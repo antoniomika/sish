@@ -6,7 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
-	"fmt"
+	"log"
 	"io/ioutil"
 	mathrand "math/rand"
 	"time"
@@ -20,7 +20,7 @@ func getSSHConfig() *ssh.ServerConfig {
 	sshConfig := &ssh.ServerConfig{
 		NoClientAuth: true,
 		PublicKeyCallback: func(c ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-			fmt.Printf("Login attempt: %s, user %s key: %s", c.RemoteAddr(), c.User(), key)
+			log.Printf("Login attempt: %s, user %s key: %s", c.RemoteAddr(), c.User(), key)
 
 			certcheck := &ssh.CertChecker{
 				IsUserAuthority: func(auth ssh.PublicKey) bool {
@@ -30,7 +30,7 @@ func getSSHConfig() *ssh.ServerConfig {
 
 			perms, err := certcheck.Authenticate(c, key)
 			if err != nil {
-				fmt.Println("Unable to verify certificate:", err)
+				log.Println("Unable to verify certificate:", err)
 
 				if err.Error() == "ssh: normal key pairs not accepted" {
 					return nil, err
@@ -49,10 +49,10 @@ func getSSHConfig() *ssh.ServerConfig {
 func generatePrivateKey(passphrase string) []byte {
 	pk, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 
-	fmt.Println("Generated RSA Keypair")
+	log.Println("Generated RSA Keypair")
 
 	pemBlock := &pem.Block{
 		Type:  "RSA PRIVATE KEY",
@@ -64,7 +64,7 @@ func generatePrivateKey(passphrase string) []byte {
 	if passphrase != "" {
 		encBlock, err := x509.EncryptPEMBlock(rand.Reader, pemBlock.Type, pemBlock.Bytes, []byte(passphrase), x509.PEMCipherAES256)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 		}
 
 		pemData = pem.EncodeToMemory(encBlock)
@@ -89,12 +89,12 @@ func loadPrivateKey(passphrase string) ssh.Signer {
 	if passphrase != "" {
 		signer, err = ssh.ParsePrivateKeyWithPassphrase(pk, []byte(passphrase))
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 		}
 	} else {
 		signer, err = ssh.ParsePrivateKey(pk)
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 		}
 	}
 

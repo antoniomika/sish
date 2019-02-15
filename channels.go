@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"io"
 
 	"golang.org/x/crypto/ssh"
@@ -13,7 +13,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 		return
 	}
 
-	fmt.Println("Handling session for connection:", connection)
+	log.Println("Handling session for connection:", connection)
 
 	cleanUp := func() {
 		close(sshConn.Close)
@@ -66,7 +66,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 			case "shell":
 				req.Reply(true, nil)
 			default:
-				fmt.Println("Sub Channel Type", req.Type, req.WantReply, string(req.Payload))
+				log.Println("Sub Channel Type", req.Type, req.WantReply, string(req.Payload))
 			}
 		}
 	}()

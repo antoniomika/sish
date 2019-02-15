@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -50,33 +50,33 @@ func main() {
 	if *debug {
 		go func() {
 			for {
-				fmt.Println("=======Start=========")
-				fmt.Println("====Goroutines====")
-				fmt.Println(runtime.NumGoroutine())
-				fmt.Println("====Listeners=====")
+				log.Println("=======Start=========")
+				log.Println("====Goroutines====")
+				log.Println(runtime.NumGoroutine())
+				log.Println("====Listeners=====")
 				state.Listeners.Range(func(key, value interface{}) bool {
-					fmt.Println(key, value)
+					log.Println(key, value)
 					return true
 				})
-				fmt.Println("====Clients=======")
+				log.Println("====Clients=======")
 				state.SSHConnections.Range(func(key, value interface{}) bool {
-					fmt.Println(key, value)
+					log.Println(key, value)
 					return true
 				})
-				fmt.Print("========End==========\n\n")
+				log.Print("========End==========\n\n")
 
 				time.Sleep(2 * time.Second)
 			}
 		}()
 	}
 
-	fmt.Println("Starting SSH service on address:", *serverAddr)
+	log.Println("Starting SSH service on address:", *serverAddr)
 
 	sshConfig := getSSHConfig()
 
 	listener, err := net.Listen("tcp", *serverAddr)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 
 	state.Listeners.Store(listener.Addr(), listener)
@@ -97,14 +97,16 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			continue
 		}
+
+		log.Println("Accepted SSH connection for:", conn.RemoteAddr())
 
 		sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
 		if err != nil {
 			conn.Close()
-			fmt.Println(err)
+			log.Println(err)
 			continue
 		}
 

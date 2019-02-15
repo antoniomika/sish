@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"golang.org/x/crypto/ssh"
 )
 
 func handleRequests(reqs <-chan *ssh.Request, sshConn *SSHConnection, state *State) {
 	for req := range reqs {
-		fmt.Println("Main Request Info", req.Type, req.WantReply, string(req.Payload))
+		log.Println("Main Request Info", req.Type, req.WantReply, string(req.Payload))
 		go handleRequest(req, sshConn, state)
 	}
 }
@@ -24,7 +25,7 @@ func handleRequest(newRequest *ssh.Request, sshConn *SSHConnection, state *State
 
 func handleChannels(chans <-chan ssh.NewChannel, sshConn *SSHConnection, state *State) {
 	for newChannel := range chans {
-		fmt.Println("Main Channel Info", newChannel.ChannelType(), string(newChannel.ExtraData()))
+		log.Println("Main Channel Info", newChannel.ChannelType(), string(newChannel.ExtraData()))
 		go handleChannel(newChannel, sshConn, state)
 	}
 }

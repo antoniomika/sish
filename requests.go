@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log"
 	"io"
 	"net"
 	"strconv"
@@ -71,7 +71,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		for {
 			select {
 			case <-sshConn.Close:
-				fmt.Println(chanListener.Close())
+				log.Println(chanListener.Close())
 				return
 			default:
 				break
@@ -82,7 +82,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 	for {
 		cl, err := chanListener.Accept()
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			break
 		}
 
