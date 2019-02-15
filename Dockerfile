@@ -12,4 +12,4 @@ COPY . .
 
 RUN go install
 
-CMD ["sish"]
+ENTRYPOINT ["sish"]

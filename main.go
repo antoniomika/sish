@@ -36,6 +36,8 @@ var (
 )
 
 func main() {
+	flag.Parse()
+
 	state := &State{
 		SSHConnections: &sync.Map{},
 		Listeners:      &sync.Map{},
