@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -81,6 +82,7 @@ func logReq(ctx *fasthttp.RequestCtx) {
 }
 
 func startHTTPHandler(state *State) {
+	fmt.Println("Starting server on address:", *httpAddr)
 	if err := fasthttp.ListenAndServe(*httpAddr, handler(state)); err != nil {
 		log.Fatalf("%sError in ListenAndServe: %s%s", red, err, reset)
 	}

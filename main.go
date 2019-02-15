@@ -33,6 +33,7 @@ var (
 	httpAddr   = flag.String("sish.http", "localhost:8081", "The address to listen for HTTP connections")
 	httpsAddr  = flag.String("sish.https", "localhost:8082", "The address to listen for HTTPS connections")
 	rootDomain = flag.String("sish.domain", "foobar.mik.qa", "The address to listen for HTTPS connections")
+	debug      = flag.Bool("sish.debug", false, "Whether or not to print debug information")
 )
 
 func main() {
@@ -46,28 +47,30 @@ func main() {
 
 	go startHTTPHandler(state)
 
-	go func() {
-		for {
-			fmt.Println("=======Start=========")
-			fmt.Println("====Goroutines====")
-			fmt.Println(runtime.NumGoroutine())
-			fmt.Println("====Listeners=====")
-			state.Listeners.Range(func(key, value interface{}) bool {
-				fmt.Println(key, value)
-				return true
-			})
-			fmt.Println("====Clients=======")
-			state.SSHConnections.Range(func(key, value interface{}) bool {
-				fmt.Println(key, value)
-				return true
-			})
-			fmt.Print("========End==========\n\n")
+	if *debug {
+		go func() {
+			for {
+				fmt.Println("=======Start=========")
+				fmt.Println("====Goroutines====")
+				fmt.Println(runtime.NumGoroutine())
+				fmt.Println("====Listeners=====")
+				state.Listeners.Range(func(key, value interface{}) bool {
+					fmt.Println(key, value)
+					return true
+				})
+				fmt.Println("====Clients=======")
+				state.SSHConnections.Range(func(key, value interface{}) bool {
+					fmt.Println(key, value)
+					return true
+				})
+				fmt.Print("========End==========\n\n")
 
-			time.Sleep(2 * time.Second)
-		}
-	}()
+				time.Sleep(2 * time.Second)
+			}
+		}()
+	}
 
-	fmt.Println("Starting service")
+	fmt.Println("Starting SSH service on address:", *serverAddr)
 
 	sshConfig := getSSHConfig()
 
@@ -95,11 +98,14 @@ func main() {
 		conn, err := listener.Accept()
 		if err != nil {
 			fmt.Println(err)
+			continue
 		}
 
 		sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
 		if err != nil {
+			conn.Close()
 			fmt.Println(err)
+			continue
 		}
 
 		holderConn := &SSHConnection{
