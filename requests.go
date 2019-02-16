@@ -1,8 +1,8 @@
 package main
 
 import (
-	"log"
 	"io"
+	"log"
 	"net"
 	"strconv"
 	"strings"

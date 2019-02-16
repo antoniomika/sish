@@ -1,11 +1,15 @@
 package main
 
 import (
-	"io"
+	"bufio"
+	"fmt"
 	"log"
-	"net"
+	"net/http"
+	"net/textproto"
+	"strings"
 	"time"
 
+	"github.com/fasthttp/websocket"
 	"github.com/valyala/fasthttp"
 )
 
@@ -15,14 +19,19 @@ type ProxyHolder struct {
 }
 
 var (
-	green   = string([]byte{27, 91, 57, 55, 59, 52, 50, 109})
-	white   = string([]byte{27, 91, 57, 48, 59, 52, 55, 109})
-	yellow  = string([]byte{27, 91, 57, 55, 59, 52, 51, 109})
-	red     = string([]byte{27, 91, 57, 55, 59, 52, 49, 109})
-	blue    = string([]byte{27, 91, 57, 55, 59, 52, 52, 109})
-	magenta = string([]byte{27, 91, 57, 55, 59, 52, 53, 109})
-	cyan    = string([]byte{27, 91, 57, 55, 59, 52, 54, 109})
-	reset   = string([]byte{27, 91, 48, 109})
+	green    = string([]byte{27, 91, 57, 55, 59, 52, 50, 109})
+	white    = string([]byte{27, 91, 57, 48, 59, 52, 55, 109})
+	yellow   = string([]byte{27, 91, 57, 55, 59, 52, 51, 109})
+	red      = string([]byte{27, 91, 57, 55, 59, 52, 49, 109})
+	blue     = string([]byte{27, 91, 57, 55, 59, 52, 52, 109})
+	magenta  = string([]byte{27, 91, 57, 55, 59, 52, 53, 109})
+	cyan     = string([]byte{27, 91, 57, 55, 59, 52, 54, 109})
+	reset    = string([]byte{27, 91, 48, 109})
+	upgrader = websocket.FastHTTPUpgrader{
+		CheckOrigin: func(ctx *fasthttp.RequestCtx) bool {
+			return true
+		},
+	}
 )
 
 func colorForStatus(code int) string {
@@ -92,6 +101,7 @@ func startHTTPHandler(state *State) {
 func handler(state *State) func(ctx *fasthttp.RequestCtx) {
 	return func(ctx *fasthttp.RequestCtx) {
 		hostname := string(ctx.Host())
+		hostname = strings.Split(hostname, ":")[0]
 		loc, ok := state.HTTPListeners.Load(hostname)
 		if !ok {
 			ctx.Error("cannot find connection for host: "+hostname, fasthttp.StatusNotFound)
@@ -103,33 +113,71 @@ func handler(state *State) func(ctx *fasthttp.RequestCtx) {
 		req := &ctx.Request
 		resp := &ctx.Response
 
-		if ctx.Request.Header.ConnectionUpgrade() {
+		if websocket.FastHTTPIsWebSocketUpgrade(ctx) {
 			dstHost := proxyClient.ProxyClient.Addr
-			req := &ctx.Request
-			uri := req.URI()
-			uri.SetHost(dstHost)
-			dstConn, err := fasthttp.DialTimeout(dstHost, 5*time.Second)
-			if err != nil {
-				ctx.Error("error when proxying the request: "+err.Error(), fasthttp.StatusInternalServerError)
-				return
-			}
-			_, err = req.WriteTo(dstConn)
-			if err != nil {
-				ctx.Error("error when proxying the request: "+err.Error(), fasthttp.StatusInternalServerError)
-				return
-			}
-			ctx.Hijack(func(conn net.Conn) {
-				defer dstConn.Close()
-				defer conn.Close()
-				errc := make(chan error, 2)
-				cp := func(dst io.Writer, src io.Reader) {
-					_, err := io.Copy(dst, src)
-					errc <- err
+			uriCopy := &fasthttp.URI{}
+			req.URI().CopyTo(uriCopy)
+
+			if err := upgrader.Upgrade(ctx, func(conn *websocket.Conn) {
+				uriCopy.SetHost(dstHost)
+				uriCopy.SetScheme("ws")
+				newURI := string(uriCopy.FullURI())
+
+				rawHeaders := string(ctx.Request.Header.RawHeaders())
+
+				reader := bufio.NewReader(strings.NewReader(rawHeaders + "\r\n"))
+				tp := textproto.NewReader(reader)
+
+				mimeHeader, err := tp.ReadMIMEHeader()
+				if err != nil {
+					log.Fatal(err)
 				}
-				go cp(dstConn, conn)
-				go cp(conn, dstConn)
-				<-errc
-			})
+
+				httpHeaders := http.Header(mimeHeader)
+				for _, i := range []string{"Connection", "Upgrade", "Sec-Websocket-Key", "Sec-Websocket-Version", "Sec-Websocket-Extensions"} {
+					httpHeaders.Del(i)
+				}
+				httpHeaders.Set("Origin", dstHost)
+
+				proxyConn, _, err := websocket.DefaultDialer.Dial(newURI, httpHeaders)
+				if err != nil {
+					fmt.Println("DIAL ERROR", err, newURI, httpHeaders)
+					ctx.Error("error when proxying the request: "+err.Error(), fasthttp.StatusInternalServerError)
+					return
+				}
+
+				wsClose := make(chan bool)
+
+				cp := func(dst, origin *websocket.Conn) {
+					for {
+						select {
+						case <-wsClose:
+							return
+						default:
+							break
+						}
+
+						t, m, err := origin.ReadMessage()
+						if err != nil {
+							log.Println(err)
+							return
+						}
+						dst.WriteMessage(t, m)
+					}
+				}
+
+				defer func() {
+					close(wsClose)
+					conn.Close()
+					proxyConn.Close()
+				}()
+
+				go cp(conn, proxyConn)
+				cp(proxyConn, conn)
+			}); err != nil {
+				fmt.Println(err)
+				ctx.Error("error when proxying the request: "+err.Error(), fasthttp.StatusInternalServerError)
+			}
 		} else {
 			if err := proxyClient.ProxyClient.Do(req, resp); err != nil {
 				ctx.Error("error when proxying the request: "+err.Error(), fasthttp.StatusInternalServerError)
