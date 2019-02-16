@@ -159,7 +159,7 @@ func handler(state *State) func(ctx *fasthttp.RequestCtx) {
 
 						t, m, err := origin.ReadMessage()
 						if err != nil {
-							log.Println(err)
+							log.Println("Error when reading from origin", err)
 							return
 						}
 						dst.WriteMessage(t, m)
