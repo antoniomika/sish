@@ -31,7 +31,6 @@ var (
 		CheckOrigin: func(ctx *fasthttp.RequestCtx) bool {
 			return true
 		},
-		EnableCompression: true,
 	}
 )
 
