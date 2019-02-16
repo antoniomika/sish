@@ -1,7 +1,9 @@
 package main
 
 import (
+	"io"
 	"log"
+	"net"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -100,11 +102,40 @@ func handler(state *State) func(ctx *fasthttp.RequestCtx) {
 		proxyClient := loc.(*ProxyHolder)
 		req := &ctx.Request
 		resp := &ctx.Response
-		if err := proxyClient.ProxyClient.Do(req, resp); err != nil {
-			ctx.Error("error when proxying the request: "+err.Error(), fasthttp.StatusInternalServerError)
+
+		if ctx.Request.Header.ConnectionUpgrade() {
+			dstHost := proxyClient.ProxyClient.Addr
+			req := &ctx.Request
+			uri := req.URI()
+			uri.SetHost(dstHost)
+			dstConn, err := fasthttp.DialTimeout(dstHost, 5*time.Second)
+			if err != nil {
+				ctx.Error("error when proxying the request: "+err.Error(), fasthttp.StatusInternalServerError)
+				return
+			}
+			_, err = req.WriteTo(dstConn)
+			if err != nil {
+				ctx.Error("error when proxying the request: "+err.Error(), fasthttp.StatusInternalServerError)
+				return
+			}
+			ctx.Hijack(func(conn net.Conn) {
+				defer dstConn.Close()
+				defer conn.Close()
+				errc := make(chan error, 2)
+				cp := func(dst io.Writer, src io.Reader) {
+					_, err := io.Copy(dst, src)
+					errc <- err
+				}
+				go cp(dstConn, conn)
+				go cp(conn, dstConn)
+				<-errc
+			})
+		} else {
+			if err := proxyClient.ProxyClient.Do(req, resp); err != nil {
+				ctx.Error("error when proxying the request: "+err.Error(), fasthttp.StatusInternalServerError)
+			}
 		}
 
-		logReq(ctx)
-		return
+		defer logReq(ctx)
 	}
 }
