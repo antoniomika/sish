@@ -3,7 +3,11 @@ steps:
   args: [ 'build', '-t', 'gcr.io/$PROJECT_ID/sish:$SHORT_SHA', '.' ]
   id: 'build-sish'
 - name: 'gcr.io/cloud-builders/docker'
-  args: ['tag', 'gcr.io/$PROJECT_ID/sish:$SHORT_SHA', 'gcr.io/$PROJECT_ID/sish']
+  entrypoint: 'bash'
+  args:
+  - '-c'
+  - |
+    [[ "$BRANCH_NAME" == "master" ]] && docker tag gcr.io/$PROJECT_ID/sish:$SHORT_SHA gcr.io/$PROJECT_ID/sish
   wait_for: ['build-sish']
   id: 'latest'
 images:
