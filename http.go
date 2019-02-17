@@ -26,7 +26,7 @@ func startHTTPHandler(state *State) {
 
 		loc, ok := state.HTTPListeners.Load(hostname)
 		if !ok {
-			c.AbortWithError(http.StatusInternalServerError, fmt.Errorf("cannot find connection for host: %s", hostname))
+			c.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", hostname))
 			return
 		}
 
