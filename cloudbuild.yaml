@@ -7,9 +7,13 @@ steps:
   args:
   - '-c'
   - |
-    [[ "$BRANCH_NAME" == "master" ]] && docker tag gcr.io/$PROJECT_ID/sish:$SHORT_SHA gcr.io/$PROJECT_ID/sish
+    if [[ "$BRANCH_NAME" == "master" ]]; then
+      docker tag gcr.io/$PROJECT_ID/sish:$SHORT_SHA gcr.io/$PROJECT_ID/sish
+      docker push gcr.io/$PROJECT_ID/sish
+    else
+      exit 0
+    fi
   wait_for: ['build-sish']
   id: 'latest'
 images:
-- 'gcr.io/$PROJECT_ID/sish:latest'
 - 'gcr.io/$PROJECT_ID/sish:$SHORT_SHA'
