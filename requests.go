@@ -5,9 +5,7 @@ import (
 	"log"
 	"net"
 	"strconv"
-	"strings"
 
-	"github.com/valyala/fasthttp"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -53,13 +51,18 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 	sshConn.Messages <- "Connections being forwarded to " + chanListener.Addr().String()
 
 	if stringPort == "80" || stringPort == "443" {
-		pH := &ProxyHolder{
-			ProxyClient: &fasthttp.HostClient{
-				Addr: chanListener.Addr().String(),
-			},
+		scheme := "http"
+		if stringPort == "443" {
+			scheme = "https"
 		}
 
-		host := strings.ToLower(RandStringBytesMaskImprSrc(3) + "." + *rootDomain)
+		host := "veg.foo2.mik.qa" //strings.ToLower(RandStringBytesMaskImprSrc(3) + "." + *rootDomain)
+
+		pH := &ProxyHolder{
+			ProxyHost: host,
+			ProxyTo:   chanListener.Addr().String(),
+			Scheme:    scheme,
+		}
 
 		state.HTTPListeners.Store(host, pH)
 		defer state.HTTPListeners.Delete(host)
@@ -107,8 +110,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		defer newChan.Close()
 
 		go copyBoth(cl, newChan)
-
-		ssh.DiscardRequests(newReqs)
+		go ssh.DiscardRequests(newReqs)
 	}
 }
 
