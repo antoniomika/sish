@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -56,7 +57,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			scheme = "https"
 		}
 
-		host := "veg.foo2.mik.qa" //strings.ToLower(RandStringBytesMaskImprSrc(3) + "." + *rootDomain)
+		host := strings.ToLower(RandStringBytesMaskImprSrc(3) + "." + *rootDomain)
 
 		pH := &ProxyHolder{
 			ProxyHost: host,
