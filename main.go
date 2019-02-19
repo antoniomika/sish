@@ -33,7 +33,7 @@ var (
 	httpAddr   = flag.String("sish.http", "localhost:8081", "The address to listen for HTTP connections")
 	httpsAddr  = flag.String("sish.https", "localhost:8082", "The address to listen for HTTPS connections")
 	rootDomain = flag.String("sish.domain", "foobar.mik.qa", "The address to listen for HTTPS connections")
-	debug      = flag.Bool("sish.debug", false, "Whether or not to print debug information")
+	debug      = flag.Bool("sish.debug", true, "Whether or not to print debug information")
 )
 
 func main() {
