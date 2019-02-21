@@ -11,8 +11,8 @@ Builds are made using Google Cloud Build. Feel free to either use the automated 
 2. Run the image
     - ```bash
       docker run -itd -p 2222:2222 --name sish \
-      --restart always --network nginx gcr.io/sishio/sish:latest \
-      -sish.addr=":2222" -sish.http=":8080" -sish.domain="ssi.sh"
+          --restart always gcr.io/sishio/sish:latest \
+          -sish.addr=":2222" -sish.http=":8080" -sish.domain="ssi.sh"
       ```
 3. SSH to your host to communicate with sish
     - `ssh -p 2222 -R 80:localhost:8080 ssi.sh`
