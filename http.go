@@ -71,7 +71,9 @@ func startHTTPHandler(state *State) {
 	})
 
 	if *httpsEnabled {
-		go log.Fatal(r.RunTLS(*httpsAddr, filepath.Join(*httpsPems, "fullchain.pem"), filepath.Join(*httpsPems, "privkey.pem")))
+		go func() {
+			log.Fatal(r.RunTLS(*httpsAddr, filepath.Join(*httpsPems, "fullchain.pem"), filepath.Join(*httpsPems, "privkey.pem")))
+		}()
 	}
 	log.Fatal(r.Run(*httpAddr))
 }
