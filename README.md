@@ -62,6 +62,10 @@ Usage of ./sish:
         SSH server private key (default "keys/ssh_key")
   -sish.pkpass string
         Passphrase to use for the server private key (default "S3Cr3tP4$$phrAsE")
+  -sish.redirectroot
+        Whether or not to redirect the root domain (default true)
+  -sish.redirectrootlocation string
+        Where to redirect the root domain to (default "https://github.com/antoniomika/sish")
   -sish.subdomainlen int
         The length of the random subdomain to generate (default 3)
 ```
