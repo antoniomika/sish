@@ -30,15 +30,18 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 	ssh.Unmarshal(newRequest.Payload, check)
 
 	bindPort := check.Rport
-	checkedPort, err := checkPort(check.Rport, *bindRange)
-	if err != nil && !*bindRandom {
-		newRequest.Reply(false, nil)
-		return
-	}
 
-	bindPort = checkedPort
-	if *bindRandom {
-		bindPort = 0
+	if bindPort != uint32(80) && bindPort != uint32(443) {
+		checkedPort, err := checkPort(check.Rport, *bindRange)
+		if err != nil && !*bindRandom {
+			newRequest.Reply(false, nil)
+			return
+		}
+
+		bindPort = checkedPort
+		if *bindRandom {
+			bindPort = 0
+		}
 	}
 
 	stringPort := strconv.FormatUint(uint64(bindPort), 10)
