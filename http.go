@@ -33,6 +33,11 @@ func startHTTPHandler(state *State) {
 	r.GET("/*proxy", func(c *gin.Context) {
 		hostname := strings.Split(c.Request.Host, ":")[0]
 
+		if hostname == *rootDomain && *redirectRoot {
+			c.Redirect(http.StatusFound, *redirectRootLocation)
+			return
+		}
+
 		loc, ok := state.HTTPListeners.Load(hostname)
 		if !ok {
 			c.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", hostname))
