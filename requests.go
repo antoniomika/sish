@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -89,9 +90,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		state.HTTPListeners.Store(host, pH)
 		defer state.HTTPListeners.Delete(host)
 
-		sshConn.Messages <- "HTTP requests for 80 and 443 can be reached on host: " + host
+		sshConn.Messages <- fmt.Sprintf("HTTP requests for 80 and 443 can be reached on host: %s", host)
 	} else {
-		sshConn.Messages <- "Connections being forwarded to " + *rootDomain + ":" + string(chanListener.Addr().(*net.TCPAddr).Port)
+		sshConn.Messages <- fmt.Sprintf("Connections being forwarded to %s:%d", *rootDomain, chanListener.Addr().(*net.TCPAddr).Port)
 	}
 
 	go func() {
