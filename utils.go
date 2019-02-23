@@ -13,6 +13,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +26,49 @@ var (
 	certHolder = make([]ssh.PublicKey, 0)
 	holderLock = sync.Mutex{}
 )
+
+func checkPort(port uint32, portRanges string) (uint32, error) {
+	ranges := strings.Split(strings.TrimSpace(portRanges), ",")
+	checks := false
+	for _, r := range ranges {
+		ends := strings.Split(strings.TrimSpace(r), "-")
+
+		if len(ends) == 1 {
+			ui, err := strconv.ParseUint(ends[0], 0, 64)
+			if err != nil {
+				return 0, err
+			}
+
+			if uint64(ui) == uint64(port) {
+				checks = true
+				continue
+			}
+		}
+
+		if len(ends) == 2 {
+			ui1, err := strconv.ParseUint(ends[0], 0, 64)
+			if err != nil {
+				return 0, err
+			}
+
+			ui2, err := strconv.ParseUint(ends[1], 0, 64)
+			if err != nil {
+				return 0, err
+			}
+
+			if uint64(port) >= ui1 && uint64(port) <= ui2 {
+				checks = true
+				continue
+			}
+		}
+	}
+
+	if checks {
+		return port, nil
+	}
+
+	return 0, fmt.Errorf("not a safe port")
+}
 
 func watchCerts() {
 	loadCerts()

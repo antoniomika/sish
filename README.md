@@ -7,12 +7,22 @@ An open source serveo/ngrok alternative.
 Builds are made using Google Cloud Build. Feel free to either use the automated binaries or to build your own.
 
 1. Pull the Docker image
-    - `docker pull gcr.io/sishio/sish:latest`
+    - `docker pull antoniomika/sish:latest`
 2. Run the image
     - ```bash
-      docker run -itd -p 2222:2222 --name sish \
-          --restart always gcr.io/sishio/sish:latest \
-          -sish.addr=":2222" -sish.http=":8080" -sish.domain="ssi.sh"
+      docker run -itd --name sish \
+        -v ~/sish/ssl:/ssl \
+        -v ~/sish/keys:/keys \
+        -v ~/sish/pubkeys:/pubkeys \
+        --net=host antoniomika/sish:latest \
+        -sish.addr=:22 \
+        -sish.https=:443 \
+        -sish.http=:80 \
+        -sish.httpsenabled=true \
+        -sish.httpspems=/ssl \
+        -sish.keysdir=/pubkeys \
+        -sish.pkloc=/keys/ssh_key \
+        -sish.bindrandom=false
       ```
 3. SSH to your host to communicate with sish
     - `ssh -p 2222 -R 80:localhost:8080 ssi.sh`
@@ -28,6 +38,10 @@ Usage of ./sish:
         The address to listen for SSH connections (default "localhost:2222")
   -sish.auth
         Whether or not to require auth on the SSH service
+  -sish.bindrandom
+        Bind ports randomly (OS chooses) (default true)
+  -sish.bindrange string
+        Ports that are allowed to be bound (default "0,1024-65535")
   -sish.debug
         Whether or not to print debug information
   -sish.domain string

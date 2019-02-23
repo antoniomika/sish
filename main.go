@@ -41,6 +41,8 @@ var (
 	authEnabled  = flag.Bool("sish.auth", false, "Whether or not to require auth on the SSH service")
 	authPassword = flag.String("sish.password", "S3Cr3tP4$$W0rD", "Password to use for password auth")
 	authKeysDir  = flag.String("sish.keysdir", "pubkeys/", "Directory for public keys for pubkey auth")
+	bindRange    = flag.String("sish.bindrange", "0,1024-65535", "Ports that are allowed to be bound")
+	bindRandom   = flag.Bool("sish.bindrandom", true, "Bind ports randomly (OS chooses)")
 	debug        = flag.Bool("sish.debug", false, "Whether or not to print debug information")
 )
 

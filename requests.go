@@ -28,8 +28,20 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 
 	ssh.Unmarshal(newRequest.Payload, check)
 
-	stringPort := strconv.FormatUint(uint64(check.Rport), 10)
-	listenAddr := check.Addr + ":" + stringPort
+	bindPort := check.Rport
+	checkedPort, err := checkPort(check.Rport, *bindRange)
+	if err != nil && !*bindRandom {
+		newRequest.Reply(false, nil)
+		return
+	}
+
+	bindPort = checkedPort
+	if *bindRandom {
+		bindPort = 0
+	}
+
+	stringPort := strconv.FormatUint(uint64(bindPort), 10)
+	listenAddr := ":" + stringPort
 	listenType := "tcp"
 
 	tmpfile, err := ioutil.TempFile("", sshConn.SSHConn.RemoteAddr().String()+":"+stringPort)
@@ -79,7 +91,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 
 		sshConn.Messages <- "HTTP requests for 80 and 443 can be reached on host: " + host
 	} else {
-		sshConn.Messages <- "Connections being forwarded to " + chanListener.Addr().String()
+		sshConn.Messages <- "Connections being forwarded to " + *rootDomain + ":" + string(chanListener.Addr().(*net.TCPAddr).Port)
 	}
 
 	go func() {
