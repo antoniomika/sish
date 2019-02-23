@@ -115,23 +115,25 @@ func main() {
 
 		log.Println("Accepted SSH connection for:", conn.RemoteAddr())
 
-		sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
-		if err != nil {
-			conn.Close()
-			log.Println(err)
-			continue
-		}
+		go func() {
+			sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
+			if err != nil {
+				conn.Close()
+				log.Println(err)
+				return
+			}
 
-		holderConn := &SSHConnection{
-			SSHConn:   sshConn,
-			Listeners: &sync.Map{},
-			Close:     make(chan bool),
-			Messages:  make(chan string),
-		}
+			holderConn := &SSHConnection{
+				SSHConn:   sshConn,
+				Listeners: &sync.Map{},
+				Close:     make(chan bool),
+				Messages:  make(chan string),
+			}
 
-		state.SSHConnections.Store(sshConn.RemoteAddr(), holderConn)
+			state.SSHConnections.Store(sshConn.RemoteAddr(), holderConn)
 
-		go handleRequests(reqs, holderConn, state)
-		go handleChannels(chans, holderConn, state)
+			go handleRequests(reqs, holderConn, state)
+			go handleChannels(chans, holderConn, state)
+		}()
 	}
 }
