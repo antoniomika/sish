@@ -4,7 +4,7 @@ sish
 An open source serveo/ngrok alternative.
 
 ## Deploy
-Builds are made using Google Cloud Build. Feel free to either use the automated binaries or to build your own.
+Builds are made automatically on Google Cloud Build and Dockerhub. Feel free to either use the automated binaries or to build your own. If you submit a PR and would like access to Google Cloud Build's output (including pre-made PR binaries), feel free to let me know.
 
 1. Pull the Docker image
     - `docker pull antoniomika/sish:latest`
@@ -29,6 +29,26 @@ Builds are made using Google Cloud Build. Feel free to either use the automated 
 
 ## How it works
 SSH can normally forward local and remote ports. This service implements an SSH server that only does that and nothing else. The service supports multiplexing connections over HTTP/HTTPS with WebSocket support. Just assign a remote port as port `80` to proxy HTTP traffic and `443` to proxy HTTPS traffic. If you use any other remote port, the server will listen to the port for connections, but only if that port is available.
+
+## Authentication
+If you want to use this service privately, it supports both public key and password authentication. To enable authentication, set `-sish.auth=true` as one of your CLI options and be sure to configure `-sish.password` or `-sish.keysdir` to your liking. The directory provided by `-sish.keysdir` is watched for changes and will reload the authorized keys automatically. The authorized cert index is regenerated on directory modification, so removed public keys will also automatically be removed. Files in this directory can either be single key per file, or multiple keys per file separated by newlines, similar to `authorized_keys`. Password auth can be disabled by setting `-sish.password=""` as a CLI option.
+
+One of my favorite ways of using this for authentication is like so:
+
+```bash
+sish@sish0:~/sish/pubkeys# curl https://github.com/antoniomika.keys > antoniomika
+```
+
+This will load my public keys from GitHub, place them in the directory that sish is watching, and then load the pubkey. As soon as this command is run, I can SSH normally and it will authorize me.
+
+## Demo
+There is a demo service (and my private instance) currently running on `ssi.sh` that doesn't require any authentication. This service provides default logging (errors, connection IP/username, and pubkey fingerprint). I do not log any of the password authentication data or the data sent within the service/tunnels. My deploy uses the exact deploy steps that are listed above. This instance is for testing and educational purposes only. You can deploy this extremely easily on any host (Google Cloud Platform provides an always-free instance that this should run perfectly on). If the service begins to accrue a lot of traffic, I will enable authentication and then you can reach out to me to get your SSH key whitelisted (make sure it's on GitHub and you provide me with your GitHub username).
+
+## Notes
+1. This is by no means production ready in any way. This was hacked together and solves a fairly specific use case. 
+      - You can help it get production ready by submitting PRs/reviewing code/writing tests/etc
+2. This is a fairly simple implementation, I've intentionally cut corners in some places to make it easier to write.
+3. If you have any questions or comments, feel free to reach out via email [me@antoniomika.me](mailto:me@antoniomika.me) or on [freenode IRC #sish](https://kiwiirc.com/client/chat.freenode.net:6697/#sish)
 
 ## CLI Flags
 ```
