@@ -33,8 +33,6 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 				connection.Write([]byte{'\r', '\n'})
 			case <-sshConn.Close:
 				return
-			default:
-				break
 			}
 		}
 	}()

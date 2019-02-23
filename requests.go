@@ -104,8 +104,6 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			case <-sshConn.Close:
 				chanListener.Close()
 				return
-			default:
-				break
 			}
 		}
 	}()
