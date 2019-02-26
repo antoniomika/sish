@@ -1,4 +1,4 @@
-FROM golang:1.11.5-alpine3.9 as builder
+FROM golang:1.12.0-alpine as builder
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 
 RUN apk add --no-cache git gcc musl-dev
