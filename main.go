@@ -44,6 +44,7 @@ var (
 	authPassword         = flag.String("sish.password", "S3Cr3tP4$$W0rD", "Password to use for password auth")
 	authKeysDir          = flag.String("sish.keysdir", "pubkeys/", "Directory for public keys for pubkey auth")
 	bindRange            = flag.String("sish.bindrange", "0,1024-65535", "Ports that are allowed to be bound")
+	cleanupUnbound       = flag.Bool("sish.cleanupunbound", true, "Whether or not to cleanup unbound (forwarded) SSH connections")
 	bindRandom           = flag.Bool("sish.bindrandom", true, "Bind ports randomly (OS chooses)")
 	debug                = flag.Bool("sish.debug", false, "Whether or not to print debug information")
 )
@@ -136,6 +137,33 @@ func main() {
 
 			go handleRequests(reqs, holderConn, state)
 			go handleChannels(chans, holderConn, state)
+
+			if *cleanupUnbound {
+				go func() {
+					time.Sleep(1 * time.Second)
+
+					count := 0
+					holderConn.Listeners.Range(func(key, value interface{}) bool {
+						count++
+						return true
+					})
+
+					if count == 0 {
+						holderConn.Messages <- "No forwarding requests sent. Closing connection."
+						time.Sleep(1 * time.Millisecond)
+						holderConn.CleanUp(state)
+					}
+				}()
+			}
 		}()
 	}
+}
+
+// CleanUp closes all allocated resources and cleans them up
+func (s *SSHConnection) CleanUp(state *State) {
+	close(s.Close)
+	close(s.Messages)
+	s.SSHConn.Close()
+	state.SSHConnections.Delete(s.SSHConn.RemoteAddr())
+	log.Println("Closed SSH connection for:", s.SSHConn.RemoteAddr(), "user:", s.SSHConn.User())
 }

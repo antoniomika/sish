@@ -62,6 +62,8 @@ Usage of ./sish:
         Bind ports randomly (OS chooses) (default true)
   -sish.bindrange string
         Ports that are allowed to be bound (default "0,1024-65535")
+  -sish.cleanupunbound
+        Whether or not to cleanup unbound (forwarded) SSH connections (default true)
   -sish.debug
         Whether or not to print debug information
   -sish.domain string

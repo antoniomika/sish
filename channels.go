@@ -17,14 +17,6 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 		log.Println("Handling session for connection:", connection)
 	}
 
-	cleanUp := func() {
-		close(sshConn.Close)
-		close(sshConn.Messages)
-		sshConn.SSHConn.Close()
-		state.SSHConnections.Delete(sshConn.SSHConn.RemoteAddr())
-		log.Println("Closed SSH connection for:", sshConn.SSHConn.RemoteAddr(), "user:", sshConn.SSHConn.User())
-	}
-
 	go func() {
 		for {
 			select {
@@ -48,14 +40,14 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 				case <-sshConn.Close:
 					break
 				default:
-					cleanUp()
+					sshConn.CleanUp(state)
 				}
 				break
 			}
 
 			if dataRead != 0 {
 				if data[0] == 3 {
-					cleanUp()
+					sshConn.CleanUp(state)
 				}
 			}
 		}
