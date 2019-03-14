@@ -151,9 +151,8 @@ func main() {
 						if count == 0 {
 							holderConn.Messages <- "No forwarding requests sent. Closing connection."
 							time.Sleep(1 * time.Millisecond)
+							holderConn.CleanUp(state)
 						}
-
-						holderConn.CleanUp(state)
 					case <-holderConn.Close:
 						return
 					}
