@@ -140,18 +140,22 @@ func main() {
 
 			if *cleanupUnbound {
 				go func() {
-					time.Sleep(1 * time.Second)
+					select {
+					case <-time.NewTimer(1 * time.Second).C:
+						count := 0
+						holderConn.Listeners.Range(func(key, value interface{}) bool {
+							count++
+							return true
+						})
 
-					count := 0
-					holderConn.Listeners.Range(func(key, value interface{}) bool {
-						count++
-						return true
-					})
+						if count == 0 {
+							holderConn.Messages <- "No forwarding requests sent. Closing connection."
+							time.Sleep(1 * time.Millisecond)
+						}
 
-					if count == 0 {
-						holderConn.Messages <- "No forwarding requests sent. Closing connection."
-						time.Sleep(1 * time.Millisecond)
 						holderConn.CleanUp(state)
+					case <-holderConn.Close:
+						return
 					}
 				}()
 			}
