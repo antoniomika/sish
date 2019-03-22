@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"strings"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -82,7 +81,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			scheme = "https"
 		}
 
-		host := strings.ToLower(RandStringBytesMaskImprSrc(*domainLen) + "." + *rootDomain)
+		host := getOpenHost(check.Addr, state, sshConn)
 
 		pH := &ProxyHolder{
 			ProxyHost: host,

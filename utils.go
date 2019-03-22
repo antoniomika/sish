@@ -232,6 +232,43 @@ func loadPrivateKey(passphrase string) ssh.Signer {
 	return signer
 }
 
+func inBannedList(host string) bool {
+	for _, v := range bannedList {
+		if strings.TrimSpace(v) == host {
+			return true
+		}
+	}
+
+	return false
+}
+
+func getOpenHost(addr string, state *State, sshConn *SSHConnection) string {
+	getUnusedHost := func() string {
+		first := true
+		host := strings.ToLower(addr + "." + *rootDomain)
+		getRandomHost := func() string {
+			return strings.ToLower(RandStringBytesMaskImprSrc(*domainLen) + "." + *rootDomain)
+		}
+
+		checkHost := func(checkHost string) bool {
+			if *forceRandomSubdomain || !first || inBannedList(host) {
+				host = getRandomHost()
+			}
+
+			first = false
+			_, ok := state.HTTPListeners.Load(host)
+			return ok
+		}
+
+		for checkHost(host) {
+		}
+
+		return host
+	}
+
+	return getUnusedHost()
+}
+
 // RandStringBytesMaskImprSrc creates a random string of length n
 // https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-golang
 func RandStringBytesMaskImprSrc(n int) string {

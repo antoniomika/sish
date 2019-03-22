@@ -58,6 +58,8 @@ Usage of ./sish:
         The address to listen for SSH connections (default "localhost:2222")
   -sish.auth
         Whether or not to require auth on the SSH service
+  -sish.bannedsubdomains string
+        A comma separated list of banned subdomains (default "localhost")
   -sish.bindrandom
         Bind ports randomly (OS chooses) (default true)
   -sish.bindrange string
@@ -68,6 +70,8 @@ Usage of ./sish:
         Whether or not to print debug information
   -sish.domain string
         The domain for HTTP(S) multiplexing (default "ssi.sh")
+  -sish.forcerandomsubdomain
+        Whether or not to force a random subdomain (default true)
   -sish.http string
         The address to listen for HTTP connections (default "localhost:80")
   -sish.https string

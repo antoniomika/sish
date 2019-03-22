@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +39,8 @@ var (
 	httpsPems            = flag.String("sish.httpspems", "ssl/", "The location of pem files for HTTPS (fullchain.pem and privkey.pem)")
 	rootDomain           = flag.String("sish.domain", "ssi.sh", "The domain for HTTP(S) multiplexing")
 	domainLen            = flag.Int("sish.subdomainlen", 3, "The length of the random subdomain to generate")
+	forceRandomSubdomain = flag.Bool("sish.forcerandomsubdomain", true, "Whether or not to force a random subdomain")
+	bannedSubdomains     = flag.String("sish.bannedsubdomains", "localhost", "A comma separated list of banned subdomains")
 	pkPass               = flag.String("sish.pkpass", "S3Cr3tP4$$phrAsE", "Passphrase to use for the server private key")
 	pkLoc                = flag.String("sish.pkloc", "keys/ssh_key", "SSH server private key")
 	authEnabled          = flag.Bool("sish.auth", false, "Whether or not to require auth on the SSH service")
@@ -47,10 +50,16 @@ var (
 	cleanupUnbound       = flag.Bool("sish.cleanupunbound", true, "Whether or not to cleanup unbound (forwarded) SSH connections")
 	bindRandom           = flag.Bool("sish.bindrandom", true, "Bind ports randomly (OS chooses)")
 	debug                = flag.Bool("sish.debug", false, "Whether or not to print debug information")
+	bannedList           = []string{""}
 )
 
 func main() {
 	flag.Parse()
+
+	bannedList = append(bannedList, strings.Split(*bannedSubdomains, ",")...)
+	for k, v := range bannedList {
+		bannedList[k] = strings.ToLower(v + "." + *rootDomain)
+	}
 
 	watchCerts()
 
