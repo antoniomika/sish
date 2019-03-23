@@ -58,6 +58,10 @@ Usage of ./sish:
         The address to listen for SSH connections (default "localhost:2222")
   -sish.auth
         Whether or not to require auth on the SSH service
+  -sish.bannedcountries string
+        A comma separated list of banned countries
+  -sish.bannedips string
+        A comma separated list of banned ips
   -sish.bannedsubdomains string
         A comma separated list of banned subdomains (default "localhost")
   -sish.bindrandom
@@ -94,4 +98,10 @@ Usage of ./sish:
         Where to redirect the root domain to (default "https://github.com/antoniomika/sish")
   -sish.subdomainlen int
         The length of the random subdomain to generate (default 3)
+  -sish.usegeodb
+        Whether or not to use the maxmind geodb
+  -sish.whitelistedcountries string
+        A comma separated list of whitelisted countries
+  -sish.whitelistedips string
+        A comma separated list of whitelisted ips
 ```
