@@ -27,9 +27,9 @@ Builds are made automatically on Google Cloud Build and Dockerhub. Feel free to 
 3. SSH to your host to communicate with sish
     - `ssh -p 2222 -R 80:localhost:8080 ssi.sh`
 
-You can choose your own instead of relying on a randomly assigned one by setting
-the `-sish.bindrandom` option to `false` and then selecting a subdomain with (
-example for `foo`):
+You can choose your own subdomain instead of relying on a randomly assigned one
+by setting the `-sish.bindrandom` option to `false` and then selecting a
+subdomain by prepending it to the remote port specifier:
 
 `ssh -p 2222 -R foo:80:localhost:8080 ssi.sh`
 
