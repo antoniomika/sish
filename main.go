@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jpillora/ipfilter"
+
 	"golang.org/x/crypto/ssh"
 )
 
@@ -27,6 +29,7 @@ type State struct {
 	SSHConnections *sync.Map
 	Listeners      *sync.Map
 	HTTPListeners  *sync.Map
+	IPFilter       *ipfilter.IPFilter
 }
 
 var (
@@ -41,6 +44,11 @@ var (
 	domainLen            = flag.Int("sish.subdomainlen", 3, "The length of the random subdomain to generate")
 	forceRandomSubdomain = flag.Bool("sish.forcerandomsubdomain", true, "Whether or not to force a random subdomain")
 	bannedSubdomains     = flag.String("sish.bannedsubdomains", "localhost", "A comma separated list of banned subdomains")
+	bannedIPs            = flag.String("sish.bannedips", "", "A comma separated list of banned ips")
+	bannedCountries      = flag.String("sish.bannedcountries", "", "A comma separated list of banned countries")
+	whitelistedIPs       = flag.String("sish.whitelistedips", "", "A comma separated list of whitelisted ips")
+	whitelistedCountries = flag.String("sish.whitelistedcountries", "", "A comma separated list of whitelisted countries")
+	useGeoDB             = flag.Bool("sish.usegeodb", false, "Whether or not to use the maxmind geodb")
 	pkPass               = flag.String("sish.pkpass", "S3Cr3tP4$$phrAsE", "Passphrase to use for the server private key")
 	pkLoc                = flag.String("sish.pkloc", "keys/ssh_key", "SSH server private key")
 	authEnabled          = flag.Bool("sish.auth", false, "Whether or not to require auth on the SSH service")
@@ -50,15 +58,48 @@ var (
 	cleanupUnbound       = flag.Bool("sish.cleanupunbound", true, "Whether or not to cleanup unbound (forwarded) SSH connections")
 	bindRandom           = flag.Bool("sish.bindrandom", true, "Bind ports randomly (OS chooses)")
 	debug                = flag.Bool("sish.debug", false, "Whether or not to print debug information")
-	bannedList           = []string{""}
+	bannedSubdomainList  = []string{""}
+	filter               ipfilter.IPFilter
 )
 
 func main() {
 	flag.Parse()
 
-	bannedList = append(bannedList, strings.Split(*bannedSubdomains, ",")...)
-	for k, v := range bannedList {
-		bannedList[k] = strings.ToLower(v + "." + *rootDomain)
+	commaSplitFields := func(c rune) bool {
+		return c == ','
+	}
+
+	bannedSubdomainList = append(bannedSubdomainList, strings.FieldsFunc(*bannedSubdomains, commaSplitFields)...)
+	for k, v := range bannedSubdomainList {
+		bannedSubdomainList[k] = strings.ToLower(strings.TrimSpace(v) + "." + *rootDomain)
+	}
+
+	upperList := func(stringList string) []string {
+		list := strings.FieldsFunc(stringList, commaSplitFields)
+		for k, v := range list {
+			list[k] = strings.ToUpper(v)
+		}
+
+		return list
+	}
+
+	whitelistedCountriesList := upperList(*whitelistedCountries)
+	whitelistedIPList := strings.FieldsFunc(*whitelistedIPs, commaSplitFields)
+
+	ipfilterOpts := ipfilter.Options{
+		BlockedCountries: upperList(*bannedCountries),
+		AllowedCountries: whitelistedCountriesList,
+		BlockedIPs:       strings.FieldsFunc(*bannedIPs, commaSplitFields),
+		AllowedIPs:       whitelistedIPList,
+		BlockByDefault:   len(whitelistedIPList) > 0 || len(whitelistedCountriesList) > 0,
+	}
+
+	var filter *ipfilter.IPFilter
+
+	if *useGeoDB {
+		filter = ipfilter.NewLazy(ipfilterOpts)
+	} else {
+		filter = ipfilter.NewNoDB(ipfilterOpts)
 	}
 
 	watchCerts()
@@ -67,6 +108,7 @@ func main() {
 		SSHConnections: &sync.Map{},
 		Listeners:      &sync.Map{},
 		HTTPListeners:  &sync.Map{},
+		IPFilter:       filter,
 	}
 
 	go startHTTPHandler(state)
@@ -122,6 +164,13 @@ func main() {
 		conn, err := listener.Accept()
 		if err != nil {
 			log.Println(err)
+			continue
+		}
+
+		clientRemote, _, err := net.SplitHostPort(conn.RemoteAddr().String())
+
+		if err != nil || filter.Blocked(clientRemote) {
+			conn.Close()
 			continue
 		}
 

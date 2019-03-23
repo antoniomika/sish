@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"path/filepath"
-	"strings"
 
 	"github.com/gorilla/websocket"
 	"github.com/koding/websocketproxy"
@@ -29,11 +28,19 @@ func startHTTPHandler(state *State) {
 	}
 	gin.SetMode(releaseMode)
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		clientIPAddr, _, err := net.SplitHostPort(c.Request.RemoteAddr)
+		if state.IPFilter.Blocked(c.ClientIP()) || state.IPFilter.Blocked(clientIPAddr) || err != nil {
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		c.Next()
+	}, gin.Logger(), gin.Recovery())
 	r.GET("/*proxy", func(c *gin.Context) {
-		hostname := strings.Split(c.Request.Host, ":")[0]
+		hostname, _, err := net.SplitHostPort(c.Request.Host)
 
-		if hostname == *rootDomain && *redirectRoot {
+		if err != nil || (hostname == *rootDomain && *redirectRoot) {
 			c.Redirect(http.StatusFound, *redirectRootLocation)
 			return
 		}

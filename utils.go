@@ -232,7 +232,7 @@ func loadPrivateKey(passphrase string) ssh.Signer {
 	return signer
 }
 
-func inBannedList(host string) bool {
+func inBannedList(host string, bannedList []string) bool {
 	for _, v := range bannedList {
 		if strings.TrimSpace(v) == host {
 			return true
@@ -251,7 +251,7 @@ func getOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 		}
 
 		checkHost := func(checkHost string) bool {
-			if *forceRandomSubdomain || !first || inBannedList(host) {
+			if *forceRandomSubdomain || !first || inBannedList(host, bannedSubdomainList) {
 				host = getRandomHost()
 			}
 
