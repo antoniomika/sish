@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"path/filepath"
+	"strings"
 
 	"github.com/gorilla/websocket"
 	"github.com/koding/websocketproxy"
@@ -38,9 +39,9 @@ func startHTTPHandler(state *State) {
 		c.Next()
 	}, gin.Logger(), gin.Recovery())
 	r.GET("/*proxy", func(c *gin.Context) {
-		hostname, _, err := net.SplitHostPort(c.Request.Host)
+		hostname := strings.Split(c.Request.Host, ":")[0]
 
-		if err != nil || (hostname == *rootDomain && *redirectRoot) {
+		if hostname == *rootDomain && *redirectRoot {
 			c.Redirect(http.StatusFound, *redirectRootLocation)
 			return
 		}
