@@ -56,7 +56,8 @@ specified with the `-sish.whitelistedips` option that accepts a comma-separated 
 IP, use the `/32` range.
 
 To whitelist countries, use `sish.whitelistedcountries` with a comma-separated
-string of countries in ISO format (for example, "pt" for Portugal).
+string of countries in ISO format (for example, "pt" for Portugal). You'll also
+need to set `-sish.usegeodb` to `true`.
 
 ## Demo
 There is a demo service (and my private instance) currently running on `ssi.sh` that doesn't require any authentication. This service provides default logging (errors, connection IP/username, and pubkey fingerprint). I do not log any of the password authentication data or the data sent within the service/tunnels. My deploy uses the exact deploy steps that are listed above. This instance is for testing and educational purposes only. You can deploy this extremely easily on any host (Google Cloud Platform provides an always-free instance that this should run perfectly on). If the service begins to accrue a lot of traffic, I will enable authentication and then you can reach out to me to get your SSH key whitelisted (make sure it's on GitHub and you provide me with your GitHub username).
