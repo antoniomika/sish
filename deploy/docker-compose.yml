@@ -1,0 +1,42 @@
+version: '3.7'
+
+services:
+  busybox:
+    image: busybox
+    volumes: 
+      - ./letsencrypt:/etc/letsencrypt
+    command: /bin/sh -c "echo '*.$DOMAIN autorestart-containers=sish' > /etc/letsencrypt/domains.conf"
+  letsencrypt:
+    image: adferrand/letsencrypt-dns:latest
+    container_name: letsencrypt-dns
+    depends_on: 
+      - busybox
+    environment:
+      - VERSION=latest
+      - LETSENCRYPT_USER_MAIL
+      - LEXICON_PROVIDER
+      - LEXICON_PROVIDER_OPTIONS
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./letsencrypt:/etc/letsencrypt
+    restart: always
+  sish:
+    image: antoniomika/sish:latest
+    container_name: sish
+    depends_on: 
+      - letsencrypt
+    volumes:
+      - ./letsencrypt/live/$DOMAIN:/ssl
+      - ./pubkeys:/pubkeys
+      - ./keys:/keys
+    command: |
+      -sish.addr=:22
+      -sish.https=:443
+      -sish.http=:80
+      -sish.httpsenabled=true
+      -sish.httpspems=/ssl
+      -sish.keysdir=/pubkeys
+      -sish.pkloc=/keys/ssh_key
+      -sish.bindrandom=false
+    network_mode: host
+    restart: always
