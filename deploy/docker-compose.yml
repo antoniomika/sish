@@ -5,7 +5,7 @@ services:
     image: busybox
     volumes: 
       - ./letsencrypt:/etc/letsencrypt
-    command: /bin/sh -c "echo '*.$DOMAIN autorestart-containers=sish' > /etc/letsencrypt/domains.conf"
+    command: /bin/sh -c "echo '$DOMAIN *.$DOMAIN autorestart-containers=sish' > /etc/letsencrypt/domains.conf"
   letsencrypt:
     image: adferrand/letsencrypt-dns:latest
     container_name: letsencrypt-dns
