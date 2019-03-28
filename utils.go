@@ -249,14 +249,22 @@ func getOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 		getRandomHost := func() string {
 			return strings.ToLower(RandStringBytesMaskImprSrc(*domainLen) + "." + *rootDomain)
 		}
+		reportUnavailable := func(unavailable bool) {
+			if first && unavailable {
+				sshConn.Messages <- "This subdomain is unavaible. Assigning a random subdomain."
+			}
+		}
 
 		checkHost := func(checkHost string) bool {
 			if *forceRandomSubdomain || !first || inBannedList(host, bannedSubdomainList) {
+				reportUnavailable(true)
 				host = getRandomHost()
 			}
 
-			first = false
 			_, ok := state.HTTPListeners.Load(host)
+			reportUnavailable(ok)
+
+			first = false
 			return ok
 		}
 

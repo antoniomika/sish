@@ -38,8 +38,7 @@ func startHTTPHandler(state *State) {
 			return
 		}
 		c.Next()
-	}, gin.Logger(), gin.Recovery())
-	r.GET("/*proxy", func(c *gin.Context) {
+	}, gin.Logger(), gin.Recovery(), func(c *gin.Context) {
 		hostname := strings.Split(c.Request.Host, ":")[0]
 
 		if hostname == *rootDomain && *redirectRoot {
@@ -78,6 +77,7 @@ func startHTTPHandler(state *State) {
 				},
 			}
 			gin.WrapH(wsProxy)(c)
+			return
 		} else {
 			proxy := httputil.NewSingleHostReverseProxy(url)
 			proxy.Transport = &http.Transport{
@@ -87,6 +87,7 @@ func startHTTPHandler(state *State) {
 				},
 			}
 			gin.WrapH(proxy)(c)
+			return
 		}
 	})
 
