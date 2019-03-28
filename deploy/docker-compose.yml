@@ -26,7 +26,7 @@ services:
     depends_on: 
       - letsencrypt
     volumes:
-      - ./letsencrypt/live/$DOMAIN:/ssl
+      - ./letsencrypt:/etc/letsencrypt
       - ./pubkeys:/pubkeys
       - ./keys:/keys
     command: |
@@ -34,9 +34,11 @@ services:
       -sish.https=:443
       -sish.http=:80
       -sish.httpsenabled=true
-      -sish.httpspems=/ssl
+      -sish.httpspems=/etc/letsencrypt/live/$DOMAIN
       -sish.keysdir=/pubkeys
       -sish.pkloc=/keys/ssh_key
       -sish.bindrandom=false
+      -sish.domain=$DOMAIN
+      -sish.forcerandomsubdomain=false
     network_mode: host
     restart: always
