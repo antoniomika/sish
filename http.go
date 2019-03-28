@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net"
@@ -55,7 +56,6 @@ func startHTTPHandler(state *State) {
 		proxyHolder := loc.(*ProxyHolder)
 
 		url := c.Request.URL
-		url.Host = "local"
 		url.Scheme = proxyHolder.Scheme
 
 		dialer := func(network, addr string) (net.Conn, error) {
@@ -72,12 +72,18 @@ func startHTTPHandler(state *State) {
 			wsProxy := websocketproxy.NewProxy(url)
 			wsProxy.Dialer = &websocket.Dialer{
 				NetDial: dialer,
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: !*verifySSL,
+				},
 			}
 			gin.WrapH(wsProxy)(c)
 		} else {
 			proxy := httputil.NewSingleHostReverseProxy(url)
 			proxy.Transport = &http.Transport{
 				Dial: dialer,
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: !*verifySSL,
+				},
 			}
 			gin.WrapH(proxy)(c)
 		}

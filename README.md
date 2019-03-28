@@ -27,6 +27,20 @@ Builds are made automatically on Google Cloud Build and Dockerhub. Feel free to 
 3. SSH to your host to communicate with sish
     - `ssh -p 2222 -R 80:localhost:8080 ssi.sh`
 
+### Docker Compose
+You can also use Docker Compose to setup your sish instance. This includes taking care of SSL via Let's Encrypt for you. This uses the [adferrand/docker-letsencrypt-dns](https://github.com/adferrand/docker-letsencrypt-dns) container to handle issuing wildcard certifications over DNS. For more information on how to use this, head to that link above. Generally, you can deploy your service like so:
+
+```bash
+DOMAIN=yourdomain.com \
+LETSENCRYPT_USER_MAIL=you@yourdomain.com \
+LEXICON_PROVIDER=cloudflare \
+LEXICON_PROVIDER_OPTIONS="--auth-username=you@yourdomain.com --auth-token=your-auth-token" \
+docker-compose -f deploy/docker-compose.yml up -d
+```
+
+## How it works
+SSH can normally forward local and remote ports. This service implements an SSH server that only does that and nothing else. The service supports multiplexing connections over HTTP/HTTPS with WebSocket support. Just assign a remote port as port `80` to proxy HTTP traffic and `443` to proxy HTTPS traffic. If you use any other remote port, the server will listen to the port for connections, but only if that port is available.
+
 You can choose your own subdomain instead of relying on a randomly assigned one
 by setting the `-sish.bindrandom` option to `false` and then selecting a
 subdomain by prepending it to the remote port specifier:
@@ -34,9 +48,6 @@ subdomain by prepending it to the remote port specifier:
 `ssh -p 2222 -R foo:80:localhost:8080 ssi.sh`
 
 If the selected subdomain is not taken, it will be assigned to your connection.
-
-## How it works
-SSH can normally forward local and remote ports. This service implements an SSH server that only does that and nothing else. The service supports multiplexing connections over HTTP/HTTPS with WebSocket support. Just assign a remote port as port `80` to proxy HTTP traffic and `443` to proxy HTTPS traffic. If you use any other remote port, the server will listen to the port for connections, but only if that port is available.
 
 ## Authentication
 If you want to use this service privately, it supports both public key and password authentication. To enable authentication, set `-sish.auth=true` as one of your CLI options and be sure to configure `-sish.password` or `-sish.keysdir` to your liking. The directory provided by `-sish.keysdir` is watched for changes and will reload the authorized keys automatically. The authorized cert index is regenerated on directory modification, so removed public keys will also automatically be removed. Files in this directory can either be single key per file, or multiple keys per file separated by newlines, similar to `authorized_keys`. Password auth can be disabled by setting `-sish.password=""` as a CLI option.
@@ -118,6 +129,8 @@ Usage of ./sish:
         The length of the random subdomain to generate (default 3)
   -sish.usegeodb
         Whether or not to use the maxmind geodb
+  -sish.verifyssl
+        Whether or not to verify SSL on proxy connection (default true)
   -sish.whitelistedcountries string
         A comma separated list of whitelisted countries
   -sish.whitelistedips string

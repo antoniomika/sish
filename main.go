@@ -36,6 +36,7 @@ var (
 	serverAddr           = flag.String("sish.addr", "localhost:2222", "The address to listen for SSH connections")
 	httpAddr             = flag.String("sish.http", "localhost:80", "The address to listen for HTTP connections")
 	httpsAddr            = flag.String("sish.https", "localhost:443", "The address to listen for HTTPS connections")
+	verifySSL            = flag.Bool("sish.verifyssl", true, "Whether or not to verify SSL on proxy connection")
 	httpsEnabled         = flag.Bool("sish.httpsenabled", false, "Whether or not to listen for HTTPS connections")
 	redirectRoot         = flag.Bool("sish.redirectroot", true, "Whether or not to redirect the root domain")
 	redirectRootLocation = flag.String("sish.redirectrootlocation", "https://github.com/antoniomika/sish", "Where to redirect the root domain to")
