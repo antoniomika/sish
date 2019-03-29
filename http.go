@@ -54,8 +54,9 @@ func startHTTPHandler(state *State) {
 
 		proxyHolder := loc.(*ProxyHolder)
 
-		url := c.Request.URL
+		url := *c.Request.URL
 		url.Host = "local"
+		url.Path = ""
 		url.Scheme = proxyHolder.Scheme
 
 		dialer := func(network, addr string) (net.Conn, error) {
@@ -69,7 +70,7 @@ func startHTTPHandler(state *State) {
 			}
 
 			url.Scheme = scheme
-			wsProxy := websocketproxy.NewProxy(url)
+			wsProxy := websocketproxy.NewProxy(&url)
 			wsProxy.Dialer = &websocket.Dialer{
 				NetDial: dialer,
 				TLSClientConfig: &tls.Config{
@@ -78,17 +79,17 @@ func startHTTPHandler(state *State) {
 			}
 			gin.WrapH(wsProxy)(c)
 			return
-		} else {
-			proxy := httputil.NewSingleHostReverseProxy(url)
-			proxy.Transport = &http.Transport{
-				Dial: dialer,
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: !*verifySSL,
-				},
-			}
-			gin.WrapH(proxy)(c)
-			return
 		}
+
+		proxy := httputil.NewSingleHostReverseProxy(&url)
+		proxy.Transport = &http.Transport{
+			Dial: dialer,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: !*verifySSL,
+			},
+		}
+		gin.WrapH(proxy)(c)
+		return
 	})
 
 	if *httpsEnabled {
