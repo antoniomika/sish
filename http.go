@@ -57,6 +57,8 @@ func startHTTPHandler(state *State) {
 		url := *c.Request.URL
 		url.Host = "local"
 		url.Path = ""
+		url.RawQuery = ""
+		url.Fragment = ""
 		url.Scheme = proxyHolder.Scheme
 
 		dialer := func(network, addr string) (net.Conn, error) {
