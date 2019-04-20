@@ -118,15 +118,20 @@ func main() {
 		go func() {
 			for {
 				log.Println("=======Start=========")
-				log.Println("====Goroutines====")
+				log.Println("===Goroutines=====")
 				log.Println(runtime.NumGoroutine())
-				log.Println("====Listeners=====")
+				log.Println("===Listeners======")
 				state.Listeners.Range(func(key, value interface{}) bool {
 					log.Println(key, value)
 					return true
 				})
-				log.Println("====Clients=======")
+				log.Println("===Clients========")
 				state.SSHConnections.Range(func(key, value interface{}) bool {
+					log.Println(key, value)
+					return true
+				})
+				log.Println("===HTTP Clients===")
+				state.HTTPListeners.Range(func(key, value interface{}) bool {
 					log.Println(key, value)
 					return true
 				})
