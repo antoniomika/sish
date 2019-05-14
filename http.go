@@ -52,6 +52,14 @@ func startHTTPHandler(state *State) {
 			return
 		}
 
+		requestedScheme := "http"
+
+		if c.Request.TLS != nil {
+			requestedScheme = "https"
+		}
+
+		c.Request.Header.Set("X-Forwarded-Proto", requestedScheme)
+
 		proxyHolder := loc.(*ProxyHolder)
 
 		url := *c.Request.URL
@@ -65,7 +73,7 @@ func startHTTPHandler(state *State) {
 			return net.Dial("unix", proxyHolder.ProxyTo)
 		}
 
-		if websocket.IsWebSocketUpgrade(c.Request) {
+		if c.IsWebsocket() {
 			scheme := "ws"
 			if url.Scheme == "https" {
 				scheme = "wss"
