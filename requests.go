@@ -75,6 +75,15 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		os.Remove(tmpfile.Name())
 	}()
 
+	connType := "tcp"
+	if stringPort == "80" {
+		connType = "http"
+	} else if stringPort == "443" {
+		connType = "https"
+	}
+
+	sshConn.Messages <- fmt.Sprintf("\nStarting SSH Fowarding service for %s:%s. Forwarded connections can be accessed via the following methods:", connType, stringPort)
+
 	if stringPort == "80" || stringPort == "443" {
 		scheme := "http"
 		if stringPort == "443" {
@@ -92,9 +101,13 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		state.HTTPListeners.Store(host, pH)
 		defer state.HTTPListeners.Delete(host)
 
-		sshConn.Messages <- fmt.Sprintf("HTTP requests for 80 and 443 can be reached on host: %s", host)
+		sshConn.Messages <- fmt.Sprintf("HTTP: http://%s:%d", host, *httpPort)
+
+		if *httpsEnabled {
+			sshConn.Messages <- fmt.Sprintf("HTTPS: https://%s:%d", host, *httpsPort)
+		}
 	} else {
-		sshConn.Messages <- fmt.Sprintf("Connections being forwarded to %s:%d", *rootDomain, chanListener.Addr().(*net.TCPAddr).Port)
+		sshConn.Messages <- fmt.Sprintf("TCP: %s:%d", *rootDomain, chanListener.Addr().(*net.TCPAddr).Port)
 	}
 
 	go func() {

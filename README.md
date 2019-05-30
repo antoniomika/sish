@@ -107,12 +107,16 @@ Usage of ./sish:
         Whether or not to force a random subdomain (default true)
   -sish.http string
         The address to listen for HTTP connections (default "localhost:80")
+  -sish.httpport int
+        The port for HTTP connections. This is only for output messages (default 80)
   -sish.https string
         The address to listen for HTTPS connections (default "localhost:443")
   -sish.httpsenabled
         Whether or not to listen for HTTPS connections
   -sish.httpspems string
         The location of pem files for HTTPS (fullchain.pem and privkey.pem) (default "ssl/")
+  -sish.httpsport int
+        The port for HTTPS connections. This is only for output messages (default 443)
   -sish.keysdir string
         Directory for public keys for pubkey auth (default "pubkeys/")
   -sish.password string
