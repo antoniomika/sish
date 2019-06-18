@@ -133,6 +133,8 @@ Usage of ./sish:
         The length of the random subdomain to generate (default 3)
   -sish.usegeodb
         Whether or not to use the maxmind geodb
+  -sish.verifyorigin
+        Whether or not to verify origin on websocket connection (default true)
   -sish.verifyssl
         Whether or not to verify SSL on proxy connection (default true)
   -sish.whitelistedcountries string

@@ -38,6 +38,7 @@ var (
 	httpPort             = flag.Int("sish.httpport", 80, "The port for HTTP connections. This is only for output messages")
 	httpsAddr            = flag.String("sish.https", "localhost:443", "The address to listen for HTTPS connections")
 	httpsPort            = flag.Int("sish.httpsport", 443, "The port for HTTPS connections. This is only for output messages")
+	verifyOrigin         = flag.Bool("sish.verifyorigin", true, "Whether or not to verify origin on websocket connection")
 	verifySSL            = flag.Bool("sish.verifyssl", true, "Whether or not to verify SSL on proxy connection")
 	httpsEnabled         = flag.Bool("sish.httpsenabled", false, "Whether or not to listen for HTTPS connections")
 	redirectRoot         = flag.Bool("sish.redirectroot", true, "Whether or not to redirect the root domain")

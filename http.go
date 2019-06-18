@@ -73,19 +73,33 @@ func startHTTPHandler(state *State) {
 			return net.Dial("unix", proxyHolder.ProxyTo)
 		}
 
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: !*verifySSL,
+		}
+
 		if c.IsWebsocket() {
 			scheme := "ws"
 			if url.Scheme == "https" {
 				scheme = "wss"
 			}
 
+			var checkOrigin func(r *http.Request) bool
+			if !*verifyOrigin {
+				checkOrigin = func(r *http.Request) bool {
+					return true
+				}
+			}
+
 			url.Scheme = scheme
 			wsProxy := websocketproxy.NewProxy(&url)
+			wsProxy.Upgrader = &websocket.Upgrader{
+				ReadBufferSize:  1024,
+				WriteBufferSize: 1024,
+				CheckOrigin:     checkOrigin,
+			}
 			wsProxy.Dialer = &websocket.Dialer{
-				NetDial: dialer,
-				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: !*verifySSL,
-				},
+				NetDial:         dialer,
+				TLSClientConfig: tlsConfig,
 			}
 			gin.WrapH(wsProxy)(c)
 			return
@@ -93,10 +107,8 @@ func startHTTPHandler(state *State) {
 
 		proxy := httputil.NewSingleHostReverseProxy(&url)
 		proxy.Transport = &http.Transport{
-			Dial: dialer,
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: !*verifySSL,
-			},
+			Dial:            dialer,
+			TLSClientConfig: tlsConfig,
 		}
 		gin.WrapH(proxy)(c)
 		return
