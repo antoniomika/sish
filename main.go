@@ -183,10 +183,24 @@ func main() {
 			continue
 		}
 
+		clientLoggedIn := false
+
+		if *cleanupUnbound {
+			go func() {
+				select {
+				case <-time.NewTimer(5 * time.Second).C:
+					if !clientLoggedIn {
+						conn.Close()
+					}
+				}
+			}()
+		}
+
 		log.Println("Accepted SSH connection for:", conn.RemoteAddr())
 
 		go func() {
 			sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
+			clientLoggedIn = true
 			if err != nil {
 				conn.Close()
 				log.Println(err)
