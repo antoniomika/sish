@@ -125,6 +125,10 @@ Usage of ./sish:
         SSH server private key (default "keys/ssh_key")
   -sish.pkpass string
         Passphrase to use for the server private key (default "S3Cr3tP4$$phrAsE")
+  -sish.proxyprotoenabled
+        Whether or not to enable the use of the proxy protocol
+  -sish.proxyprotoversion string
+        What version of the proxy protocol to use. Can either be 1, 2, or userdefined. If userdefined, the user needs to add a command to SSH called proxy:version (ie proxy:1) (default "1")
   -sish.redirectroot
         Whether or not to redirect the root domain (default true)
   -sish.redirectrootlocation string
