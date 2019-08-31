@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"log"
 	mathrand "math/rand"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -27,6 +28,55 @@ var (
 	holderLock = sync.Mutex{}
 )
 
+func getRandomPortInRange(portRange string) uint32 {
+	var bindPort uint32
+
+	ranges := strings.Split(strings.TrimSpace(portRange), ",")
+	possible := [][]uint64{}
+	for _, r := range ranges {
+		ends := strings.Split(strings.TrimSpace(r), "-")
+
+		if len(ends) == 1 {
+			ui, err := strconv.ParseUint(ends[0], 0, 64)
+			if err != nil {
+				return 0
+			}
+
+			possible = append(possible, []uint64{uint64(ui)})
+		} else if len(ends) == 2 {
+			ui1, err := strconv.ParseUint(ends[0], 0, 64)
+			if err != nil {
+				return 0
+			}
+
+			ui2, err := strconv.ParseUint(ends[1], 0, 64)
+			if err != nil {
+				return 0
+			}
+
+			possible = append(possible, []uint64{uint64(ui1), uint64(ui2)})
+		}
+	}
+
+	mathrand.Seed(time.Now().UnixNano())
+	locHolder := mathrand.Intn(len(possible))
+
+	if len(possible[locHolder]) == 1 {
+		bindPort = uint32(possible[locHolder][0])
+	} else if len(possible[locHolder]) == 2 {
+		bindPort = uint32(mathrand.Intn(int(possible[locHolder][1]-possible[locHolder][0])) + int(possible[locHolder][0]))
+	}
+
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", bindPort))
+	if err != nil {
+		return getRandomPortInRange(portRange)
+	}
+
+	ln.Close()
+
+	return bindPort
+}
+
 func checkPort(port uint32, portRanges string) (uint32, error) {
 	ranges := strings.Split(strings.TrimSpace(portRanges), ",")
 	checks := false
@@ -43,9 +93,7 @@ func checkPort(port uint32, portRanges string) (uint32, error) {
 				checks = true
 				continue
 			}
-		}
-
-		if len(ends) == 2 {
+		} else if len(ends) == 2 {
 			ui1, err := strconv.ParseUint(ends[0], 0, 64)
 			if err != nil {
 				return 0, err

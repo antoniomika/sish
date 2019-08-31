@@ -18,10 +18,11 @@ import (
 
 // SSHConnection handles state for a SSHConnection
 type SSHConnection struct {
-	SSHConn   *ssh.ServerConn
-	Listeners *sync.Map
-	Close     chan bool
-	Messages  chan string
+	SSHConn    *ssh.ServerConn
+	Listeners  *sync.Map
+	Close      chan bool
+	Messages   chan string
+	ProxyProto byte
 }
 
 // State handles overall state
@@ -61,6 +62,8 @@ var (
 	bindRange            = flag.String("sish.bindrange", "0,1024-65535", "Ports that are allowed to be bound")
 	cleanupUnbound       = flag.Bool("sish.cleanupunbound", true, "Whether or not to cleanup unbound (forwarded) SSH connections")
 	bindRandom           = flag.Bool("sish.bindrandom", true, "Bind ports randomly (OS chooses)")
+	proxyProtoEnabled    = flag.Bool("sish.proxyprotoenabled", false, "Whether or not to enable the use of the proxy protocol")
+	proxyProtoVersion    = flag.String("sish.proxyprotoversion", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined. If userdefined, the user needs to add a command to SSH called proxy:version (ie proxy:1)")
 	debug                = flag.Bool("sish.debug", false, "Whether or not to print debug information")
 	bannedSubdomainList  = []string{""}
 	filter               ipfilter.IPFilter

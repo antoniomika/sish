@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/pires/go-proxyproto"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -40,6 +41,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		bindPort = checkedPort
 		if *bindRandom {
 			bindPort = 0
+
+			if *bindRange != "" {
+				bindPort = getRandomPortInRange(*bindRange)
+			}
 		}
 	}
 
@@ -145,6 +150,23 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		}
 
 		defer newChan.Close()
+
+		if sshConn.ProxyProto != 0 && listenType != "unix" {
+			sourceInfo := cl.RemoteAddr().(*net.TCPAddr)
+			destInfo := cl.LocalAddr().(*net.TCPAddr)
+
+			proxyProtoHeader := proxyproto.Header{
+				Version:            sshConn.ProxyProto,
+				Command:            proxyproto.ProtocolVersionAndCommand(proxyproto.PROXY),
+				TransportProtocol:  proxyproto.AddressFamilyAndProtocol(proxyproto.TCPv4),
+				SourceAddress:      sourceInfo.IP,
+				DestinationAddress: destInfo.IP,
+				SourcePort:         uint16(sourceInfo.Port),
+				DestinationPort:    uint16(destInfo.Port),
+			}
+
+			proxyProtoHeader.WriteTo(newChan)
+		}
 
 		go copyBoth(cl, newChan)
 		go ssh.DiscardRequests(newReqs)
