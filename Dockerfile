@@ -23,5 +23,6 @@ LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 
 WORKDIR /app
 COPY --from=builder /go/bin/sish /app/sish
+COPY --from=builder /tmp /tmp
 
 ENTRYPOINT ["/app/sish"]
