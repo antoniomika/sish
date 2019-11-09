@@ -25,8 +25,15 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 		for {
 			select {
 			case c := <-sshConn.Messages:
-				connection.Write([]byte(c))
-				connection.Write([]byte{'\r', '\n'})
+				_, err := connection.Write([]byte(c))
+				if err != nil {
+					log.Println("Error trying to write message to socket:", err)
+				}
+
+				_, err = connection.Write([]byte{'\r', '\n'})
+				if err != nil {
+					log.Println("Error trying to write message to socket:", err)
+				}
 			case <-sshConn.Close:
 				return
 			}
@@ -61,7 +68,10 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 		for req := range requests {
 			switch req.Type {
 			case "shell":
-				req.Reply(true, nil)
+				err := req.Reply(true, nil)
+				if err != nil {
+					log.Println("Error replying to socket request:", err)
+				}
 			case "exec":
 				payloadString := string(req.Payload[4:])
 				if strings.HasPrefix(payloadString, proxyProtoPrefix) && *proxyProtoEnabled {

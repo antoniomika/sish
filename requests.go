@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"os"
 	"strconv"
@@ -28,14 +29,20 @@ type forwardedTCPPayload struct {
 func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state *State) {
 	check := &channelForwardMsg{}
 
-	ssh.Unmarshal(newRequest.Payload, check)
+	err := ssh.Unmarshal(newRequest.Payload, check)
+	if err != nil {
+		log.Println("Error unmarshaling remote forward payload:", err)
+	}
 
 	bindPort := check.Rport
 
 	if bindPort != uint32(80) && bindPort != uint32(443) {
 		checkedPort, err := checkPort(check.Rport, *bindRange)
 		if err != nil && !*bindRandom {
-			newRequest.Reply(false, nil)
+			err = newRequest.Reply(false, nil)
+			if err != nil {
+				log.Println("Error replying to socket request:", err)
+			}
 			return
 		}
 
@@ -55,7 +62,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 
 	tmpfile, err := ioutil.TempFile("", sshConn.SSHConn.RemoteAddr().String()+":"+stringPort)
 	if err != nil {
-		newRequest.Reply(false, nil)
+		err = newRequest.Reply(false, nil)
+		if err != nil {
+			log.Println("Error replying to socket request:", err)
+		}
 		return
 	}
 	os.Remove(tmpfile.Name())
@@ -67,7 +77,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 
 	chanListener, err := net.Listen(listenType, listenAddr)
 	if err != nil {
-		newRequest.Reply(false, nil)
+		err = newRequest.Reply(false, nil)
+		if err != nil {
+			log.Println("Error replying to socket request:", err)
+		}
 		return
 	}
 
@@ -119,12 +132,8 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 	sshConn.Messages <- requestMessages
 
 	go func() {
-		for {
-			select {
-			case <-sshConn.Close:
-				chanListener.Close()
-				return
-			}
+		for range sshConn.Close {
+			chanListener.Close()
 		}
 	}()
 
@@ -166,7 +175,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 				DestinationPort:    uint16(destInfo.Port),
 			}
 
-			proxyProtoHeader.WriteTo(newChan)
+			_, err := proxyProtoHeader.WriteTo(newChan)
+			if err != nil {
+				log.Println("Error writing to channel:", err)
+			}
 		}
 
 		go copyBoth(cl, newChan)
@@ -185,8 +197,14 @@ func copyBoth(writer net.Conn, reader ssh.Channel) {
 
 	go func() {
 		defer closeBoth()
-		io.Copy(writer, reader)
+		_, err := io.Copy(writer, reader)
+		if err != nil {
+			log.Println("Error writing to reader:", err)
+		}
 	}()
 
-	io.Copy(reader, writer)
+	_, err := io.Copy(reader, writer)
+	if err != nil {
+		log.Println("Error writing to writer:", err)
+	}
 }

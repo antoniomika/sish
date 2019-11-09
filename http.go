@@ -48,7 +48,10 @@ func startHTTPHandler(state *State) {
 
 		loc, ok := state.HTTPListeners.Load(hostname)
 		if !ok {
-			c.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", hostname))
+			err := c.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", hostname))
+			if err != nil {
+				log.Println("Aborting with error", err)
+			}
 			return
 		}
 
@@ -111,7 +114,6 @@ func startHTTPHandler(state *State) {
 			TLSClientConfig: tlsConfig,
 		}
 		gin.WrapH(proxy)(c)
-		return
 	})
 
 	if *httpsEnabled {
