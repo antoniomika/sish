@@ -7,6 +7,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
+    - name: Lints the codebase
+      run: |
+        docker run --rm -v $(pwd):/app -w /app golangci/golangci-lint:v1.21.0 golangci-lint run -E goimports
     - name: Register multiarch for Docker
       run: |
         docker run --privileged linuxkit/binfmt:v0.7
