@@ -8,23 +8,41 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: Register multiarch for Docker
-      run: docker run --privileged linuxkit/binfmt:v0.7
+      run: |
+        docker run --privileged linuxkit/binfmt:v0.7
     - name: Install buildx
-      run: mkdir -p ~/.docker/cli-plugins && wget https://github.com/docker/buildx/releases/download/v0.3.0/buildx-v0.3.0.linux-amd64 -O ~/.docker/cli-plugins/docker-buildx && chmod a+x ~/.docker/cli-plugins/docker-buildx
+      run: |
+        mkdir -p ~/.docker/cli-plugins
+        wget https://github.com/docker/buildx/releases/download/v0.3.0/buildx-v0.3.0.linux-amd64 \
+          -O ~/.docker/cli-plugins/docker-buildx
+        chmod a+x ~/.docker/cli-plugins/docker-buildx
     - name: Setup buildkit
-      run: docker buildx create --name builder && docker buildx use builder && docker buildx inspect --bootstrap && docker buildx ls
+      run: |
+        docker buildx create --name builder
+        docker buildx use builder
+        docker buildx inspect --bootstrap
+        docker buildx ls
     - name: Login to GitHub Docker Registry
       env:
         DOCKER_USERNAME: ${{ secrets.GITHUB_DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.GITHUB_DOCKER_PASSWORD }}
-      run: echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+      run: echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin
     - name: Build and push the Docker images
-      run: docker buildx build --push --platform linux/arm/v7,linux/arm64,linux/amd64 -t $GITHUB_REPOSITORY:$GITHUB_SHA .
-    - name: Build and push the versioned Docker images
-      if: startsWith(github.ref, 'refs/tags/v')
       run: |
-        export REF="${GITHUB_REF//refs\/tags\/}"
-        docker buildx build --push --platform linux/arm/v7,linux/arm64,linux/amd64 -t $GITHUB_REPOSITORY:$REF .
-    - name: Build and push the latest Docker images
-      if: github.event.base_ref == 'refs/heads/master'
-      run: docker buildx build --push --platform linux/arm/v7,linux/arm64,linux/amd64 -t $GITHUB_REPOSITORY:latest .
+        DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        OTHER_TAGS=""
+        REF="master"
+        if [[ ${GITHUB_REF} =~ ^refs\/tags\/v.*$ ]]
+        then
+          REF="${GITHUB_REF//refs\/tags\/}"
+          OTHER_TAGS="${OTHER_TAGS} -t ${GITHUB_REPOSITORY}:${REF} -t ${GITHUB_REPOSITORY}:latest"
+        fi
+
+        docker buildx build \
+          --push \
+          --platform linux/arm/v7,linux/arm64,linux/amd64 \
+          --build-arg VERSION=${REF} \
+          --build-arg COMMIT=${GITHUB_SHA} \
+          --build-arg DATE=${DATE} \
+          -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} \
+          ${OTHER_TAGS} .
