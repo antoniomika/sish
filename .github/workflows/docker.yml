@@ -20,33 +20,11 @@ jobs:
       run: echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
     - name: Build and push the Docker images
       run: docker buildx build --push --platform linux/arm/v7,linux/arm64,linux/amd64 -t $GITHUB_REPOSITORY:$GITHUB_SHA .
+    - name: Build and push the versioned Docker images
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        export REF="${GITHUB_REF//refs\/tags\/}"
+        docker buildx build --push --platform linux/arm/v7,linux/arm64,linux/amd64 -t $GITHUB_REPOSITORY:$REF .
     - name: Build and push the latest Docker images
-      if: github.ref == 'refs/heads/master'
+      if: github.event.base_ref == 'refs/heads/master'
       run: docker buildx build --push --platform linux/arm/v7,linux/arm64,linux/amd64 -t $GITHUB_REPOSITORY:latest .
-    - name: Dump GitHub context
-      env:
-        GITHUB_CONTEXT: ${{ toJson(github) }}
-      run: echo "$GITHUB_CONTEXT"
-    - name: Dump job context
-      env:
-        JOB_CONTEXT: ${{ toJson(job) }}
-      run: echo "$JOB_CONTEXT"
-    - name: Dump steps context
-      env:
-        STEPS_CONTEXT: ${{ toJson(steps) }}
-      run: echo "$STEPS_CONTEXT"
-    - name: Dump runner context
-      env:
-        RUNNER_CONTEXT: ${{ toJson(runner) }}
-      run: echo "$RUNNER_CONTEXT"
-    - name: Dump strategy context
-      env:
-        STRATEGY_CONTEXT: ${{ toJson(strategy) }}
-      run: echo "$STRATEGY_CONTEXT"
-    - name: Dump matrix context
-      env:
-        MATRIX_CONTEXT: ${{ toJson(matrix) }}
-      run: echo "$MATRIX_CONTEXT"
-    # - name: Build and push the versioned Docker images
-    #   # if: startsWith(github.ref, 'refs/heads/v')
-    #   run: docker buildx build --push --platform linux/arm/v7,linux/arm64,linux/amd64 -t $GITHUB_REPOSITORY:latest .
