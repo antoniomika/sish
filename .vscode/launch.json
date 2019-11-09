@@ -12,15 +12,15 @@
       "program": "${fileDirname}",
       "env": {},
       "args": [
-        "-sish.auth=true",
+        "-sish.auth=false",
         "-sish.debug=true",
-        "-sish.password=''",
         "-sish.subdomainlen=3",
         "-sish.httpsenabled=false",
         "-sish.http=localhost:8081",
         "-sish.addr=localhost:2222",
         "-sish.domain=testing.ssi.sh",
-        "-sish.forcerandomsubdomain=false"
+        "-sish.forcerandomsubdomain=false",
+        "-sish.bindrandom=false"
       ]
     }
   ]

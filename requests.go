@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/pires/go-proxyproto"
 	"golang.org/x/crypto/ssh"
@@ -174,11 +175,18 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 }
 
 func copyBoth(writer net.Conn, reader ssh.Channel) {
-	defer func() {
+	closeBoth := func() {
+		time.Sleep(1 * time.Millisecond)
 		writer.Close()
 		reader.Close()
+	}
+
+	defer closeBoth()
+
+	go func() {
+		defer closeBoth()
+		io.Copy(writer, reader)
 	}()
 
-	go io.Copy(writer, reader)
 	io.Copy(reader, writer)
 }
