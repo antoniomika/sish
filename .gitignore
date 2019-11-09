@@ -7,3 +7,4 @@ ssl/*
 sish
 deploy/*
 !deploy/docker-compose.yml
+dist/

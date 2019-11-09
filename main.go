@@ -34,6 +34,9 @@ type State struct {
 }
 
 var (
+	version              = "dev"
+	commit               = "none"
+	date                 = "unknown"
 	serverAddr           = flag.String("sish.addr", "localhost:2222", "The address to listen for SSH connections")
 	httpAddr             = flag.String("sish.http", "localhost:80", "The address to listen for HTTP connections")
 	httpPort             = flag.Int("sish.httpport", 80, "The port for HTTP connections. This is only for output messages")
@@ -65,12 +68,18 @@ var (
 	proxyProtoEnabled    = flag.Bool("sish.proxyprotoenabled", false, "Whether or not to enable the use of the proxy protocol")
 	proxyProtoVersion    = flag.String("sish.proxyprotoversion", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined. If userdefined, the user needs to add a command to SSH called proxy:version (ie proxy:1)")
 	debug                = flag.Bool("sish.debug", false, "Whether or not to print debug information")
+	versionCheck         = flag.Bool("sish.version", false, "Print version and exit")
 	bannedSubdomainList  = []string{""}
 	filter               ipfilter.IPFilter
 )
 
 func main() {
 	flag.Parse()
+
+	if *versionCheck {
+		log.Printf("Version: %v\nCommit: %v\nDate: %v\n", version, commit, date)
+		os.Exit(0)
+	}
 
 	commaSplitFields := func(c rune) bool {
 		return c == ','
