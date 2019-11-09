@@ -24,5 +24,3 @@ archives:
     format_overrides:
     - goos: windows
       format: zip
-snapshot:
-  name_template: "{{ .Tag }}-next"
