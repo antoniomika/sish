@@ -70,7 +70,7 @@ var (
 	debug                = flag.Bool("sish.debug", false, "Whether or not to print debug information")
 	versionCheck         = flag.Bool("sish.version", false, "Print version and exit")
 	bannedSubdomainList  = []string{""}
-	filter               ipfilter.IPFilter
+	filter               *ipfilter.IPFilter
 )
 
 func main() {
@@ -109,8 +109,6 @@ func main() {
 		AllowedIPs:       whitelistedIPList,
 		BlockByDefault:   len(whitelistedIPList) > 0 || len(whitelistedCountriesList) > 0,
 	}
-
-	var filter *ipfilter.IPFilter
 
 	if *useGeoDB {
 		filter = ipfilter.NewLazy(ipfilterOpts)
@@ -174,7 +172,7 @@ func main() {
 	}()
 
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, os.Kill)
+	signal.Notify(c, os.Interrupt)
 	go func() {
 		for range c {
 			os.Exit(0)
@@ -199,11 +197,9 @@ func main() {
 
 		if *cleanupUnbound {
 			go func() {
-				select {
-				case <-time.NewTimer(5 * time.Second).C:
-					if !clientLoggedIn {
-						conn.Close()
-					}
+				<-time.NewTimer(5 * time.Second).C
+				if !clientLoggedIn {
+					conn.Close()
 				}
 			}()
 		}

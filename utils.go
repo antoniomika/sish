@@ -127,7 +127,7 @@ func watchCerts() {
 
 	go func() {
 		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt, os.Kill)
+		signal.Notify(c, os.Interrupt)
 		go func() {
 			for range c {
 				watcher.Close()
@@ -251,7 +251,10 @@ func generatePrivateKey(passphrase string) []byte {
 		pemData = pem.EncodeToMemory(pemBlock)
 	}
 
-	ioutil.WriteFile(*pkLoc, pemData, 0644)
+	err = ioutil.WriteFile(*pkLoc, pemData, 0644)
+	if err != nil {
+		log.Println("Error writing to file:", err)
+	}
 
 	return pemData
 }

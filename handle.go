@@ -21,7 +21,10 @@ func handleRequest(newRequest *ssh.Request, sshConn *SSHConnection, state *State
 	case "tcpip-forward":
 		handleRemoteForward(newRequest, sshConn, state)
 	default:
-		newRequest.Reply(false, nil)
+		err := newRequest.Reply(false, nil)
+		if err != nil {
+			log.Println("Error replying to socket request:", err)
+		}
 	}
 }
 
@@ -39,6 +42,9 @@ func handleChannel(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 	case "session":
 		handleSession(newChannel, sshConn, state)
 	default:
-		newChannel.Reject(ssh.UnknownChannelType, fmt.Sprintf("unknown channel type: %s", channel))
+		err := newChannel.Reject(ssh.UnknownChannelType, fmt.Sprintf("unknown channel type: %s", channel))
+		if err != nil {
+			log.Println("Error rejecting socket channel:", err)
+		}
 	}
 }

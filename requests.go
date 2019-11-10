@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/pires/go-proxyproto"
 	"golang.org/x/crypto/ssh"
@@ -27,14 +29,20 @@ type forwardedTCPPayload struct {
 func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state *State) {
 	check := &channelForwardMsg{}
 
-	ssh.Unmarshal(newRequest.Payload, check)
+	err := ssh.Unmarshal(newRequest.Payload, check)
+	if err != nil {
+		log.Println("Error unmarshaling remote forward payload:", err)
+	}
 
 	bindPort := check.Rport
 
 	if bindPort != uint32(80) && bindPort != uint32(443) {
 		checkedPort, err := checkPort(check.Rport, *bindRange)
 		if err != nil && !*bindRandom {
-			newRequest.Reply(false, nil)
+			err = newRequest.Reply(false, nil)
+			if err != nil {
+				log.Println("Error replying to socket request:", err)
+			}
 			return
 		}
 
@@ -54,7 +62,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 
 	tmpfile, err := ioutil.TempFile("", sshConn.SSHConn.RemoteAddr().String()+":"+stringPort)
 	if err != nil {
-		newRequest.Reply(false, nil)
+		err = newRequest.Reply(false, nil)
+		if err != nil {
+			log.Println("Error replying to socket request:", err)
+		}
 		return
 	}
 	os.Remove(tmpfile.Name())
@@ -66,7 +77,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 
 	chanListener, err := net.Listen(listenType, listenAddr)
 	if err != nil {
-		newRequest.Reply(false, nil)
+		err = newRequest.Reply(false, nil)
+		if err != nil {
+			log.Println("Error replying to socket request:", err)
+		}
 		return
 	}
 
@@ -118,13 +132,8 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 	sshConn.Messages <- requestMessages
 
 	go func() {
-		for {
-			select {
-			case <-sshConn.Close:
-				chanListener.Close()
-				return
-			}
-		}
+		<-sshConn.Close
+		chanListener.Close()
 	}()
 
 	for {
@@ -165,7 +174,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 				DestinationPort:    uint16(destInfo.Port),
 			}
 
-			proxyProtoHeader.WriteTo(newChan)
+			_, err := proxyProtoHeader.WriteTo(newChan)
+			if err != nil {
+				log.Println("Error writing to channel:", err)
+			}
 		}
 
 		go copyBoth(cl, newChan)
@@ -174,11 +186,24 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 }
 
 func copyBoth(writer net.Conn, reader ssh.Channel) {
-	defer func() {
+	closeBoth := func() {
+		time.Sleep(1 * time.Millisecond)
 		writer.Close()
 		reader.Close()
+	}
+
+	defer closeBoth()
+
+	go func() {
+		defer closeBoth()
+		_, err := io.Copy(writer, reader)
+		if err != nil {
+			log.Println("Error writing to reader:", err)
+		}
 	}()
 
-	go io.Copy(writer, reader)
-	io.Copy(reader, writer)
+	_, err := io.Copy(reader, writer)
+	if err != nil {
+		log.Println("Error writing to writer:", err)
+	}
 }

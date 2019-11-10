@@ -9,6 +9,7 @@ import (
 	"net/http/httputil"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/koding/websocketproxy"
@@ -38,7 +39,29 @@ func startHTTPHandler(state *State) {
 			return
 		}
 		c.Next()
-	}, gin.Logger(), gin.Recovery(), func(c *gin.Context) {
+	}, gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		var statusColor, methodColor, resetColor string
+		if param.IsOutputColor() {
+			statusColor = param.StatusCodeColor()
+			methodColor = param.MethodColor()
+			resetColor = param.ResetColor()
+		}
+
+		if param.Latency > time.Minute {
+			// Truncate in a golang < 1.8 safe way
+			param.Latency = param.Latency - param.Latency%time.Second
+		}
+		return fmt.Sprintf("[GIN] %v | %s |%s %3d %s| %13v | %15s |%s %-7s %s %s\n%s",
+			param.TimeStamp.Format("2006/01/02 - 15:04:05"),
+			param.Request.Host,
+			statusColor, param.StatusCode, resetColor,
+			param.Latency,
+			param.ClientIP,
+			methodColor, param.Method, resetColor,
+			param.Path,
+			param.ErrorMessage,
+		)
+	}), gin.Recovery(), func(c *gin.Context) {
 		hostname := strings.Split(c.Request.Host, ":")[0]
 
 		if hostname == *rootDomain && *redirectRoot {
@@ -48,7 +71,10 @@ func startHTTPHandler(state *State) {
 
 		loc, ok := state.HTTPListeners.Load(hostname)
 		if !ok {
-			c.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", hostname))
+			err := c.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", hostname))
+			if err != nil {
+				log.Println("Aborting with error", err)
+			}
 			return
 		}
 
@@ -111,7 +137,6 @@ func startHTTPHandler(state *State) {
 			TLSClientConfig: tlsConfig,
 		}
 		gin.WrapH(proxy)(c)
-		return
 	})
 
 	if *httpsEnabled {
