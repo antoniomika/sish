@@ -132,9 +132,8 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 	sshConn.Messages <- requestMessages
 
 	go func() {
-		for range sshConn.Close {
-			chanListener.Close()
-		}
+		<-sshConn.Close
+		chanListener.Close()
 	}()
 
 	for {
