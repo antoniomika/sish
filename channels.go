@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
@@ -14,6 +15,7 @@ var proxyProtoPrefix = "proxyproto:"
 func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State) {
 	connection, requests, err := newChannel.Accept()
 	if err != nil {
+		sshConn.CleanUp(state)
 		return
 	}
 
@@ -87,6 +89,48 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 			}
 		}
 	}()
+}
+
+func handleAlias(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State) {
+	connection, requests, err := newChannel.Accept()
+	if err != nil {
+		sshConn.CleanUp(state)
+		return
+	}
+
+	go ssh.DiscardRequests(requests)
+
+	if *debug {
+		log.Println("Handling alias connection for:", connection)
+	}
+
+	check := &forwardedTCPPayload{}
+	err = ssh.Unmarshal(newChannel.ExtraData(), check)
+	if err != nil {
+		log.Println("Error unmarshaling information:", err)
+		sshConn.CleanUp(state)
+		return
+	}
+
+	tcpAliasToConnect := fmt.Sprintf("%s:%d", check.Addr, check.Port)
+	loc, ok := state.TCPListeners.Load(tcpAliasToConnect)
+	if !ok {
+		log.Println("Unable to load tcp alias:", tcpAliasToConnect)
+		sshConn.CleanUp(state)
+		return
+	}
+
+	conn, err := net.Dial("unix", loc.(string))
+	if err != nil {
+		log.Println("Error connecting to alias:", err)
+		sshConn.CleanUp(state)
+		return
+	}
+
+	sshConn.Listeners.Store(conn.RemoteAddr(), nil)
+
+	copyBoth(conn, connection, false)
+	sshConn.CleanUp(state)
 }
 
 func getProxyProtoVersion(proxyProtoUserVersion string) byte {

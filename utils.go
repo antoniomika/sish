@@ -328,6 +328,41 @@ func getOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 	return getUnusedHost()
 }
 
+func getOpenAlias(addr string, port string, state *State, sshConn *SSHConnection) string {
+	getUnusedAlias := func() string {
+		first := true
+		alias := fmt.Sprintf("%s:%s", strings.ToLower(addr), port)
+		getRandomAlias := func() string {
+			return fmt.Sprintf("%s:%s", strings.ToLower(RandStringBytesMaskImprSrc(*domainLen)), port)
+		}
+		reportUnavailable := func(unavailable bool) {
+			if first && unavailable {
+				sshConn.Messages <- "This alias is unavaible. Assigning a random alias."
+			}
+		}
+
+		checkAlias := func(checkAlias string) bool {
+			if *forceRandomSubdomain || !first || inBannedList(alias, bannedSubdomainList) {
+				reportUnavailable(true)
+				alias = getRandomAlias()
+			}
+
+			_, ok := state.TCPListeners.Load(alias)
+			reportUnavailable(ok)
+
+			first = false
+			return ok
+		}
+
+		for checkAlias(alias) {
+		}
+
+		return alias
+	}
+
+	return getUnusedAlias()
+}
+
 // RandStringBytesMaskImprSrc creates a random string of length n
 // https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-golang
 func RandStringBytesMaskImprSrc(n int) string {
