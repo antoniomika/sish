@@ -128,19 +128,23 @@ Usage of ./sish:
   -sish.proxyprotoenabled
         Whether or not to enable the use of the proxy protocol
   -sish.proxyprotoversion string
-        What version of the proxy protocol to use. Can either be 1, 2, or userdefined. If userdefined, the user needs to add a command to SSH called proxy:version (ie proxy:1) (default "1")
+        What version of the proxy protocol to use. Can either be 1, 2, or userdefined. If userdefined, the user needs to add a command to SSH called proxyproto:version (ie proxyproto:1) (default "1")
   -sish.redirectroot
         Whether or not to redirect the root domain (default true)
   -sish.redirectrootlocation string
         Where to redirect the root domain to (default "https://github.com/antoniomika/sish")
   -sish.subdomainlen int
         The length of the random subdomain to generate (default 3)
+  -sish.tcpalias
+        Whether or not to allow the use of TCP aliasing
   -sish.usegeodb
         Whether or not to use the maxmind geodb
   -sish.verifyorigin
         Whether or not to verify origin on websocket connection (default true)
   -sish.verifyssl
         Whether or not to verify SSL on proxy connection (default true)
+  -sish.version
+        Print version and exit
   -sish.whitelistedcountries string
         A comma separated list of whitelisted countries
   -sish.whitelistedips string

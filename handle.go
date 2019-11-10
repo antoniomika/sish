@@ -41,6 +41,8 @@ func handleChannel(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 	switch channel := newChannel.ChannelType(); channel {
 	case "session":
 		handleSession(newChannel, sshConn, state)
+	case "direct-tcpip":
+		handleAlias(newChannel, sshConn, state)
 	default:
 		err := newChannel.Reject(ssh.UnknownChannelType, fmt.Sprintf("unknown channel type: %s", channel))
 		if err != nil {

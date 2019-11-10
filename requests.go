@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/pires/go-proxyproto"
@@ -36,22 +37,27 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 
 	bindPort := check.Rport
 
+	handleTCPAliasing := false
 	if bindPort != uint32(80) && bindPort != uint32(443) {
-		checkedPort, err := checkPort(check.Rport, *bindRange)
-		if err != nil && !*bindRandom {
-			err = newRequest.Reply(false, nil)
-			if err != nil {
-				log.Println("Error replying to socket request:", err)
+		if *tcpAlias && check.Addr != "localhost" {
+			handleTCPAliasing = true
+		} else {
+			checkedPort, err := checkPort(check.Rport, *bindRange)
+			if err != nil && !*bindRandom {
+				err = newRequest.Reply(false, nil)
+				if err != nil {
+					log.Println("Error replying to socket request:", err)
+				}
+				return
 			}
-			return
-		}
 
-		bindPort = checkedPort
-		if *bindRandom {
-			bindPort = 0
+			bindPort = checkedPort
+			if *bindRandom {
+				bindPort = 0
 
-			if *bindRange != "" {
-				bindPort = getRandomPortInRange(*bindRange)
+				if *bindRange != "" {
+					bindPort = getRandomPortInRange(*bindRange)
+				}
 			}
 		}
 	}
@@ -70,7 +76,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 	}
 	os.Remove(tmpfile.Name())
 
-	if stringPort == "80" || stringPort == "443" {
+	if stringPort == "80" || stringPort == "443" || handleTCPAliasing {
 		listenType = "unix"
 		listenAddr = tmpfile.Name()
 	}
@@ -126,7 +132,16 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			requestMessages += fmt.Sprintf("HTTPS: https://%s:%d", host, *httpsPort)
 		}
 	} else {
-		requestMessages += fmt.Sprintf("TCP: %s:%d", *rootDomain, chanListener.Addr().(*net.TCPAddr).Port)
+		if handleTCPAliasing {
+			validAlias := getOpenAlias(check.Addr, stringPort, state, sshConn)
+
+			state.TCPListeners.Store(validAlias, chanListener.Addr().String())
+			defer state.TCPListeners.Delete(validAlias)
+
+			requestMessages += fmt.Sprintf("TCP Alias: %s", validAlias)
+		} else {
+			requestMessages += fmt.Sprintf("TCP: %s:%d", *rootDomain, chanListener.Addr().(*net.TCPAddr).Port)
+		}
 	}
 
 	sshConn.Messages <- requestMessages
@@ -160,9 +175,16 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 
 		defer newChan.Close()
 
-		if sshConn.ProxyProto != 0 && listenType != "unix" {
-			sourceInfo := cl.RemoteAddr().(*net.TCPAddr)
-			destInfo := cl.LocalAddr().(*net.TCPAddr)
+		if sshConn.ProxyProto != 0 && (listenType != "unix" || handleTCPAliasing) {
+			var sourceInfo *net.TCPAddr
+			var destInfo *net.TCPAddr
+			if _, ok := cl.RemoteAddr().(*net.TCPAddr); !ok {
+				sourceInfo = sshConn.SSHConn.RemoteAddr().(*net.TCPAddr)
+				destInfo = sshConn.SSHConn.LocalAddr().(*net.TCPAddr)
+			} else {
+				sourceInfo = cl.RemoteAddr().(*net.TCPAddr)
+				destInfo = cl.LocalAddr().(*net.TCPAddr)
+			}
 
 			proxyProtoHeader := proxyproto.Header{
 				Version:            sshConn.ProxyProto,
@@ -180,30 +202,48 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			}
 		}
 
-		go copyBoth(cl, newChan)
+		go copyBoth(cl, newChan, false)
 		go ssh.DiscardRequests(newReqs)
 	}
 }
 
-func copyBoth(writer net.Conn, reader ssh.Channel) {
+func copyBoth(writer net.Conn, reader ssh.Channel, wait bool) {
 	closeBoth := func() {
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		writer.Close()
 		reader.Close()
 	}
 
-	defer closeBoth()
+	var wg sync.WaitGroup
 
 	go func() {
-		defer closeBoth()
+		if wait {
+			wg.Add(1)
+			defer wg.Done()
+		} else {
+			defer closeBoth()
+		}
+
 		_, err := io.Copy(writer, reader)
 		if err != nil {
 			log.Println("Error writing to reader:", err)
 		}
 	}()
 
+	if wait {
+		wg.Add(1)
+	} else {
+		defer closeBoth()
+	}
+
 	_, err := io.Copy(reader, writer)
 	if err != nil {
 		log.Println("Error writing to writer:", err)
 	}
+	if wait {
+		wg.Done()
+	}
+
+	wg.Wait()
+	closeBoth()
 }

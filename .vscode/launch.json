@@ -20,7 +20,9 @@
         "-sish.addr=localhost:2222",
         "-sish.domain=testing.ssi.sh",
         "-sish.forcerandomsubdomain=false",
-        "-sish.bindrandom=false"
+        "-sish.bindrandom=false",
+        "-sish.tcpalias=true",
+        "-sish.proxyprotoenabled=false"
       ]
     }
   ]

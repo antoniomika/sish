@@ -30,6 +30,7 @@ type State struct {
 	SSHConnections *sync.Map
 	Listeners      *sync.Map
 	HTTPListeners  *sync.Map
+	TCPListeners   *sync.Map
 	IPFilter       *ipfilter.IPFilter
 }
 
@@ -66,9 +67,10 @@ var (
 	cleanupUnbound       = flag.Bool("sish.cleanupunbound", true, "Whether or not to cleanup unbound (forwarded) SSH connections")
 	bindRandom           = flag.Bool("sish.bindrandom", true, "Bind ports randomly (OS chooses)")
 	proxyProtoEnabled    = flag.Bool("sish.proxyprotoenabled", false, "Whether or not to enable the use of the proxy protocol")
-	proxyProtoVersion    = flag.String("sish.proxyprotoversion", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined. If userdefined, the user needs to add a command to SSH called proxy:version (ie proxy:1)")
+	proxyProtoVersion    = flag.String("sish.proxyprotoversion", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined. If userdefined, the user needs to add a command to SSH called proxyproto:version (ie proxyproto:1)")
 	debug                = flag.Bool("sish.debug", false, "Whether or not to print debug information")
 	versionCheck         = flag.Bool("sish.version", false, "Print version and exit")
+	tcpAlias             = flag.Bool("sish.tcpalias", false, "Whether or not to allow the use of TCP aliasing")
 	bannedSubdomainList  = []string{""}
 	filter               *ipfilter.IPFilter
 )
@@ -122,6 +124,7 @@ func main() {
 		SSHConnections: &sync.Map{},
 		Listeners:      &sync.Map{},
 		HTTPListeners:  &sync.Map{},
+		TCPListeners:   &sync.Map{},
 		IPFilter:       filter,
 	}
 
