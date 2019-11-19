@@ -27,12 +27,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 		for {
 			select {
 			case c := <-sshConn.Messages:
-				_, err := connection.Write([]byte(c))
-				if err != nil {
-					log.Println("Error trying to write message to socket:", err)
-				}
-
-				_, err = connection.Write([]byte{'\r', '\n'})
+				_, err := connection.Write(append([]byte(c), []byte{'\r', '\n'}...))
 				if err != nil {
 					log.Println("Error trying to write message to socket:", err)
 				}
@@ -79,7 +74,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 				if strings.HasPrefix(payloadString, proxyProtoPrefix) && *proxyProtoEnabled {
 					sshConn.ProxyProto = getProxyProtoVersion(strings.TrimPrefix(payloadString, proxyProtoPrefix))
 					if sshConn.ProxyProto != 0 {
-						sshConn.Messages <- fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto))
+						sendMessage(sshConn, fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)))
 					}
 				}
 			default:
