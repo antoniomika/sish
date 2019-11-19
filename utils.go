@@ -302,7 +302,7 @@ func getOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 		}
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
-				sshConn.Messages <- "This subdomain is unavaible. Assigning a random subdomain."
+				sendMessage(sshConn, "This subdomain is unavaible. Assigning a random subdomain.")
 			}
 		}
 
@@ -337,7 +337,7 @@ func getOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 		}
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
-				sshConn.Messages <- "This alias is unavaible. Assigning a random alias."
+				sendMessage(sshConn, "This alias is unavaible. Assigning a random alias.")
 			}
 		}
 
@@ -389,4 +389,18 @@ func RandStringBytesMaskImprSrc(n int) string {
 	}
 
 	return string(b)
+}
+
+func sendMessage(sshConn *SSHConnection, message string) {
+	for i := 0; i < 2; {
+		select {
+		case <-sshConn.Close:
+			return
+		case sshConn.Messages <- message:
+			return
+		default:
+			time.Sleep(20 * time.Millisecond)
+			i++
+		}
+	}
 }

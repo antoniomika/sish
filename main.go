@@ -18,11 +18,13 @@ import (
 
 // SSHConnection handles state for a SSHConnection
 type SSHConnection struct {
-	SSHConn    *ssh.ServerConn
-	Listeners  *sync.Map
-	Close      chan bool
-	Messages   chan string
-	ProxyProto byte
+	SSHConn        *ssh.ServerConn
+	Listeners      *sync.Map
+	Close          chan bool
+	Messages       chan string
+	ProxyProto     byte
+	Session        chan bool
+	CleanupHandler bool
 }
 
 // State handles overall state
@@ -200,7 +202,7 @@ func main() {
 
 		if *cleanupUnbound {
 			go func() {
-				<-time.NewTimer(5 * time.Second).C
+				<-time.After(5 * time.Second)
 				if !clientLoggedIn {
 					conn.Close()
 				}
@@ -223,6 +225,7 @@ func main() {
 				Listeners: &sync.Map{},
 				Close:     make(chan bool),
 				Messages:  make(chan string),
+				Session:   make(chan bool),
 			}
 
 			state.SSHConnections.Store(sshConn.RemoteAddr(), holderConn)
@@ -233,7 +236,7 @@ func main() {
 			if *cleanupUnbound {
 				go func() {
 					select {
-					case <-time.NewTimer(1 * time.Second).C:
+					case <-time.After(1 * time.Second):
 						count := 0
 						holderConn.Listeners.Range(func(key, value interface{}) bool {
 							count++
@@ -241,7 +244,7 @@ func main() {
 						})
 
 						if count == 0 {
-							holderConn.Messages <- "No forwarding requests sent. Closing connection."
+							sendMessage(holderConn, "No forwarding requests sent. Closing connection.")
 							time.Sleep(1 * time.Millisecond)
 							holderConn.CleanUp(state)
 						}
