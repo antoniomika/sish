@@ -69,7 +69,7 @@ func startHTTPHandler(state *State) {
 			loc, ok := state.HTTPListeners.Load(hostname)
 			if ok {
 				proxyHolder := loc.(*ProxyHolder)
-				sendMessage(proxyHolder.SSHConn, strings.TrimSpace(logLine))
+				sendMessage(proxyHolder.SSHConn, strings.TrimSpace(logLine), true)
 			}
 		}
 

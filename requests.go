@@ -160,7 +160,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		}
 	}
 
-	sendMessage(sshConn, requestMessages)
+	sendMessage(sshConn, requestMessages, true)
 
 	go func() {
 		<-sshConn.Close
@@ -180,7 +180,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			log.Println(logLine)
 
 			if *logToClient {
-				sendMessage(sshConn, logLine)
+				sendMessage(sshConn, logLine, true)
 			}
 		}
 
@@ -193,7 +193,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 
 		newChan, newReqs, err := sshConn.SSHConn.OpenChannel("forwarded-tcpip", ssh.Marshal(resp))
 		if err != nil {
-			sendMessage(sshConn, err.Error())
+			sendMessage(sshConn, err.Error(), true)
 			cl.Close()
 			continue
 		}

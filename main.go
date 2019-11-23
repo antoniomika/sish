@@ -271,7 +271,7 @@ func main() {
 						})
 
 						if count == 0 {
-							sendMessage(holderConn, "No forwarding requests sent. Closing connection.")
+							sendMessage(holderConn, "No forwarding requests sent. Closing connection.", true)
 							time.Sleep(1 * time.Millisecond)
 							holderConn.CleanUp(state)
 						}
