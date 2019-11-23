@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -40,11 +41,11 @@ var (
 	version              = "dev"
 	commit               = "none"
 	date                 = "unknown"
+	httpPort             int
+	httpsPort            int
 	serverAddr           = flag.String("sish.addr", "localhost:2222", "The address to listen for SSH connections")
 	httpAddr             = flag.String("sish.http", "localhost:80", "The address to listen for HTTP connections")
-	httpPort             = flag.Int("sish.httpport", 80, "The port for HTTP connections. This is only for output messages")
 	httpsAddr            = flag.String("sish.https", "localhost:443", "The address to listen for HTTPS connections")
-	httpsPort            = flag.Int("sish.httpsport", 443, "The port for HTTPS connections. This is only for output messages")
 	verifyOrigin         = flag.Bool("sish.verifyorigin", true, "Whether or not to verify origin on websocket connection")
 	verifySSL            = flag.Bool("sish.verifyssl", true, "Whether or not to verify SSL on proxy connection")
 	httpsEnabled         = flag.Bool("sish.httpsenabled", false, "Whether or not to listen for HTTPS connections")
@@ -73,6 +74,7 @@ var (
 	debug                = flag.Bool("sish.debug", false, "Whether or not to print debug information")
 	versionCheck         = flag.Bool("sish.version", false, "Print version and exit")
 	tcpAlias             = flag.Bool("sish.tcpalias", false, "Whether or not to allow the use of TCP aliasing")
+	logToClient          = flag.Bool("sish.logtoclient", false, "Whether or not to log http requests to the client")
 	bannedSubdomainList  = []string{""}
 	filter               *ipfilter.IPFilter
 )
@@ -80,8 +82,28 @@ var (
 func main() {
 	flag.Parse()
 
+	_, httpPortString, err := net.SplitHostPort(*httpAddr)
+	if err != nil {
+		log.Fatalln("Error parsing address:", err)
+	}
+
+	_, httpsPortString, err := net.SplitHostPort(*httpsAddr)
+	if err != nil {
+		log.Fatalln("Error parsing address:", err)
+	}
+
+	httpPort, err = strconv.Atoi(httpPortString)
+	if err != nil {
+		log.Fatalln("Error parsing address:", err)
+	}
+
+	httpsPort, err = strconv.Atoi(httpsPortString)
+	if err != nil {
+		log.Fatalln("Error parsing address:", err)
+	}
+
 	if *versionCheck {
-		log.Printf("Version: %v\nCommit: %v\nDate: %v\n", version, commit, date)
+		log.Printf("\nVersion: %v\nCommit: %v\nDate: %v\n", version, commit, date)
 		os.Exit(0)
 	}
 
@@ -150,6 +172,11 @@ func main() {
 				})
 				log.Println("===HTTP Clients===")
 				state.HTTPListeners.Range(func(key, value interface{}) bool {
+					log.Println(key, value)
+					return true
+				})
+				log.Println("===TCP Aliases====")
+				state.TCPListeners.Range(func(key, value interface{}) bool {
 					log.Println(key, value)
 					return true
 				})

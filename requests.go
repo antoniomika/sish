@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/logrusorgru/aurora"
 	"github.com/pires/go-proxyproto"
 	"golang.org/x/crypto/ssh"
 )
@@ -107,7 +108,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		connType = "https"
 	}
 
-	requestMessages := fmt.Sprintf("\nStarting SSH Fowarding service for %s:%s. Forwarded connections can be accessed via the following methods:\r\n", connType, stringPort)
+	requestMessages := fmt.Sprintf("\nStarting SSH Fowarding service for %s. Forwarded connections can be accessed via the following methods:\r\n", aurora.Sprintf(aurora.Green("%s:%s"), connType, stringPort))
 
 	if stringPort == "80" || stringPort == "443" {
 		scheme := "http"
@@ -121,15 +122,28 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			ProxyHost: host,
 			ProxyTo:   chanListener.Addr().String(),
 			Scheme:    scheme,
+			SSHConn:   sshConn,
 		}
 
 		state.HTTPListeners.Store(host, pH)
 		defer state.HTTPListeners.Delete(host)
 
-		requestMessages += fmt.Sprintf("HTTP: http://%s:%d\r\n", host, *httpPort)
+		httpPortString := ""
+		if httpPort != 80 {
+			httpPortString = fmt.Sprintf(":%d", httpPort)
+		}
+
+		requestMessages += fmt.Sprintf("%s: http://%s%s\r\n", aurora.BgBlue("HTTP"), host, httpPortString)
+		log.Printf("%s forwarding started: http://%s%s -> %s for client: %s\n", aurora.BgBlue("HTTP"), host, httpPortString, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 
 		if *httpsEnabled {
-			requestMessages += fmt.Sprintf("HTTPS: https://%s:%d", host, *httpsPort)
+			httpsPortString := ""
+			if httpsPort != 443 {
+				httpsPortString = fmt.Sprintf(":%d", httpsPort)
+			}
+
+			requestMessages += fmt.Sprintf("%s: https://%s%s", aurora.BgBlue("HTTPS"), host, httpsPortString)
+			log.Printf("%s forwarding started: https://%s%s -> %s for client: %s\n", aurora.BgBlue("HTTPS"), host, httpPortString, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 		}
 	} else {
 		if handleTCPAliasing {
@@ -138,9 +152,11 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			state.TCPListeners.Store(validAlias, chanListener.Addr().String())
 			defer state.TCPListeners.Delete(validAlias)
 
-			requestMessages += fmt.Sprintf("TCP Alias: %s", validAlias)
+			requestMessages += fmt.Sprintf("%s: %s", aurora.BgBlue("TCP Alias"), validAlias)
+			log.Printf("%s forwarding started: %s -> %s for client: %s\n", aurora.BgBlue("TCP Alias"), validAlias, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 		} else {
-			requestMessages += fmt.Sprintf("TCP: %s:%d", *rootDomain, chanListener.Addr().(*net.TCPAddr).Port)
+			requestMessages += fmt.Sprintf("%s: %s:%d", aurora.BgBlue("TCP"), *rootDomain, chanListener.Addr().(*net.TCPAddr).Port)
+			log.Printf("%s forwarding started: %s:%d -> %s for client: %s\n", aurora.BgBlue("TCP"), *rootDomain, chanListener.Addr().(*net.TCPAddr).Port, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 		}
 	}
 
@@ -158,6 +174,15 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		}
 
 		defer cl.Close()
+
+		if connType == "tcp" {
+			logLine := fmt.Sprintf("Accepted connection from %s -> %s", cl.RemoteAddr().String(), sshConn.SSHConn.RemoteAddr().String())
+			log.Println(logLine)
+
+			if *logToClient {
+				sendMessage(sshConn, logLine)
+			}
+		}
 
 		resp := &forwardedTCPPayload{
 			Addr:       check.Addr,
@@ -197,7 +222,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			}
 
 			_, err := proxyProtoHeader.WriteTo(newChan)
-			if err != nil {
+			if err != nil && *debug {
 				log.Println("Error writing to channel:", err)
 			}
 		}
@@ -225,7 +250,7 @@ func copyBoth(writer net.Conn, reader ssh.Channel, wait bool) {
 		}
 
 		_, err := io.Copy(writer, reader)
-		if err != nil {
+		if err != nil && *debug {
 			log.Println("Error writing to reader:", err)
 		}
 	}()
@@ -237,7 +262,7 @@ func copyBoth(writer net.Conn, reader ssh.Channel, wait bool) {
 	}
 
 	_, err := io.Copy(reader, writer)
-	if err != nil {
+	if err != nil && *debug {
 		log.Println("Error writing to writer:", err)
 	}
 	if wait {

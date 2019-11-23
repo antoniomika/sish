@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/logrusorgru/aurora"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -28,7 +29,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 			select {
 			case c := <-sshConn.Messages:
 				_, err := connection.Write(append([]byte(c), []byte{'\r', '\n'}...))
-				if err != nil {
+				if err != nil && *debug {
 					log.Println("Error trying to write message to socket:", err)
 				}
 			case <-sshConn.Close:
@@ -37,7 +38,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 		}
 	}()
 
-	sshConn.Messages <- "Press Ctrl-C to close the session."
+	sshConn.Messages <- aurora.BgRed("Press Ctrl-C to close the session.").String()
 
 	go func() {
 		for {

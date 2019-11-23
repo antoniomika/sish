@@ -9,6 +9,7 @@ Builds are made automatically on Google Cloud Build and Dockerhub. Feel free to 
 1. Pull the Docker image
     - `docker pull antoniomika/sish:latest`
 2. Run the image
+
     - ```bash
       docker run -itd --name sish \
         -v ~/sish/ssl:/ssl \
@@ -24,6 +25,7 @@ Builds are made automatically on Google Cloud Build and Dockerhub. Feel free to 
         -sish.pkloc=/keys/ssh_key \
         -sish.bindrandom=false
       ```
+
 3. SSH to your host to communicate with sish
     - `ssh -p 2222 -R 80:localhost:8080 ssi.sh`
 
@@ -42,7 +44,7 @@ docker-compose -f deploy/docker-compose.yml up -d
 SSH can normally forward local and remote ports. This service implements an SSH server that only does that and nothing else. The service supports multiplexing connections over HTTP/HTTPS with WebSocket support. Just assign a remote port as port `80` to proxy HTTP traffic and `443` to proxy HTTPS traffic. If you use any other remote port, the server will listen to the port for connections, but only if that port is available.
 
 You can choose your own subdomain instead of relying on a randomly assigned one
-by setting the `-sish.bindrandom` option to `false` and then selecting a
+by setting the `-sish.forcerandomsubdomain` option to `false` and then selecting a
 subdomain by prepending it to the remote port specifier:
 
 `ssh -p 2222 -R foo:80:localhost:8080 ssi.sh`
@@ -107,18 +109,16 @@ Usage of ./sish:
         Whether or not to force a random subdomain (default true)
   -sish.http string
         The address to listen for HTTP connections (default "localhost:80")
-  -sish.httpport int
-        The port for HTTP connections. This is only for output messages (default 80)
   -sish.https string
         The address to listen for HTTPS connections (default "localhost:443")
   -sish.httpsenabled
         Whether or not to listen for HTTPS connections
   -sish.httpspems string
         The location of pem files for HTTPS (fullchain.pem and privkey.pem) (default "ssl/")
-  -sish.httpsport int
-        The port for HTTPS connections. This is only for output messages (default 443)
   -sish.keysdir string
         Directory for public keys for pubkey auth (default "pubkeys/")
+  -sish.logtoclient
+        Whether or not to log http requests to the client
   -sish.password string
         Password to use for password auth (default "S3Cr3tP4$$W0rD")
   -sish.pkloc string
