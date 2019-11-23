@@ -82,10 +82,24 @@ func main() {
 	flag.Parse()
 
 	_, httpPortString, err := net.SplitHostPort(*httpAddr)
+	if err != nil {
+		log.Fatalln("Error parsing address:", err)
+	}
+
 	_, httpsPortString, err := net.SplitHostPort(*httpsAddr)
+	if err != nil {
+		log.Fatalln("Error parsing address:", err)
+	}
 
 	httpPort, err = strconv.Atoi(httpPortString)
+	if err != nil {
+		log.Fatalln("Error parsing address:", err)
+	}
+
 	httpsPort, err = strconv.Atoi(httpsPortString)
+	if err != nil {
+		log.Fatalln("Error parsing address:", err)
+	}
 
 	if *versionCheck {
 		log.Printf("\nVersion: %v\nCommit: %v\nDate: %v\n", version, commit, date)
