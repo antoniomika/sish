@@ -8,3 +8,4 @@ sish
 deploy/*
 !deploy/docker-compose.yml
 dist/
+__debug_bin

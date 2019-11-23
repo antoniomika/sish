@@ -9,6 +9,7 @@ require (
 	github.com/jpillora/ipfilter v1.0.0
 	github.com/json-iterator/go v1.1.8 // indirect
 	github.com/koding/websocketproxy v0.0.0-20181220232114-7ed82d81a28c
+	github.com/logrusorgru/aurora v0.0.0-20191116043053-66b7ad493a23
 	github.com/mattn/go-isatty v0.0.10 // indirect
 	github.com/oschwald/maxminddb-golang v1.5.0 // indirect
 	github.com/pires/go-proxyproto v0.0.0-20190615163442-2c19fd512994

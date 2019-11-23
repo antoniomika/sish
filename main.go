@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -40,11 +41,11 @@ var (
 	version              = "dev"
 	commit               = "none"
 	date                 = "unknown"
+	httpPort             int
+	httpsPort            int
 	serverAddr           = flag.String("sish.addr", "localhost:2222", "The address to listen for SSH connections")
 	httpAddr             = flag.String("sish.http", "localhost:80", "The address to listen for HTTP connections")
-	httpPort             = flag.Int("sish.httpport", 80, "The port for HTTP connections. This is only for output messages")
 	httpsAddr            = flag.String("sish.https", "localhost:443", "The address to listen for HTTPS connections")
-	httpsPort            = flag.Int("sish.httpsport", 443, "The port for HTTPS connections. This is only for output messages")
 	verifyOrigin         = flag.Bool("sish.verifyorigin", true, "Whether or not to verify origin on websocket connection")
 	verifySSL            = flag.Bool("sish.verifyssl", true, "Whether or not to verify SSL on proxy connection")
 	httpsEnabled         = flag.Bool("sish.httpsenabled", false, "Whether or not to listen for HTTPS connections")
@@ -80,8 +81,14 @@ var (
 func main() {
 	flag.Parse()
 
+	_, httpPortString, err := net.SplitHostPort(*httpAddr)
+	_, httpsPortString, err := net.SplitHostPort(*httpsAddr)
+
+	httpPort, err = strconv.Atoi(httpPortString)
+	httpsPort, err = strconv.Atoi(httpsPortString)
+
 	if *versionCheck {
-		log.Printf("Version: %v\nCommit: %v\nDate: %v\n", version, commit, date)
+		log.Printf("\nVersion: %v\nCommit: %v\nDate: %v\n", version, commit, date)
 		os.Exit(0)
 	}
 
