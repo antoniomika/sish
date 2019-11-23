@@ -22,6 +22,7 @@ type ProxyHolder struct {
 	ProxyHost string
 	ProxyTo   string
 	Scheme    string
+	SSHConn   *SSHConnection
 }
 
 func startHTTPHandler(state *State) {
@@ -51,7 +52,8 @@ func startHTTPHandler(state *State) {
 			// Truncate in a golang < 1.8 safe way
 			param.Latency = param.Latency - param.Latency%time.Second
 		}
-		return fmt.Sprintf("[GIN] %v | %s |%s %3d %s| %13v | %15s |%s %-7s %s %s\n%s",
+
+		logLine := fmt.Sprintf("%v | %s |%s %3d %s| %13v | %15s |%s %-7s %s %s\n%s",
 			param.TimeStamp.Format("2006/01/02 - 15:04:05"),
 			param.Request.Host,
 			statusColor, param.StatusCode, resetColor,
@@ -61,6 +63,17 @@ func startHTTPHandler(state *State) {
 			param.Path,
 			param.ErrorMessage,
 		)
+
+		if *logToClient {
+			hostname := strings.Split(param.Request.Host, ":")[0]
+			loc, ok := state.HTTPListeners.Load(hostname)
+			if ok {
+				proxyHolder := loc.(*ProxyHolder)
+				sendMessage(proxyHolder.SSHConn, strings.TrimSpace(logLine))
+			}
+		}
+
+		return logLine
 	}), gin.Recovery(), func(c *gin.Context) {
 		hostname := strings.Split(c.Request.Host, ":")[0]
 

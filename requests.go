@@ -122,25 +122,28 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			ProxyHost: host,
 			ProxyTo:   chanListener.Addr().String(),
 			Scheme:    scheme,
+			SSHConn:   sshConn,
 		}
 
 		state.HTTPListeners.Store(host, pH)
 		defer state.HTTPListeners.Delete(host)
 
 		httpPortString := ""
-		if httpPort == 80 {
+		if httpPort != 80 {
 			httpPortString = fmt.Sprintf(":%d", httpPort)
 		}
 
 		requestMessages += fmt.Sprintf("%s: http://%s%s\r\n", aurora.BgBlue("HTTP"), host, httpPortString)
+		log.Printf("%s forwarding started: http://%s%s -> %s for client: %s\n", aurora.BgBlue("HTTP"), host, httpPortString, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 
 		if *httpsEnabled {
 			httpsPortString := ""
-			if httpsPort == 443 {
+			if httpsPort != 443 {
 				httpsPortString = fmt.Sprintf(":%d", httpsPort)
 			}
 
 			requestMessages += fmt.Sprintf("%s: https://%s%s", aurora.BgBlue("HTTPS"), host, httpsPortString)
+			log.Printf("%s forwarding started: https://%s%s -> %s for client: %s\n", aurora.BgBlue("HTTPS"), host, httpPortString, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 		}
 	} else {
 		if handleTCPAliasing {
@@ -150,8 +153,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			defer state.TCPListeners.Delete(validAlias)
 
 			requestMessages += fmt.Sprintf("%s: %s", aurora.BgBlue("TCP Alias"), validAlias)
+			log.Printf("%s forwarding started: %s -> %s for client: %s\n", aurora.BgBlue("TCP Alias"), validAlias, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 		} else {
 			requestMessages += fmt.Sprintf("%s: %s:%d", aurora.BgBlue("TCP"), *rootDomain, chanListener.Addr().(*net.TCPAddr).Port)
+			log.Printf("%s forwarding started: %s:%d -> %s for client: %s\n", aurora.BgBlue("TCP"), *rootDomain, chanListener.Addr().(*net.TCPAddr).Port, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 		}
 	}
 
@@ -169,6 +174,15 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		}
 
 		defer cl.Close()
+
+		if connType == "tcp" {
+			logLine := fmt.Sprintf("Accepted connection from %s -> %s", cl.RemoteAddr().String(), sshConn.SSHConn.RemoteAddr().String())
+			log.Println(logLine)
+
+			if *logToClient {
+				sendMessage(sshConn, logLine)
+			}
+		}
 
 		resp := &forwardedTCPPayload{
 			Addr:       check.Addr,

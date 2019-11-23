@@ -74,6 +74,7 @@ var (
 	debug                = flag.Bool("sish.debug", false, "Whether or not to print debug information")
 	versionCheck         = flag.Bool("sish.version", false, "Print version and exit")
 	tcpAlias             = flag.Bool("sish.tcpalias", false, "Whether or not to allow the use of TCP aliasing")
+	logToClient          = flag.Bool("sish.logtoclient", false, "Whether or not to log http requests to the client")
 	bannedSubdomainList  = []string{""}
 	filter               *ipfilter.IPFilter
 )
@@ -171,6 +172,11 @@ func main() {
 				})
 				log.Println("===HTTP Clients===")
 				state.HTTPListeners.Range(func(key, value interface{}) bool {
+					log.Println(key, value)
+					return true
+				})
+				log.Println("===TCP Aliases====")
+				state.TCPListeners.Range(func(key, value interface{}) bool {
 					log.Println(key, value)
 					return true
 				})

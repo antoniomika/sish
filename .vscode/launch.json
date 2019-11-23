@@ -22,7 +22,8 @@
         "-sish.forcerandomsubdomain=false",
         "-sish.bindrandom=false",
         "-sish.tcpalias=true",
-        "-sish.proxyprotoenabled=false"
+        "-sish.proxyprotoenabled=false",
+        "-sish.logtoclient=true"
       ]
     }
   ]
