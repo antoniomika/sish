@@ -42,7 +42,7 @@ docker-compose -f deploy/docker-compose.yml up -d
 SSH can normally forward local and remote ports. This service implements an SSH server that only does that and nothing else. The service supports multiplexing connections over HTTP/HTTPS with WebSocket support. Just assign a remote port as port `80` to proxy HTTP traffic and `443` to proxy HTTPS traffic. If you use any other remote port, the server will listen to the port for connections, but only if that port is available.
 
 You can choose your own subdomain instead of relying on a randomly assigned one
-by setting the `-sish.bindrandom` option to `false` and then selecting a
+by setting the `-sish.forcerandomsubdomain` option to `false` and then selecting a
 subdomain by prepending it to the remote port specifier:
 
 `ssh -p 2222 -R foo:80:localhost:8080 ssi.sh`
