@@ -227,7 +227,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			}
 		}
 
-		go copyBoth(cl, newChan, true)
+		go copyBoth(cl, newChan, false)
 		go ssh.DiscardRequests(newReqs)
 	}
 }
@@ -247,21 +247,21 @@ func copyBoth(writer net.Conn, reader ssh.Channel, wait bool) {
 			defer wg.Done()
 		}
 
-		_, err := io.Copy(writer, reader)
+		_, err := io.Copy(reader, writer)
 		if err != nil && *debug {
-			log.Println("Error writing to writer:", err)
+			log.Println("Error copying to reader:", err)
 		}
 	}()
 
-	go func() {
+	func() {
 		if wait {
 			wg.Add(1)
 			defer wg.Done()
 		}
 
-		_, err := io.Copy(reader, writer)
+		_, err := io.Copy(writer, reader)
 		if err != nil && *debug {
-			log.Println("Error writing to reader:", err)
+			log.Println("Error copying to writer:", err)
 		}
 	}()
 
