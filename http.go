@@ -32,6 +32,8 @@ func startHTTPHandler(state *State) {
 	}
 	gin.SetMode(releaseMode)
 
+	gin.ForceConsoleColor()
+
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
 		clientIPAddr, _, err := net.SplitHostPort(c.Request.RemoteAddr)
