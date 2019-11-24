@@ -10,21 +10,10 @@ jobs:
     - name: Lint the codebase
       run: |
         docker run --rm -v $(pwd):/app -w /app golangci/golangci-lint:v1.21.0 golangci-lint run -E goimports
-    - name: Register multiarch for Docker
-      run: |
-        docker run --privileged linuxkit/binfmt:v0.7
-    - name: Install buildx
-      run: |
-        mkdir -p ~/.docker/cli-plugins
-        wget https://github.com/docker/buildx/releases/download/v0.3.0/buildx-v0.3.0.linux-amd64 \
-          -O ~/.docker/cli-plugins/docker-buildx
-        chmod a+x ~/.docker/cli-plugins/docker-buildx
-    - name: Setup buildkit
-      run: |
-        docker buildx create --name builder
-        docker buildx use builder
-        docker buildx inspect --bootstrap
-        docker buildx ls
+    - name: Set up Docker Buildx
+      uses: crazy-max/ghaction-docker-buildx@v1
+      with:
+        version: latest
     - name: Login to GitHub Docker Registry
       env:
         DOCKER_USERNAME: ${{ secrets.GITHUB_DOCKER_USERNAME }}
