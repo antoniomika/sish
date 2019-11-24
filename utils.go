@@ -398,14 +398,14 @@ func sendMessage(sshConn *SSHConnection, message string, block bool) {
 		return
 	}
 
-	for i := 0; i < 2; {
+	for i := 0; i < 5; {
 		select {
 		case <-sshConn.Close:
 			return
 		case sshConn.Messages <- message:
 			return
 		default:
-			time.Sleep(20 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			i++
 		}
 	}
