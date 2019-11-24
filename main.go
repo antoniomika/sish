@@ -271,7 +271,7 @@ func main() {
 						})
 
 						if count == 0 {
-							sendMessage(holderConn, "No forwarding requests sent. Closing connection.")
+							sendMessage(holderConn, "No forwarding requests sent. Closing connection.", true)
 							time.Sleep(1 * time.Millisecond)
 							holderConn.CleanUp(state)
 						}
@@ -287,7 +287,6 @@ func main() {
 // CleanUp closes all allocated resources and cleans them up
 func (s *SSHConnection) CleanUp(state *State) {
 	close(s.Close)
-	close(s.Messages)
 	s.SSHConn.Close()
 	state.SSHConnections.Delete(s.SSHConn.RemoteAddr())
 	log.Println("Closed SSH connection for:", s.SSHConn.RemoteAddr(), "user:", s.SSHConn.User())

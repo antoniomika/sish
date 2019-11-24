@@ -24,21 +24,18 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 		log.Println("Handling session for connection:", connection)
 	}
 
+	writeToSession(connection, aurora.BgRed("Press Ctrl-C to close the session.").String()+"\r\n")
+
 	go func() {
 		for {
 			select {
 			case c := <-sshConn.Messages:
-				_, err := connection.Write(append([]byte(c), []byte{'\r', '\n'}...))
-				if err != nil && *debug {
-					log.Println("Error trying to write message to socket:", err)
-				}
+				writeToSession(connection, c)
 			case <-sshConn.Close:
 				return
 			}
 		}
 	}()
-
-	sshConn.Messages <- aurora.BgRed("Press Ctrl-C to close the session.").String()
 
 	go func() {
 		for {
@@ -75,7 +72,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 				if strings.HasPrefix(payloadString, proxyProtoPrefix) && *proxyProtoEnabled {
 					sshConn.ProxyProto = getProxyProtoVersion(strings.TrimPrefix(payloadString, proxyProtoPrefix))
 					if sshConn.ProxyProto != 0 {
-						sendMessage(sshConn, fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)))
+						sendMessage(sshConn, fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)
 					}
 				}
 			default:
@@ -127,6 +124,13 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State
 
 	copyBoth(conn, connection, false)
 	sshConn.CleanUp(state)
+}
+
+func writeToSession(connection ssh.Channel, c string) {
+	_, err := connection.Write(append([]byte(c), []byte{'\r', '\n'}...))
+	if err != nil && *debug {
+		log.Println("Error trying to write message to socket:", err)
+	}
 }
 
 func getProxyProtoVersion(proxyProtoUserVersion string) byte {

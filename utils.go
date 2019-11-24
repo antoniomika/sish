@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/logrusorgru/aurora"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -302,7 +303,7 @@ func getOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 		}
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
-				sendMessage(sshConn, "This subdomain is unavaible. Assigning a random subdomain.")
+				sendMessage(sshConn, aurora.Sprintf("The subdomain %s is unavaible. Assigning a random subdomain.", aurora.Red(host)), true)
 			}
 		}
 
@@ -337,7 +338,7 @@ func getOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 		}
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
-				sendMessage(sshConn, "This alias is unavaible. Assigning a random alias.")
+				sendMessage(sshConn, aurora.Sprintf("The alias %s is unavaible. Assigning a random alias.", aurora.Red(alias)), true)
 			}
 		}
 
@@ -391,7 +392,12 @@ func RandStringBytesMaskImprSrc(n int) string {
 	return string(b)
 }
 
-func sendMessage(sshConn *SSHConnection, message string) {
+func sendMessage(sshConn *SSHConnection, message string, block bool) {
+	if block {
+		sshConn.Messages <- message
+		return
+	}
+
 	for i := 0; i < 2; {
 		select {
 		case <-sshConn.Close:
