@@ -124,7 +124,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State
 
 	sshConn.Listeners.Store(conn.RemoteAddr(), nil)
 
-	copyBoth(conn, connection, false)
+	copyBoth(conn, connection)
 
 	select {
 	case <-sshConn.Close:
