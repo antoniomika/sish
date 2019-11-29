@@ -42,6 +42,8 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 			data := make([]byte, 4096)
 			dataRead, err := connection.Read(data)
 			if err != nil && err == io.EOF {
+				break
+			} else if err != nil {
 				select {
 				case <-sshConn.Close:
 					break
@@ -123,7 +125,13 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State
 	sshConn.Listeners.Store(conn.RemoteAddr(), nil)
 
 	copyBoth(conn, connection, false)
-	sshConn.CleanUp(state)
+
+	select {
+	case <-sshConn.Close:
+		break
+	default:
+		sshConn.CleanUp(state)
+	}
 }
 
 func writeToSession(connection ssh.Channel, c string) {

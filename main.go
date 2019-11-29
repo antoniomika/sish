@@ -267,6 +267,20 @@ func main() {
 
 			state.SSHConnections.Store(sshConn.RemoteAddr(), holderConn)
 
+			go func() {
+				err := sshConn.Wait()
+				if err != nil && *debug {
+					log.Println("Closing SSH connection:", err)
+				}
+
+				select {
+				case <-holderConn.Close:
+					break
+				default:
+					holderConn.CleanUp(state)
+				}
+			}()
+
 			go handleRequests(reqs, holderConn, state)
 			go handleChannels(chans, holderConn, state)
 
