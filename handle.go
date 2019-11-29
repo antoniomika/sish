@@ -22,6 +22,11 @@ func handleRequest(newRequest *ssh.Request, sshConn *SSHConnection, state *State
 	case "tcpip-forward":
 		go checkSession(newRequest, sshConn, state)
 		handleRemoteForward(newRequest, sshConn, state)
+	case "keepalive@openssh.com":
+		err := newRequest.Reply(true, nil)
+		if err != nil {
+			log.Println("Error replying to socket request:", err)
+		}
 	default:
 		err := newRequest.Reply(false, nil)
 		if err != nil {

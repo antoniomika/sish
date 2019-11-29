@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/logrusorgru/aurora"
@@ -227,47 +226,65 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			}
 		}
 
-		go copyBoth(cl, newChan, false)
+		go copyBoth(cl, newChan)
 		go ssh.DiscardRequests(newReqs)
 	}
 }
 
-func copyBoth(writer net.Conn, reader ssh.Channel, wait bool) {
-	closeBoth := func() {
-		time.Sleep(100 * time.Millisecond)
-		writer.Close()
-		reader.Close()
+// IdleTimeoutConn handles the connection with a context deadline
+// code adapted from https://qiita.com/kwi/items/b38d6273624ad3f6ae79
+type IdleTimeoutConn struct {
+	Conn net.Conn
+}
+
+// Read is needed to implement the reader part
+func (i IdleTimeoutConn) Read(buf []byte) (int, error) {
+	err := i.Conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if err != nil {
+		return 0, err
 	}
 
-	var wg sync.WaitGroup
+	return i.Conn.Read(buf)
+}
 
-	go func() {
-		if wait {
-			wg.Add(1)
-			defer wg.Done()
-		}
+// Write is needed to implement the writer part
+func (i IdleTimeoutConn) Write(buf []byte) (int, error) {
+	err := i.Conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if err != nil {
+		return 0, err
+	}
 
-		_, err := io.Copy(reader, writer)
+	return i.Conn.Write(buf)
+}
+
+func copyBoth(writer net.Conn, reader ssh.Channel) {
+	closeBoth := func() {
+		reader.Close()
+		writer.Close()
+	}
+
+	tcon := IdleTimeoutConn{
+		Conn: writer,
+	}
+
+	copyToReader := func() {
+		_, err := io.Copy(reader, tcon)
 		if err != nil && *debug {
 			log.Println("Error copying to reader:", err)
 		}
-	}()
 
-	func() {
-		if wait {
-			wg.Add(1)
-			defer wg.Done()
-		}
+		closeBoth()
+	}
 
-		_, err := io.Copy(writer, reader)
+	copyToWriter := func() {
+		_, err := io.Copy(tcon, reader)
 		if err != nil && *debug {
 			log.Println("Error copying to writer:", err)
 		}
-	}()
 
-	if wait {
-		wg.Wait()
+		closeBoth()
 	}
 
-	closeBoth()
+	go copyToReader()
+	copyToWriter()
 }
