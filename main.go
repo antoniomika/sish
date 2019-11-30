@@ -11,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"net/http"
+	"io/ioutil"
+	"bytes"
 
 	"github.com/jpillora/ipfilter"
 
@@ -79,6 +82,7 @@ var (
 	logToClient          = flag.Bool("sish.logtoclient", false, "Whether or not to log http requests to the client")
 	bannedSubdomainList  = []string{""}
 	filter               *ipfilter.IPFilter
+	serverIp             = ""
 )
 
 func main() {
@@ -151,6 +155,20 @@ func main() {
 	} else {
 		filter = ipfilter.NewNoDB(ipfilterOpts)
 	}
+
+
+	// Get this server's external IP
+	rsp, err := http.Get("http://checkip.amazonaws.com")
+	if err != nil {
+		log.Println("Couldn't get server's external IP", err)
+	}
+	defer rsp.Body.Close()
+	buf, err := ioutil.ReadAll(rsp.Body)
+	if err != nil {
+		log.Println("Couldn't get server's external IP", err)
+	}
+	serverIp = string(bytes.TrimSpace(buf))
+	log.Printf("This server's IP: %s", serverIp)
 
 	watchCerts()
 

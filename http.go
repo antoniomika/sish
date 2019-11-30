@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/logrusorgru/aurora"
 	"github.com/gorilla/websocket"
 	"github.com/koding/websocketproxy"
 
@@ -41,27 +42,45 @@ func startHTTPHandler(state *State) {
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
+
+		// Filter out requests to server IP
+		hostname := strings.Split(c.Request.Host, ":")[0]
+		if hostname == serverIp {
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+
 		c.Next()
 	}, gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-		var statusColor, methodColor, resetColor string
+		var statusFormatted, methodFormatted string
+
+		statusFormatted = fmt.Sprintf("%3d", param.StatusCode)
+		methodFormatted = param.Method
+
 		if param.IsOutputColor() {
-			statusColor = param.StatusCodeColor()
-			methodColor = param.MethodColor()
-			resetColor = param.ResetColor()
+			switch {
+			case param.StatusCode >= http.StatusOK && param.StatusCode < http.StatusMultipleChoices:
+					statusFormatted = aurora.Sprintf(aurora.Green("%3d"), param.StatusCode)
+			case param.StatusCode >= http.StatusMultipleChoices && param.StatusCode < http.StatusBadRequest:
+					statusFormatted = aurora.Sprintf(aurora.Yellow("%3d"), param.StatusCode)
+			case param.StatusCode >= http.StatusBadRequest && param.StatusCode < http.StatusInternalServerError:
+					statusFormatted = aurora.Sprintf(aurora.Red("%3d"), param.StatusCode)
+			default:
+					statusFormatted = aurora.Sprintf(aurora.Red("%3d"), param.StatusCode)
+			}
 		}
 
 		if param.Latency > time.Minute {
 			// Truncate in a golang < 1.8 safe way
 			param.Latency = param.Latency - param.Latency%time.Second
 		}
-
-		logLine := fmt.Sprintf("%v | %s |%s %3d %s| %13v | %15s |%s %-7s %s %s\n%s",
-			param.TimeStamp.Format("2006/01/02 - 15:04:05"),
+		logLine := fmt.Sprintf("%v | %s | %s | % 8s | %15s | %-4s %s\n%s",
+			param.TimeStamp.Format("2006-01-02 15:04:05"),
 			param.Request.Host,
-			statusColor, param.StatusCode, resetColor,
-			param.Latency,
+			statusFormatted,
+			RoundN(param.Latency, 4),
 			param.ClientIP,
-			methodColor, param.Method, resetColor,
+			methodFormatted,
 			param.Path,
 			param.ErrorMessage,
 		)
@@ -160,4 +179,78 @@ func startHTTPHandler(state *State) {
 		}()
 	}
 	log.Fatal(r.Run(*httpAddr))
+}
+
+func Round(d, r time.Duration) time.Duration {
+	if r <= 0 {
+		return d
+	}
+	neg := d < 0
+	if neg {
+		d = -d
+	}
+	if m := d % r; m+m < r {
+		d = d - m
+	} else {
+		d = d + r - m
+	}
+	if neg {
+		return -d
+	}
+	return d
+}
+
+func RoundN(d time.Duration, n int) time.Duration {
+	if n < 1 {
+		return d
+	}
+	if d >= time.Hour {
+		k := digits(d / time.Hour)
+		if k >= n {
+			return Round(d, pow10(time.Hour, k-n))
+		}
+		n -= k
+		k = digits(d % time.Hour / time.Minute)
+		if k >= n {
+			return Round(d, pow10(time.Minute, k-n))
+		}
+		return Round(d, pow10(100*time.Second, k-n))
+	}
+	if d >= time.Minute {
+		k := digits(d / time.Minute)
+		if k >= n {
+			return Round(d, pow10(time.Minute, k-n))
+		}
+		return Round(d, pow10(100*time.Second, k-n))
+	}
+	if k := digits(d); k > n {
+		return Round(d, pow10(1, k-n))
+	}
+	return d
+}
+
+func digits(d time.Duration) int {
+	if d < 0 {
+		d = -d
+	}
+	i := 1
+	for d > 9 {
+		d /= 10
+		i++
+	}
+	return i
+}
+
+func pow10(d time.Duration, i int) time.Duration {
+	var pow10tab [19]time.Duration
+
+	pow10tab[0] = 1
+	for i := 1; i < len(pow10tab); i++ {
+		pow10tab[i] = 10 * pow10tab[i-1]
+	}
+	
+	if i < 0 {
+		return d / pow10tab[-i]
+	}
+	return d * pow10tab[i]
 }

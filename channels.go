@@ -24,7 +24,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 		log.Println("Handling session for connection:", connection)
 	}
 
-	writeToSession(connection, aurora.BgRed("Press Ctrl-C to close the session.").String()+"\r\n")
+	writeToSession(connection, aurora.Red("Press Ctrl-C to close the session.").String()+"\r\n")
 
 	go func() {
 		for {

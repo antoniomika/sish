@@ -107,7 +107,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		connType = "https"
 	}
 
-	requestMessages := fmt.Sprintf("Starting SSH Fowarding service for %s. Forwarded connections can be accessed via the following methods:\r\n", aurora.Sprintf(aurora.Green("%s:%s"), connType, stringPort))
+	requestMessages := fmt.Sprintf("Forwarding %s traffic on port %s from:\r\n", connType, stringPort)
 
 	if stringPort == "80" || stringPort == "443" {
 		scheme := "http"
@@ -132,17 +132,19 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			httpPortString = fmt.Sprintf(":%d", httpPort)
 		}
 
-		requestMessages += fmt.Sprintf("%s: http://%s%s\r\n", aurora.BgBlue("HTTP"), host, httpPortString)
-		log.Printf("%s forwarding started: http://%s%s -> %s for client: %s\n", aurora.BgBlue("HTTP"), host, httpPortString, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
-
 		if *httpsEnabled {
 			httpsPortString := ""
 			if httpsPort != 443 {
-				httpsPortString = fmt.Sprintf(":%d", httpsPort)
+					httpsPortString = fmt.Sprintf(":%d", httpsPort)
 			}
 
-			requestMessages += fmt.Sprintf("%s: https://%s%s\r\n", aurora.BgBlue("HTTPS"), host, httpsPortString)
-			log.Printf("%s forwarding started: https://%s%s -> %s for client: %s\n", aurora.BgBlue("HTTPS"), host, httpPortString, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
+			requestMessages += aurora.Sprintf(aurora.Green("HTTP:  http://%s%s\r\n"), host, httpPortString)
+			requestMessages += aurora.Sprintf(aurora.Green("HTTPS: https://%s%s\r\n"), host, httpsPortString)
+			log.Printf("%s forwarding started: http://%s%s -> %s for client: %s\n", aurora.Green("HTTP"), host, httpPortString, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
+			log.Printf("%s forwarding started: https://%s%s -> %s for client: %s\n", aurora.Green("HTTPS"), host, httpPortString, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
+		} else {
+			requestMessages += aurora.Sprintf(aurora.Green("%s: %s%s\r\n"), "HTTP", host, httpPortString)
+			log.Printf("%s forwarding started: http://%s%s -> %s for client: %s\n", aurora.Green("HTTP"), host, httpPortString, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 		}
 	} else {
 		if handleTCPAliasing {
@@ -151,11 +153,11 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			state.TCPListeners.Store(validAlias, chanListener.Addr().String())
 			defer state.TCPListeners.Delete(validAlias)
 
-			requestMessages += fmt.Sprintf("%s: %s\r\n", aurora.BgBlue("TCP Alias"), validAlias)
-			log.Printf("%s forwarding started: %s -> %s for client: %s\n", aurora.BgBlue("TCP Alias"), validAlias, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
+			requestMessages += fmt.Sprintf("%s: %s\r\n", aurora.Green("TCP Alias"), validAlias)
+			log.Printf("%s forwarding started: %s -> %s for client: %s\n", aurora.Green("TCP Alias"), validAlias, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 		} else {
-			requestMessages += fmt.Sprintf("%s: %s:%d\r\n", aurora.BgBlue("TCP"), *rootDomain, chanListener.Addr().(*net.TCPAddr).Port)
-			log.Printf("%s forwarding started: %s:%d -> %s for client: %s\n", aurora.BgBlue("TCP"), *rootDomain, chanListener.Addr().(*net.TCPAddr).Port, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
+			requestMessages += fmt.Sprintf("%s: %s:%d\r\n", aurora.Green("TCP"), *rootDomain, chanListener.Addr().(*net.TCPAddr).Port)
+			log.Printf("%s forwarding started: %s:%d -> %s for client: %s\n", aurora.Green("TCP"), *rootDomain, chanListener.Addr().(*net.TCPAddr).Port, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 		}
 	}
 
