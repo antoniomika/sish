@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"math"
 
 	"github.com/logrusorgru/aurora"
 	"github.com/gorilla/websocket"
@@ -43,9 +44,10 @@ func startHTTPHandler(state *State) {
 			return
 		}
 
-		// Filter out requests to server IP
+		// Return if the hostname is an IP
 		hostname := strings.Split(c.Request.Host, ":")[0]
-		if hostname == serverIp {
+		hostnameIsIp := net.ParseIP(hostname)
+		if hostnameIsIp != nil {
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
@@ -181,6 +183,7 @@ func startHTTPHandler(state *State) {
 	log.Fatal(r.Run(*httpAddr))
 }
 
+// Round a duration, see original source here: https://play.golang.org/p/WjfKwhhjL5
 func Round(d, r time.Duration) time.Duration {
 	if r <= 0 {
 		return d
@@ -207,24 +210,24 @@ func RoundN(d time.Duration, n int) time.Duration {
 	if d >= time.Hour {
 		k := digits(d / time.Hour)
 		if k >= n {
-			return Round(d, pow10(time.Hour, k-n))
+			return Round(d, time.Hour*time.Duration(math.Pow10(k-n)))
 		}
 		n -= k
 		k = digits(d % time.Hour / time.Minute)
 		if k >= n {
-			return Round(d, pow10(time.Minute, k-n))
+			return Round(d, time.Minute*time.Duration(math.Pow10(k-n)))
 		}
-		return Round(d, pow10(100*time.Second, k-n))
+		return Round(d, time.Duration(float64(100*time.Second)*math.Pow10(k-n)))
 	}
 	if d >= time.Minute {
 		k := digits(d / time.Minute)
 		if k >= n {
-			return Round(d, pow10(time.Minute, k-n))
+			return Round(d, time.Minute*time.Duration(math.Pow10(k-n)))
 		}
-		return Round(d, pow10(100*time.Second, k-n))
+		return Round(d, time.Duration(float64(100*time.Second)*math.Pow10(k-n)))
 	}
 	if k := digits(d); k > n {
-		return Round(d, pow10(1, k-n))
+		return Round(d, time.Duration(math.Pow10(k-n)))
 	}
 	return d
 }
@@ -239,18 +242,4 @@ func digits(d time.Duration) int {
 		i++
 	}
 	return i
-}
-
-func pow10(d time.Duration, i int) time.Duration {
-	var pow10tab [19]time.Duration
-
-	pow10tab[0] = 1
-	for i := 1; i < len(pow10tab); i++ {
-		pow10tab[i] = 10 * pow10tab[i-1]
-	}
-	
-	if i < 0 {
-		return d / pow10tab[-i]
-	}
-	return d * pow10tab[i]
 }
