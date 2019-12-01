@@ -76,16 +76,47 @@ func startHTTPHandler(state *State) {
 			// Truncate in a golang < 1.8 safe way
 			param.Latency = param.Latency - param.Latency%time.Second
 		}
-		logLine := fmt.Sprintf("%v | %s | %s | % 8s | %15s | %-4s %s\n%s",
-			param.TimeStamp.Format("2006-01-02 15:04:05"),
-			param.Request.Host,
-			statusFormatted,
-			RoundN(param.Latency, 4),
-			param.ClientIP,
-			methodFormatted,
-			param.Path,
-			param.ErrorMessage,
-		)
+
+		logLine := ""
+		switch *logDetail {
+		case 0:
+			logLine = fmt.Sprintf("%v %s %-4s %s\n%s",
+				param.TimeStamp.Format("2006-01-02 15:04:05"),
+				statusFormatted,
+				methodFormatted,
+				param.Path,
+				param.ErrorMessage,
+			)
+		case 1:
+			logLine = fmt.Sprintf("%v | %s | % 8s | %-4s %s\n%s",
+				param.TimeStamp.Format("2006-01-02 15:04:05"),
+				statusFormatted,
+				RoundN(param.Latency, 4),
+				methodFormatted,
+				param.Path,
+				param.ErrorMessage,
+			)
+		case 2:
+			logLine = fmt.Sprintf("%v | %s | % 8s | %-4s %s\n%s",
+				param.TimeStamp.Format("2006-01-02 15:04:05"),
+				statusFormatted,
+				RoundN(param.Latency, 4),
+				methodFormatted,
+				param.Path,
+				param.ErrorMessage,
+			)
+		default:
+			logLine = fmt.Sprintf("%v | %s | %s | % 8s | %15s | %-4s %s\n%s",
+				param.TimeStamp.Format("2006-01-02 15:04:05"),
+				param.Request.Host,
+				statusFormatted,
+				RoundN(param.Latency, 4),
+				param.ClientIP,
+				methodFormatted,
+				param.Path,
+				param.ErrorMessage,
+			)
+		}
 
 		if *logToClient {
 			hostname := strings.Split(param.Request.Host, ":")[0]

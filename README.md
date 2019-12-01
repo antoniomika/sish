@@ -138,6 +138,8 @@ Usage of ./sish:
         Directory for public keys for pubkey auth (default "pubkeys/")
   -sish.logtoclient
         Whether or not to log http requests to the client
+  -sish.logdetail
+        The request log detail level 0 is most compact, 3 is most verbose (default 3)
   -sish.password string
         Password to use for password auth (default "S3Cr3tP4$$W0rD")
   -sish.pkloc string
