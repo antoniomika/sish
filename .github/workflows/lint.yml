@@ -23,4 +23,4 @@ jobs:
           --build-arg VERSION=${REF} \
           --build-arg COMMIT=${GITHUB_SHA} \
           --build-arg DATE=${DATE} \
-          -t ${GITHUB_REPOSITORY}:${GITHUB_SHA}
+          -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} .
