@@ -1,6 +1,9 @@
 name: Docker Image CI
 
-on: [push]
+on:
+  push:
+  pull_request:
+    types: [labeled, unlabeled]
 
 jobs:
   build:
