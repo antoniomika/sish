@@ -1,8 +1,6 @@
 name: Lint
 
-on:
-  pull_request:
-    types: [labeled, unlabeled]
+on: [pull_request]
 
 jobs:
   build:
@@ -18,9 +16,11 @@ jobs:
         version: latest
     - name: Build and the Docker images
       run: |
+        DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
         docker buildx build \
           --platform linux/arm/v7,linux/arm64,linux/amd64 \
-          --build-arg VERSION=${REF} \
+          --build-arg VERSION=${GITHUB_SHA} \
           --build-arg COMMIT=${GITHUB_SHA} \
           --build-arg DATE=${DATE} \
           -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} .
