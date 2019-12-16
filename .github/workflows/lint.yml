@@ -1,0 +1,26 @@
+name: Lint
+
+on: [pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Lint the codebase
+      run: |
+        docker run --rm -v $(pwd):/app -w /app golangci/golangci-lint:v1.21.0 golangci-lint run -E goimports
+    - name: Set up Docker Buildx
+      uses: crazy-max/ghaction-docker-buildx@v1
+      with:
+        version: latest
+    - name: Build and the Docker images
+      run: |
+        DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+        docker buildx build \
+          --platform linux/arm/v7,linux/arm64,linux/amd64 \
+          --build-arg VERSION=${GITHUB_SHA} \
+          --build-arg COMMIT=${GITHUB_SHA} \
+          --build-arg DATE=${DATE} \
+          -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} .

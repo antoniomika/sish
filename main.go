@@ -78,6 +78,7 @@ var (
 	tcpAlias             = flag.Bool("sish.tcpalias", false, "Whether or not to allow the use of TCP aliasing")
 	logToClient          = flag.Bool("sish.logtoclient", false, "Whether or not to log http requests to the client")
 	logDetail            = flag.Int("sish.logdetail", 3, "The request log detail level 0 is most compact, 3 is most verbose")
+	idleTimeout          = flag.Int("sish.idletimeout", 5, "Number of seconds to wait for activity before closing a connection")
 	bannedSubdomainList  = []string{""}
 	filter               *ipfilter.IPFilter
 )

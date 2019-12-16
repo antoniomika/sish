@@ -134,6 +134,8 @@ Usage of ./sish:
         The location of pem files for HTTPS (fullchain.pem and privkey.pem) (default "ssl/")
   -sish.httpsport int
         The port to use for https command output
+  -sish.idletimeout int
+        Number of seconds to wait for activity before closing a connection (default 5)
   -sish.keysdir string
         Directory for public keys for pubkey auth (default "pubkeys/")
   -sish.logtoclient
