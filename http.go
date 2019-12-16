@@ -77,44 +77,29 @@ func startHTTPHandler(state *State) {
 		}
 
 		logLine := ""
-		switch *logDetail {
-		case 0:
-			logLine = fmt.Sprintf("%v %s %-4s %s\n%s",
-				param.TimeStamp.Format("2006-01-02 15:04:05"),
-				statusFormatted,
-				methodFormatted,
-				param.Path,
-				param.ErrorMessage,
-			)
-		case 1:
-			logLine = fmt.Sprintf("%v | %s | % 8s | %-4s %s\n%s",
-				param.TimeStamp.Format("2006-01-02 15:04:05"),
-				statusFormatted,
-				RoundN(param.Latency, 4),
-				methodFormatted,
-				param.Path,
-				param.ErrorMessage,
-			)
-		case 2:
-			logLine = fmt.Sprintf("%v | %s | % 8s | %-4s %s\n%s",
-				param.TimeStamp.Format("2006-01-02 15:04:05"),
-				statusFormatted,
-				RoundN(param.Latency, 4),
-				methodFormatted,
-				param.Path,
-				param.ErrorMessage,
-			)
-		default:
-			logLine = fmt.Sprintf("%v | %s | %s | % 8s | %15s | %-4s %s\n%s",
-				param.TimeStamp.Format("2006-01-02 15:04:05"),
-				param.Request.Host,
-				statusFormatted,
-				RoundN(param.Latency, 4),
-				param.ClientIP,
-				methodFormatted,
-				param.Path,
-				param.ErrorMessage,
-			)
+		for _, logPart := range logFormatParts {
+			switch logPart {
+			case "{timestamp}":
+				logLine += fmt.Sprintf("%v", param.TimeStamp.Format(*logTimestampFormat))
+			case "{host}":
+				logLine += fmt.Sprintf("%s", param.Request.Host)
+			case "{status}":
+				logLine += fmt.Sprintf("%s", statusFormatted)
+			case "{latency}":
+				logLine += fmt.Sprintf("% 8s", RoundN(param.Latency, 4))
+			case "{clientip}":
+				logLine += fmt.Sprintf("%15s", param.ClientIP)
+			case "{method}":
+				logLine += fmt.Sprintf("%s", methodFormatted)
+			case "{methodp}":
+				logLine += fmt.Sprintf("%-4s", methodFormatted)
+			case "{path}":
+				logLine += fmt.Sprintf("%s", param.Path)
+			case "{error}":
+				logLine += fmt.Sprintf("%s", param.ErrorMessage)
+			default:
+				logLine += fmt.Sprintf("%s", logPart)
+			}
 		}
 
 		if *logToClient {

@@ -140,8 +140,10 @@ Usage of ./sish:
         Directory for public keys for pubkey auth (default "pubkeys/")
   -sish.logtoclient
         Whether or not to log http requests to the client
-  -sish.logdetail
-        The request log detail level 0 is most compact, 3 is most verbose (default 3)
+  -sish.logtimestampformat
+        Log timestamp format (default "2006-01-02 15:04:05")
+  -sish.logformat
+        Custom log format. A string made up of required parts ({timestamp}, {host}, {status}, {latency}, {clientip}, {method}, {methodp}, {path}, {error}) and delimiters (one or more of space, pipe or comma). "methodp" differed from "method" in that is is padded to 4 characters (default "{timestamp} | {host} | {status} | {latency} | {clientip} | {methodp} | {path} \n{error}")
   -sish.password string
         Password to use for password auth (default "S3Cr3tP4$$W0rD")
   -sish.pkloc string

@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -77,7 +78,9 @@ var (
 	versionCheck         = flag.Bool("sish.version", false, "Print version and exit")
 	tcpAlias             = flag.Bool("sish.tcpalias", false, "Whether or not to allow the use of TCP aliasing")
 	logToClient          = flag.Bool("sish.logtoclient", false, "Whether or not to log http requests to the client")
-	logDetail            = flag.Int("sish.logdetail", 3, "The request log detail level 0 is most compact, 3 is most verbose")
+	logTimestampFormat   = flag.String("sish.logtimestampformat", "2006-01-02 15:04:05", "Log timestamp format")
+	logFormat            = flag.String("sish.logformat", "{timestamp} | {host} | {status} | {latency} | {clientip} | {methodp} | {path} \n{error}", "Custom log format")
+	logFormatParts       = []string{""}
 	idleTimeout          = flag.Int("sish.idletimeout", 5, "Number of seconds to wait for activity before closing a connection")
 	bannedSubdomainList  = []string{""}
 	filter               *ipfilter.IPFilter
@@ -152,6 +155,13 @@ func main() {
 		filter = ipfilter.NewLazy(ipfilterOpts)
 	} else {
 		filter = ipfilter.NewNoDB(ipfilterOpts)
+	}
+
+	// Get log format parts and delimiters (1..n space, pipe, comma or newline)
+	re := regexp.MustCompile("({[a-z]+}|[ \\|,\\n]+)")
+	tmpLogFormatParts := re.FindAllStringSubmatch(*logFormat, -1)
+	for _, logPart := range tmpLogFormatParts {
+		logFormatParts = append(logFormatParts , logPart[1])
 	}
 
 	watchCerts()
