@@ -79,8 +79,10 @@ var (
 	tcpAlias             = flag.Bool("sish.tcpalias", false, "Whether or not to allow the use of TCP aliasing")
 	logToClient          = flag.Bool("sish.logtoclient", false, "Whether or not to log http requests to the client")
 	logTimestampFormat   = flag.String("sish.logtimestampformat", "2006-01-02 15:04:05", "Log timestamp format")
-	logFormat            = flag.String("sish.logformat", "{timestamp} | {host} | {status} | {latency} | {clientip} | {methodp} | {path} \n{error}", "Custom log format")
-	logFormatParts       = []string{""}
+	serverLogFormat      = flag.String("sish.serverlogformat", "{timestamp} | {host} | {status} | {latencyp} | {clientipp} | {methodp} | {path}", "The server log format")
+	serverLogFormatParts = []string{""}
+	clientLogFormat      = flag.String("sish.clientlogformat", "{timestamp} | {host} | {status} | {latencyp} | {clientipp} | {methodp} | {path}", "The client log format")
+	clientLogFormatParts = []string{""}
 	idleTimeout          = flag.Int("sish.idletimeout", 5, "Number of seconds to wait for activity before closing a connection")
 	bannedSubdomainList  = []string{""}
 	filter               *ipfilter.IPFilter
@@ -157,11 +159,16 @@ func main() {
 		filter = ipfilter.NewNoDB(ipfilterOpts)
 	}
 
-	// Get log format parts and delimiters (1..n space, pipe, comma or newline)
-	re := regexp.MustCompile("({[a-z]+}|[ \\|,\\n]+)")
-	tmpLogFormatParts := re.FindAllStringSubmatch(*logFormat, -1)
+	// Get log format parts and delimiters
+	re := regexp.MustCompile(`({[a-z]+}|[ \w\d:\|,;=]*)`)
+	tmpLogFormatParts := re.FindAllStringSubmatch(*serverLogFormat, -1)
 	for _, logPart := range tmpLogFormatParts {
-		logFormatParts = append(logFormatParts , logPart[1])
+		serverLogFormatParts = append(serverLogFormatParts, logPart[1])
+	}
+
+	tmpLogFormatParts = re.FindAllStringSubmatch(*clientLogFormat, -1)
+	for _, logPart := range tmpLogFormatParts {
+		clientLogFormatParts = append(clientLogFormatParts, logPart[1])
 	}
 
 	watchCerts()

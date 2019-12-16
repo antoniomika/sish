@@ -53,65 +53,23 @@ func startHTTPHandler(state *State) {
 
 		c.Next()
 	}, gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-		var statusFormatted, methodFormatted string
-
-		statusFormatted = fmt.Sprintf("%3d", param.StatusCode)
-		methodFormatted = param.Method
-
-		if param.IsOutputColor() {
-			switch {
-			case param.StatusCode >= http.StatusOK && param.StatusCode < http.StatusMultipleChoices:
-				statusFormatted = aurora.Sprintf(aurora.Green("%3d"), param.StatusCode)
-			case param.StatusCode >= http.StatusMultipleChoices && param.StatusCode < http.StatusBadRequest:
-				statusFormatted = aurora.Sprintf(aurora.Yellow("%3d"), param.StatusCode)
-			case param.StatusCode >= http.StatusBadRequest && param.StatusCode < http.StatusInternalServerError:
-				statusFormatted = aurora.Sprintf(aurora.Red("%3d"), param.StatusCode)
-			default:
-				statusFormatted = aurora.Sprintf(aurora.Red("%3d"), param.StatusCode)
-			}
-		}
-
 		if param.Latency > time.Minute {
 			// Truncate in a golang < 1.8 safe way
 			param.Latency = param.Latency - param.Latency%time.Second
 		}
 
-		logLine := ""
-		for _, logPart := range logFormatParts {
-			switch logPart {
-			case "{timestamp}":
-				logLine += fmt.Sprintf("%v", param.TimeStamp.Format(*logTimestampFormat))
-			case "{host}":
-				logLine += fmt.Sprintf("%s", param.Request.Host)
-			case "{status}":
-				logLine += fmt.Sprintf("%s", statusFormatted)
-			case "{latency}":
-				logLine += fmt.Sprintf("% 8s", RoundN(param.Latency, 4))
-			case "{clientip}":
-				logLine += fmt.Sprintf("%15s", param.ClientIP)
-			case "{method}":
-				logLine += fmt.Sprintf("%s", methodFormatted)
-			case "{methodp}":
-				logLine += fmt.Sprintf("%-4s", methodFormatted)
-			case "{path}":
-				logLine += fmt.Sprintf("%s", param.Path)
-			case "{error}":
-				logLine += fmt.Sprintf("%s", param.ErrorMessage)
-			default:
-				logLine += fmt.Sprintf("%s", logPart)
-			}
-		}
-
+		// Client log
 		if *logToClient {
 			hostname := strings.Split(param.Request.Host, ":")[0]
 			loc, ok := state.HTTPListeners.Load(hostname)
 			if ok {
 				proxyHolder := loc.(*ProxyHolder)
-				sendMessage(proxyHolder.SSHConn, strings.TrimSpace(logLine), true)
+				sendMessage(proxyHolder.SSHConn, strings.TrimSpace(formatLog(clientLogFormatParts, &param)), true)
 			}
 		}
 
-		return logLine
+		// Server log line
+		return formatLog(serverLogFormatParts, &param) + "\n"
 	}), gin.Recovery(), func(c *gin.Context) {
 		hostname := strings.Split(c.Request.Host, ":")[0]
 
@@ -257,4 +215,55 @@ func digits(d time.Duration) int {
 		i++
 	}
 	return i
+}
+
+func formatLog(logFormatParts []string, param *gin.LogFormatterParams) string {
+	statusFormatted := fmt.Sprintf("%3d", param.StatusCode)
+
+	if param.IsOutputColor() {
+		switch {
+		case param.StatusCode >= http.StatusOK && param.StatusCode < http.StatusMultipleChoices:
+			statusFormatted = aurora.Sprintf(aurora.Green("%3d"), param.StatusCode)
+		case param.StatusCode >= http.StatusMultipleChoices && param.StatusCode < http.StatusBadRequest:
+			statusFormatted = aurora.Sprintf(aurora.Yellow("%3d"), param.StatusCode)
+		case param.StatusCode >= http.StatusBadRequest && param.StatusCode < http.StatusInternalServerError:
+			statusFormatted = aurora.Sprintf(aurora.Red("%3d"), param.StatusCode)
+		default:
+			statusFormatted = aurora.Sprintf(aurora.Red("%3d"), param.StatusCode)
+		}
+	}
+
+	logLine := ""
+	for _, logPart := range logFormatParts {
+		switch logPart {
+		case "{timestamp}":
+			logLine += fmt.Sprintf("%v", param.TimeStamp.Format(*logTimestampFormat))
+		case "{host}":
+			logLine += param.Request.Host
+		case "{status}":
+			logLine += statusFormatted
+		case "{latency}":
+			logLine += RoundN(param.Latency, 4).String()
+		case "{latencyp}":
+			logLine += fmt.Sprintf("% 8s", RoundN(param.Latency, 4))
+		case "{clientip}":
+			logLine += param.ClientIP
+		case "{clientipp}":
+			logLine += fmt.Sprintf("%15s", param.ClientIP)
+		case "{method}":
+			logLine += param.Method
+		case "{methodp}":
+			logLine += fmt.Sprintf("%-4s", param.Method)
+		case "{path}":
+			logLine += param.Path
+		case "{error}":
+			logLine += param.ErrorMessage
+		case "{newline}":
+			logLine += "\n"
+		default:
+			logLine += logPart
+		}
+	}
+
+	return logLine
 }

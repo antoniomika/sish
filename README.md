@@ -138,12 +138,10 @@ Usage of ./sish:
         Number of seconds to wait for activity before closing a connection (default 5)
   -sish.keysdir string
         Directory for public keys for pubkey auth (default "pubkeys/")
+  -sish.logtimestampformat string
+        Log timestamp format (default "2006-01-02 15:04:05")
   -sish.logtoclient
         Whether or not to log http requests to the client
-  -sish.logtimestampformat
-        Log timestamp format (default "2006-01-02 15:04:05")
-  -sish.logformat
-        Custom log format. A string made up of required parts ({timestamp}, {host}, {status}, {latency}, {clientip}, {method}, {methodp}, {path}, {error}) and delimiters (one or more of space, pipe or comma). "methodp" differed from "method" in that is is padded to 4 characters (default "{timestamp} | {host} | {status} | {latency} | {clientip} | {methodp} | {path} \n{error}")
   -sish.password string
         Password to use for password auth (default "S3Cr3tP4$$W0rD")
   -sish.pkloc string
@@ -158,6 +156,10 @@ Usage of ./sish:
         Whether or not to redirect the root domain (default true)
   -sish.redirectrootlocation string
         Where to redirect the root domain to (default "https://github.com/antoniomika/sish")
+  -sish.serverlogformat string
+        The server log format string, created from available fields ({timestamp}, {host}, {status}, {latency}, {latencyp}, {clientip}, {clientipp}, {method}, {methodp}, {path} and {error}) and delimiters. {latencyp}, {clientipp} and {methodp} are padded to deliver fixed column widths. {newline} will inject a newline (default "{timestamp} | {host} | {status} | {latencyp} | {clientipp} | {methodp} | {path}")
+  -sish.clientlogformat string
+        The client log format string, created from available fields ({timestamp}, {host}, {status}, {latency}, {latencyp}, {clientip}, {clientipp, {method}, {methodp} and {path}) and delimiters. {latencyp}, {clientipp} and {methodp} are padded to deliver fixed column widths. {newline} will inject a newline (default "{timestamp} | {host} | {status} | {latencyp} | {clientipp} | {methodp} | {path}")
   -sish.subdomainlen int
         The length of the random subdomain to generate (default 3)
   -sish.tcpalias
