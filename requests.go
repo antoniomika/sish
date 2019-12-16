@@ -135,7 +135,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		if *httpsEnabled {
 			httpsPortString := ""
 			if httpsPort != 443 {
-					httpsPortString = fmt.Sprintf(":%d", httpsPort)
+				httpsPortString = fmt.Sprintf(":%d", httpsPort)
 			}
 
 			requestMessages += aurora.Sprintf(aurora.Green("HTTP:  http://%s%s\r\n"), host, httpPortString)

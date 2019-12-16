@@ -4,19 +4,18 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"path/filepath"
 	"strings"
 	"time"
-	"math"
-
-	"github.com/logrusorgru/aurora"
-	"github.com/gorilla/websocket"
-	"github.com/koding/websocketproxy"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
+	"github.com/koding/websocketproxy"
+	"github.com/logrusorgru/aurora"
 )
 
 // ProxyHolder holds proxy and connection info
@@ -62,13 +61,13 @@ func startHTTPHandler(state *State) {
 		if param.IsOutputColor() {
 			switch {
 			case param.StatusCode >= http.StatusOK && param.StatusCode < http.StatusMultipleChoices:
-					statusFormatted = aurora.Sprintf(aurora.Green("%3d"), param.StatusCode)
+				statusFormatted = aurora.Sprintf(aurora.Green("%3d"), param.StatusCode)
 			case param.StatusCode >= http.StatusMultipleChoices && param.StatusCode < http.StatusBadRequest:
-					statusFormatted = aurora.Sprintf(aurora.Yellow("%3d"), param.StatusCode)
+				statusFormatted = aurora.Sprintf(aurora.Yellow("%3d"), param.StatusCode)
 			case param.StatusCode >= http.StatusBadRequest && param.StatusCode < http.StatusInternalServerError:
-					statusFormatted = aurora.Sprintf(aurora.Red("%3d"), param.StatusCode)
+				statusFormatted = aurora.Sprintf(aurora.Red("%3d"), param.StatusCode)
 			default:
-					statusFormatted = aurora.Sprintf(aurora.Red("%3d"), param.StatusCode)
+				statusFormatted = aurora.Sprintf(aurora.Red("%3d"), param.StatusCode)
 			}
 		}
 
