@@ -164,24 +164,24 @@ func RoundN(d time.Duration, n int) time.Duration {
 	if d >= time.Hour {
 		k := digits(d / time.Hour)
 		if k >= n {
-			return d.Round(time.Hour*time.Duration(math.Pow10(k-n)))
+			return d.Round(time.Hour * time.Duration(math.Pow10(k-n)))
 		}
 		n -= k
 		k = digits(d % time.Hour / time.Minute)
 		if k >= n {
-			return d.Round(time.Minute*time.Duration(math.Pow10(k-n)))
+			return d.Round(time.Minute * time.Duration(math.Pow10(k-n)))
 		}
-		return d.Round(time.Duration(float64(100*time.Second)*math.Pow10(k-n)))
+		return d.Round(time.Duration(float64(100*time.Second) * math.Pow10(k-n)))
 	}
 	if d >= time.Minute {
 		k := digits(d / time.Minute)
 		if k >= n {
-			return d.Round(time.Minute*time.Duration(math.Pow10(k-n)))
+			return d.Round(time.Minute * time.Duration(math.Pow10(k-n)))
 		}
-		return d.Round(time.Duration(float64(100*time.Second)*math.Pow10(k-n)))
+		return d.Round(time.Duration(float64(100*time.Second) * math.Pow10(k-n)))
 	}
 	if k := digits(d); k > n {
-		return d.Round(time.Duration(math.Pow10(k-n)))
+		return d.Round(time.Duration(math.Pow10(k - n)))
 	}
 	return d
 }
