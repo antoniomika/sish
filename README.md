@@ -116,6 +116,8 @@ Usage of ./sish:
         Ports that are allowed to be bound (default "0,1024-65535")
   -sish.cleanupunbound
         Whether or not to cleanup unbound (forwarded) SSH connections (default true)
+  -sish.clientlogformat string
+        The client log format string, created from available fields ({timestamp}, {host}, {status}, {latency}, {latencyp}, {clientip}, {clientipp, {method}, {methodp} and {path}) and delimiters. {latencyp}, {clientipp} and {methodp} are padded to deliver fixed column widths. {newline} will inject a newline (default "{timestamp} | {host} | {status} | {latencyp} | {clientipp} | {methodp} | {path}")
   -sish.debug
         Whether or not to print debug information
   -sish.domain string
@@ -158,8 +160,6 @@ Usage of ./sish:
         Where to redirect the root domain to (default "https://github.com/antoniomika/sish")
   -sish.serverlogformat string
         The server log format string, created from available fields ({timestamp}, {host}, {status}, {latency}, {latencyp}, {clientip}, {clientipp}, {method}, {methodp}, {path} and {error}) and delimiters. {latencyp}, {clientipp} and {methodp} are padded to deliver fixed column widths. {newline} will inject a newline (default "{timestamp} | {host} | {status} | {latencyp} | {clientipp} | {methodp} | {path}")
-  -sish.clientlogformat string
-        The client log format string, created from available fields ({timestamp}, {host}, {status}, {latency}, {latencyp}, {clientip}, {clientipp, {method}, {methodp} and {path}) and delimiters. {latencyp}, {clientipp} and {methodp} are padded to deliver fixed column widths. {newline} will inject a newline (default "{timestamp} | {host} | {status} | {latencyp} | {clientipp} | {methodp} | {path}")
   -sish.subdomainlen int
         The length of the random subdomain to generate (default 3)
   -sish.tcpalias

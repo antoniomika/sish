@@ -156,26 +156,7 @@ func startHTTPHandler(state *State) {
 	log.Fatal(r.Run(*httpAddr))
 }
 
-// Round a duration, see original source here: https://play.golang.org/p/WjfKwhhjL5
-func Round(d, r time.Duration) time.Duration {
-	if r <= 0 {
-		return d
-	}
-	neg := d < 0
-	if neg {
-		d = -d
-	}
-	if m := d % r; m+m < r {
-		d = d - m
-	} else {
-		d = d + r - m
-	}
-	if neg {
-		return -d
-	}
-	return d
-}
-
+// Round duration to N decimal points. Original source here: https://play.golang.org/p/WjfKwhhjL5
 func RoundN(d time.Duration, n int) time.Duration {
 	if n < 1 {
 		return d
@@ -183,24 +164,24 @@ func RoundN(d time.Duration, n int) time.Duration {
 	if d >= time.Hour {
 		k := digits(d / time.Hour)
 		if k >= n {
-			return Round(d, time.Hour*time.Duration(math.Pow10(k-n)))
+			return d.Round(time.Hour*time.Duration(math.Pow10(k-n)))
 		}
 		n -= k
 		k = digits(d % time.Hour / time.Minute)
 		if k >= n {
-			return Round(d, time.Minute*time.Duration(math.Pow10(k-n)))
+			return d.Round(time.Minute*time.Duration(math.Pow10(k-n)))
 		}
-		return Round(d, time.Duration(float64(100*time.Second)*math.Pow10(k-n)))
+		return d.Round(time.Duration(float64(100*time.Second)*math.Pow10(k-n)))
 	}
 	if d >= time.Minute {
 		k := digits(d / time.Minute)
 		if k >= n {
-			return Round(d, time.Minute*time.Duration(math.Pow10(k-n)))
+			return d.Round(time.Minute*time.Duration(math.Pow10(k-n)))
 		}
-		return Round(d, time.Duration(float64(100*time.Second)*math.Pow10(k-n)))
+		return d.Round(time.Duration(float64(100*time.Second)*math.Pow10(k-n)))
 	}
 	if k := digits(d); k > n {
-		return Round(d, time.Duration(math.Pow10(k-n)))
+		return d.Round(time.Duration(math.Pow10(k-n)))
 	}
 	return d
 }

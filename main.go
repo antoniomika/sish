@@ -79,9 +79,9 @@ var (
 	tcpAlias             = flag.Bool("sish.tcpalias", false, "Whether or not to allow the use of TCP aliasing")
 	logToClient          = flag.Bool("sish.logtoclient", false, "Whether or not to log http requests to the client")
 	logTimestampFormat   = flag.String("sish.logtimestampformat", "2006-01-02 15:04:05", "Log timestamp format")
-	serverLogFormat      = flag.String("sish.serverlogformat", "{timestamp} | {host} | {status} | {latencyp} | {clientipp} | {methodp} | {path}", "The server log format")
+	serverLogFormat      = flag.String("sish.serverlogformat", "{timestamp} | {host} | {status} | {latencyp} | {clientipp} | {methodp} | {path}", "The server log format string, created from available fields ({timestamp}, {host}, {status}, {latency}, {latencyp}, {clientip}, {clientipp}, {method}, {methodp}, {path} and {error}) and delimiters. {latencyp}, {clientipp} and {methodp} are padded to deliver fixed column widths. {newline} will inject a newline")
 	serverLogFormatParts = []string{""}
-	clientLogFormat      = flag.String("sish.clientlogformat", "{timestamp} | {host} | {status} | {latencyp} | {clientipp} | {methodp} | {path}", "The client log format")
+	clientLogFormat      = flag.String("sish.clientlogformat", "{timestamp} | {host} | {status} | {latencyp} | {clientipp} | {methodp} | {path}", "The client log format string, created from available fields ({timestamp}, {host}, {status}, {latency}, {latencyp}, {clientip}, {clientipp, {method}, {methodp} and {path}) and delimiters. {latencyp}, {clientipp} and {methodp} are padded to deliver fixed column widths. {newline} will inject a newline")
 	clientLogFormatParts = []string{""}
 	idleTimeout          = flag.Int("sish.idletimeout", 5, "Number of seconds to wait for activity before closing a connection")
 	bannedSubdomainList  = []string{""}
