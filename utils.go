@@ -177,10 +177,9 @@ func loadCerts() {
 			}
 			return rest
 		}
-		rest := keyHandle(keyBytes, fileInfo)
 
-		if len(rest) > 0 {
-			keyHandle(rest, fileInfo)
+		for ok := true; ok; ok = len(keyBytes) > 0 {
+			keyBytes = keyHandle(keyBytes, fileInfo)
 		}
 	}
 
