@@ -303,7 +303,7 @@ func getOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 		}
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
-				sendMessage(sshConn, aurora.Sprintf("The subdomain %s is unavaible. Assigning a random subdomain.", aurora.Red(host)), true)
+				sendMessage(sshConn, aurora.Sprintf("The subdomain %s is unavailable. Assigning a random subdomain.", aurora.Red(host)), true)
 			}
 		}
 
