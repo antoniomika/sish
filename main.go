@@ -38,48 +38,49 @@ type State struct {
 }
 
 var (
-	version              = "dev"
-	commit               = "none"
-	date                 = "unknown"
-	httpPort             int
-	httpsPort            int
-	serverAddr           = flag.String("sish.addr", "localhost:2222", "The address to listen for SSH connections")
-	httpAddr             = flag.String("sish.http", "localhost:80", "The address to listen for HTTP connections")
-	httpPortOverride     = flag.Int("sish.httpport", 0, "The port to use for http command output")
-	httpsAddr            = flag.String("sish.https", "localhost:443", "The address to listen for HTTPS connections")
-	httpsPortOverride    = flag.Int("sish.httpsport", 0, "The port to use for https command output")
-	verifyOrigin         = flag.Bool("sish.verifyorigin", true, "Whether or not to verify origin on websocket connection")
-	verifySSL            = flag.Bool("sish.verifyssl", true, "Whether or not to verify SSL on proxy connection")
-	httpsEnabled         = flag.Bool("sish.httpsenabled", false, "Whether or not to listen for HTTPS connections")
-	redirectRoot         = flag.Bool("sish.redirectroot", true, "Whether or not to redirect the root domain")
-	redirectRootLocation = flag.String("sish.redirectrootlocation", "https://github.com/antoniomika/sish", "Where to redirect the root domain to")
-	httpsPems            = flag.String("sish.httpspems", "ssl/", "The location of pem files for HTTPS (fullchain.pem and privkey.pem)")
-	rootDomain           = flag.String("sish.domain", "ssi.sh", "The domain for HTTP(S) multiplexing")
-	domainLen            = flag.Int("sish.subdomainlen", 3, "The length of the random subdomain to generate")
-	forceRandomSubdomain = flag.Bool("sish.forcerandomsubdomain", true, "Whether or not to force a random subdomain")
-	bannedSubdomains     = flag.String("sish.bannedsubdomains", "localhost", "A comma separated list of banned subdomains")
-	bannedIPs            = flag.String("sish.bannedips", "", "A comma separated list of banned ips")
-	bannedCountries      = flag.String("sish.bannedcountries", "", "A comma separated list of banned countries")
-	whitelistedIPs       = flag.String("sish.whitelistedips", "", "A comma separated list of whitelisted ips")
-	whitelistedCountries = flag.String("sish.whitelistedcountries", "", "A comma separated list of whitelisted countries")
-	useGeoDB             = flag.Bool("sish.usegeodb", false, "Whether or not to use the maxmind geodb")
-	pkPass               = flag.String("sish.pkpass", "S3Cr3tP4$$phrAsE", "Passphrase to use for the server private key")
-	pkLoc                = flag.String("sish.pkloc", "keys/ssh_key", "SSH server private key")
-	authEnabled          = flag.Bool("sish.auth", false, "Whether or not to require auth on the SSH service")
-	authPassword         = flag.String("sish.password", "S3Cr3tP4$$W0rD", "Password to use for password auth")
-	authKeysDir          = flag.String("sish.keysdir", "pubkeys/", "Directory for public keys for pubkey auth")
-	bindRange            = flag.String("sish.bindrange", "0,1024-65535", "Ports that are allowed to be bound")
-	cleanupUnbound       = flag.Bool("sish.cleanupunbound", true, "Whether or not to cleanup unbound (forwarded) SSH connections")
-	bindRandom           = flag.Bool("sish.bindrandom", true, "Bind ports randomly (OS chooses)")
-	proxyProtoEnabled    = flag.Bool("sish.proxyprotoenabled", false, "Whether or not to enable the use of the proxy protocol")
-	proxyProtoVersion    = flag.String("sish.proxyprotoversion", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined. If userdefined, the user needs to add a command to SSH called proxyproto:version (ie proxyproto:1)")
-	debug                = flag.Bool("sish.debug", false, "Whether or not to print debug information")
-	versionCheck         = flag.Bool("sish.version", false, "Print version and exit")
-	tcpAlias             = flag.Bool("sish.tcpalias", false, "Whether or not to allow the use of TCP aliasing")
-	logToClient          = flag.Bool("sish.logtoclient", false, "Whether or not to log http requests to the client")
-	idleTimeout          = flag.Int("sish.idletimeout", 5, "Number of seconds to wait for activity before closing a connection")
-	bannedSubdomainList  = []string{""}
-	filter               *ipfilter.IPFilter
+	version               = "dev"
+	commit                = "none"
+	date                  = "unknown"
+	httpPort              int
+	httpsPort             int
+	serverAddr            = flag.String("sish.addr", "localhost:2222", "The address to listen for SSH connections")
+	httpAddr              = flag.String("sish.http", "localhost:80", "The address to listen for HTTP connections")
+	httpPortOverride      = flag.Int("sish.httpport", 0, "The port to use for http command output")
+	httpsAddr             = flag.String("sish.https", "localhost:443", "The address to listen for HTTPS connections")
+	httpsPortOverride     = flag.Int("sish.httpsport", 0, "The port to use for https command output")
+	verifyOrigin          = flag.Bool("sish.verifyorigin", true, "Whether or not to verify origin on websocket connection")
+	verifySSL             = flag.Bool("sish.verifyssl", true, "Whether or not to verify SSL on proxy connection")
+	httpsEnabled          = flag.Bool("sish.httpsenabled", false, "Whether or not to listen for HTTPS connections")
+	redirectRoot          = flag.Bool("sish.redirectroot", true, "Whether or not to redirect the root domain")
+	redirectRootLocation  = flag.String("sish.redirectrootlocation", "https://github.com/antoniomika/sish", "Where to redirect the root domain to")
+	httpsPems             = flag.String("sish.httpspems", "ssl/", "The location of pem files for HTTPS (fullchain.pem and privkey.pem)")
+	rootDomain            = flag.String("sish.domain", "ssi.sh", "The domain for HTTP(S) multiplexing")
+	domainLen             = flag.Int("sish.subdomainlen", 3, "The length of the random subdomain to generate")
+	forceRandomSubdomain  = flag.Bool("sish.forcerandomsubdomain", true, "Whether or not to force a random subdomain")
+	bannedSubdomains      = flag.String("sish.bannedsubdomains", "localhost", "A comma separated list of banned subdomains")
+	bannedIPs             = flag.String("sish.bannedips", "", "A comma separated list of banned ips")
+	bannedCountries       = flag.String("sish.bannedcountries", "", "A comma separated list of banned countries")
+	whitelistedIPs        = flag.String("sish.whitelistedips", "", "A comma separated list of whitelisted ips")
+	whitelistedCountries  = flag.String("sish.whitelistedcountries", "", "A comma separated list of whitelisted countries")
+	useGeoDB              = flag.Bool("sish.usegeodb", false, "Whether or not to use the maxmind geodb")
+	pkPass                = flag.String("sish.pkpass", "S3Cr3tP4$$phrAsE", "Passphrase to use for the server private key")
+	pkLoc                 = flag.String("sish.pkloc", "keys/ssh_key", "SSH server private key")
+	authEnabled           = flag.Bool("sish.auth", false, "Whether or not to require auth on the SSH service")
+	authPassword          = flag.String("sish.password", "S3Cr3tP4$$W0rD", "Password to use for password auth")
+	authKeysDir           = flag.String("sish.keysdir", "pubkeys/", "Directory for public keys for pubkey auth")
+	bindRange             = flag.String("sish.bindrange", "0,1024-65535", "Ports that are allowed to be bound")
+	cleanupUnbound        = flag.Bool("sish.cleanupunbound", true, "Whether or not to cleanup unbound (forwarded) SSH connections")
+	bindRandom            = flag.Bool("sish.bindrandom", true, "Bind ports randomly (OS chooses)")
+	proxyProtoEnabled     = flag.Bool("sish.proxyprotoenabled", false, "Whether or not to enable the use of the proxy protocol")
+	proxyProtoVersion     = flag.String("sish.proxyprotoversion", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined. If userdefined, the user needs to add a command to SSH called proxyproto:version (ie proxyproto:1)")
+	debug                 = flag.Bool("sish.debug", false, "Whether or not to print debug information")
+	versionCheck          = flag.Bool("sish.version", false, "Print version and exit")
+	tcpAlias              = flag.Bool("sish.tcpalias", false, "Whether or not to allow the use of TCP aliasing")
+	logToClient           = flag.Bool("sish.logtoclient", false, "Whether or not to log http requests to the client")
+	idleTimeout           = flag.Int("sish.idletimeout", 5, "Number of seconds to wait for activity before closing a connection")
+	appendUserToSubdomain = flag.Bool("sish.appendusertosubdomain", false, "Whether or not to append the user to the subdomain")
+	bannedSubdomainList   = []string{""}
+	filter                *ipfilter.IPFilter
 )
 
 func main() {
