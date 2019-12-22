@@ -296,7 +296,14 @@ func inBannedList(host string, bannedList []string) bool {
 func getOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 	getUnusedHost := func() string {
 		first := true
-		host := strings.ToLower(addr + "." + *rootDomain)
+
+		hostExtension := ""
+		if *appendUserToSubdomain {
+			hostExtension = "-" + sshConn.SSHConn.User()
+		}
+
+		host := strings.ToLower(addr + hostExtension + "." + *rootDomain)
+
 		getRandomHost := func() string {
 			return strings.ToLower(RandStringBytesMaskImprSrc(*domainLen) + "." + *rootDomain)
 		}
