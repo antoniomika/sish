@@ -122,7 +122,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State
 		return
 	}
 
-	sshConn.Listeners.Store(conn.RemoteAddr(), nil)
+	sshConn.Listeners.Store(conn.RemoteAddr(), tcpAliasToConnect)
 
 	copyBoth(conn, connection)
 

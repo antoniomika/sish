@@ -30,6 +30,7 @@ type SSHConnection struct {
 
 // State handles overall state
 type State struct {
+	Console        *WebConsole
 	SSHConnections *sync.Map
 	Listeners      *sync.Map
 	HTTPListeners  *sync.Map
@@ -79,6 +80,10 @@ var (
 	logToClient           = flag.Bool("sish.logtoclient", false, "Whether or not to log http requests to the client")
 	idleTimeout           = flag.Int("sish.idletimeout", 5, "Number of seconds to wait for activity before closing a connection")
 	appendUserToSubdomain = flag.Bool("sish.appendusertosubdomain", false, "Whether or not to append the user to the subdomain")
+	adminEnabled          = flag.Bool("sish.adminenabled", false, "Whether or not to enable the admin console")
+	adminToken            = flag.String("sish.admintoken", "S3Cr3tP4$$W0rD", "The token to use for admin access")
+	serviceConsoleEnabled = flag.Bool("sish.serviceconsoleenabled", false, "Whether or not to enable the admin console for each service and send the info to users")
+	serviceConsoleToken   = flag.String("sish.serviceconsoletoken", "", "The token to use for service access. Auto generated if empty.")
 	bannedSubdomainList   = []string{""}
 	filter                *ipfilter.IPFilter
 )
@@ -162,7 +167,10 @@ func main() {
 		HTTPListeners:  &sync.Map{},
 		TCPListeners:   &sync.Map{},
 		IPFilter:       filter,
+		Console:        NewWebConsole(),
 	}
+
+	state.Console.State = state
 
 	go startHTTPHandler(state)
 
@@ -189,6 +197,16 @@ func main() {
 				})
 				log.Println("===TCP Aliases====")
 				state.TCPListeners.Range(func(key, value interface{}) bool {
+					log.Println(key, value)
+					return true
+				})
+				log.Println("===Web Console Routes====")
+				state.Console.Clients.Range(func(key, value interface{}) bool {
+					log.Println(key, value)
+					return true
+				})
+				log.Println("===Web Console Tokens====")
+				state.Console.RouteTokens.Range(func(key, value interface{}) bool {
 					log.Println(key, value)
 					return true
 				})

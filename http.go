@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -35,7 +38,9 @@ func startHTTPHandler(state *State) {
 	gin.ForceConsoleColor()
 
 	r := gin.New()
+	r.LoadHTMLGlob("templates/*")
 	r.Use(func(c *gin.Context) {
+		c.Set("startTime", time.Now())
 		clientIPAddr, _, err := net.SplitHostPort(c.Request.RemoteAddr)
 		if state.IPFilter.Blocked(c.ClientIP()) || state.IPFilter.Blocked(clientIPAddr) || err != nil {
 			c.AbortWithStatus(http.StatusForbidden)
@@ -53,6 +58,14 @@ func startHTTPHandler(state *State) {
 		if param.Latency > time.Minute {
 			// Truncate in a golang < 1.8 safe way
 			param.Latency = param.Latency - param.Latency%time.Second
+		}
+
+		if *adminToken != "" && strings.Contains(param.Path, *adminToken) {
+			param.Path = strings.Replace(param.Path, *adminToken, "[REDACTED]", 1)
+		}
+
+		if *serviceConsoleToken != "" && strings.Contains(param.Path, *serviceConsoleToken) {
+			param.Path = strings.Replace(param.Path, *serviceConsoleToken, "[REDACTED]", 1)
 		}
 
 		logLine := fmt.Sprintf("%v | %s |%s %3d %s| %13v | %15s |%s %-7s %s %s\n%s",
@@ -78,8 +91,14 @@ func startHTTPHandler(state *State) {
 		return logLine
 	}), gin.Recovery(), func(c *gin.Context) {
 		hostname := strings.Split(c.Request.Host, ":")[0]
+		hostIsRoot := hostname == *rootDomain
 
-		if hostname == *rootDomain && *redirectRoot {
+		if (*adminEnabled || *serviceConsoleEnabled) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
+			state.Console.HandleRequest(hostname, hostIsRoot, c)
+			return
+		}
+
+		if hostIsRoot && *redirectRoot {
 			c.Redirect(http.StatusFound, *redirectRootLocation)
 			return
 		}
@@ -92,6 +111,14 @@ func startHTTPHandler(state *State) {
 			}
 			return
 		}
+
+		reqBody, err := ioutil.ReadAll(c.Request.Body)
+		if err != nil {
+			log.Println("Error reading request body:", err)
+			return
+		}
+
+		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(reqBody))
 
 		requestedScheme := "http"
 
@@ -151,6 +178,53 @@ func startHTTPHandler(state *State) {
 			Dial:            dialer,
 			TLSClientConfig: tlsConfig,
 		}
+
+		if *adminEnabled || *serviceConsoleEnabled {
+			proxy.ModifyResponse = func(response *http.Response) error {
+				resBody, err := ioutil.ReadAll(response.Body)
+				if err != nil {
+					log.Println("error marshaling json for webconsole:", err)
+				}
+
+				response.Body = ioutil.NopCloser(bytes.NewBuffer(resBody))
+
+				startTime := c.GetTime("startTime")
+				currentTime := time.Now()
+				diffTime := currentTime.Sub(startTime)
+
+				roundTime := 10 * time.Microsecond
+				if diffTime > time.Second {
+					roundTime = 10 * time.Millisecond
+				}
+
+				requestHeaders := c.Request.Header.Clone()
+				requestHeaders.Add("Host", hostname)
+
+				data, err := json.Marshal(map[string]interface{}{
+					"startTime":       startTime,
+					"currentTime":     currentTime,
+					"requestIP":       c.ClientIP(),
+					"requestTime":     diffTime.Round(roundTime).String(),
+					"requestMethod":   c.Request.Method,
+					"requestUrl":      c.Request.URL,
+					"requestHeaders":  requestHeaders,
+					"requestBody":     string(reqBody),
+					"responseHeaders": response.Header,
+					"responseCode":    response.StatusCode,
+					"responseStatus":  response.Status,
+					"responseBody":    string(resBody),
+				})
+
+				if err != nil {
+					log.Println("error marshaling json for webconsole:", err)
+				}
+
+				state.Console.BroadcastRoute(hostname, data)
+
+				return nil
+			}
+		}
+
 		gin.WrapH(proxy)(c)
 	})
 

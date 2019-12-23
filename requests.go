@@ -127,6 +127,22 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		state.HTTPListeners.Store(host, pH)
 		defer state.HTTPListeners.Delete(host)
 
+		if *adminEnabled || *serviceConsoleEnabled {
+			routeToken := *serviceConsoleToken
+			sendToken := false
+			if routeToken == "" {
+				sendToken = true
+				routeToken = RandStringBytesMaskImprSrc(20)
+			}
+
+			state.Console.AddRoute(host, routeToken)
+			defer state.Console.RemoveRoute(host)
+
+			if *serviceConsoleEnabled && sendToken {
+				requestMessages += fmt.Sprintf("Service console can be accessed with token: %s\r\n", routeToken)
+			}
+		}
+
 		httpPortString := ""
 		if httpPort != 80 {
 			httpPortString = fmt.Sprintf(":%d", httpPort)

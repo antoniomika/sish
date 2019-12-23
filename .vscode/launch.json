@@ -23,7 +23,9 @@
         "-sish.bindrandom=false",
         "-sish.tcpalias=true",
         "-sish.proxyprotoenabled=false",
-        "-sish.logtoclient=true"
+        "-sish.logtoclient=true",
+        "-sish.adminenabled=true",
+        "-sish.serviceconsoleenabled=true"
       ]
     }
   ]

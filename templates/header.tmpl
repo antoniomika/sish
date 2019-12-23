@@ -1,0 +1,55 @@
+{{ define "header" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <title>sish</title>
+
+    <!-- Bootstrap Start -->
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"></script>
+
+    <link href="https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sandstone/bootstrap.min.css" rel="stylesheet">
+    <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- Bootstrap End -->
+
+    <style>
+        #pageContainer {
+            padding-top: 60px;
+        }
+
+        .navbar {
+            max-height: 60px !important
+        }
+    </style>
+
+    <script type="text/javascript">
+        
+    </script>
+</head>
+
+<body>
+<nav class="navbar navbar-expand-md fixed-top navbar-dark bg-primary" role="navigation">
+    <a class="navbar-brand" href="/_sish/console">sish</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbar">
+        <ul class="navbar-nav mr-auto">
+            <li class="nav-item">
+                <a class="nav-link" href="/_sish/console">Home</a>
+            </li>
+        </ul>
+        <ul class="navbar-nav flex-row ml-md-auto d-none d-md-flex">
+            <li class="nav-item">
+                <a class="nav-link" href="/_sish/console"><i class="fa fa-home"></i> Home</a>
+            </li>
+        </ul>
+    </div>
+</nav>
+<div id="pageContainer" class="container">
+{{ end }}
