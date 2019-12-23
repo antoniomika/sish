@@ -102,6 +102,12 @@ sh-3.2# ./sish -h
 Usage of ./sish:
   -sish.addr string
         The address to listen for SSH connections (default "localhost:2222")
+  -sish.adminenabled
+        Whether or not to enable the admin console
+  -sish.admintoken string
+        The token to use for admin access (default "S3Cr3tP4$$W0rD")
+  -sish.appendusertosubdomain
+        Whether or not to append the user to the subdomain
   -sish.auth
         Whether or not to require auth on the SSH service
   -sish.bannedcountries string
@@ -154,6 +160,10 @@ Usage of ./sish:
         Whether or not to redirect the root domain (default true)
   -sish.redirectrootlocation string
         Where to redirect the root domain to (default "https://github.com/antoniomika/sish")
+  -sish.serviceconsoleenabled
+        Whether or not to enable the admin console for each service and send the info to users
+  -sish.serviceconsoletoken string
+        The token to use for service access. Auto generated if empty.
   -sish.subdomainlen int
         The length of the random subdomain to generate (default 3)
   -sish.tcpalias
