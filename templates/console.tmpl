@@ -79,11 +79,11 @@
 
             if ("Content-Type" in requestData.requestHeaders && requestData.requestHeaders["Content-Type"][0] == "application/json") {
                 $("#requestBody").html(`
-                    <pre><code>${JSON.stringify(JSON.parse(requestData.requestBody), null, 4)}</code></pre>
+                    <pre><code>${JSON.stringify(JSON.parse(atob(requestData.requestBody)), null, 4)}</code></pre>
                 `);
             } else {
                 $("#requestBody").html(`
-                    <pre><code>${requestData.requestBody}</code></pre>
+                    <pre><code>${atob(requestData.requestBody)}</code></pre>
                 `);
             }
 
@@ -93,11 +93,11 @@
 
             if ("Content-Type" in requestData.responseHeaders && requestData.responseHeaders["Content-Type"][0] == "application/json") {
                 $("#responseBody").html(`
-                    <pre><code>${JSON.stringify(JSON.parse(requestData.responseBody), null, 4)}</code></pre>
+                    <pre><code>${JSON.stringify(JSON.parse(atob(requestData.responseBody)), null, 4)}</code></pre>
                 `);
             } else {
                 $("#responseBody").html(`
-                    <pre><code>${requestData.responseBody}</code></pre>
+                    <pre><code>${atob(requestData.responseBody)}</code></pre>
                 `);
             }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -222,11 +223,11 @@ func startHTTPHandler(state *State) {
 					"requestMethod":   c.Request.Method,
 					"requestUrl":      c.Request.URL,
 					"requestHeaders":  requestHeaders,
-					"requestBody":     string(reqBody),
+					"requestBody":     base64.StdEncoding.EncodeToString(reqBody),
 					"responseHeaders": response.Header,
 					"responseCode":    response.StatusCode,
 					"responseStatus":  response.Status,
-					"responseBody":    string(resBody),
+					"responseBody":    base64.StdEncoding.EncodeToString(resBody),
 				})
 
 				if err != nil {
