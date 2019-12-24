@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -183,7 +184,7 @@ func startHTTPHandler(state *State) {
 			proxy.ModifyResponse = func(response *http.Response) error {
 				resBody, err := ioutil.ReadAll(response.Body)
 				if err != nil {
-					log.Println("error marshaling json for webconsole:", err)
+					log.Println("error reading response for webconsole:", err)
 				}
 
 				response.Body = ioutil.NopCloser(bytes.NewBuffer(resBody))
@@ -195,6 +196,19 @@ func startHTTPHandler(state *State) {
 				roundTime := 10 * time.Microsecond
 				if diffTime > time.Second {
 					roundTime = 10 * time.Millisecond
+				}
+
+				if response.Header.Get("Content-Encoding") == "gzip" {
+					gzData := bytes.NewBuffer(resBody)
+					gzReader, err := gzip.NewReader(gzData)
+					if err != nil {
+						log.Println("error reading gzip data:", err)
+					}
+
+					resBody, err = ioutil.ReadAll(gzReader)
+					if err != nil {
+						log.Println("error reading gzip data:", err)
+					}
 				}
 
 				requestHeaders := c.Request.Header.Clone()
