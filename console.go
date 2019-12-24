@@ -255,7 +255,7 @@ func (c *WebConsole) HandleClients(hostname string, g *gin.Context) {
 
 			var name string
 
-			if unixListener != nil {
+			if ok {
 				name = unixListener.String()
 			} else {
 				name = tcpListener.String()
