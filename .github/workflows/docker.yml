@@ -14,7 +14,7 @@ jobs:
       uses: crazy-max/ghaction-docker-buildx@v1
       with:
         version: latest
-    - name: Login to GitHub Docker Registry
+    - name: Login to Docker Registry
       env:
         DOCKER_USERNAME: ${{ secrets.GITHUB_DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.GITHUB_DOCKER_PASSWORD }}
@@ -25,6 +25,7 @@ jobs:
         DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         REF="${BRANCH_NAME:-master}"
         OTHER_TAGS=""
+
         if [[ ${GITHUB_REF} =~ ^refs\/tags\/v.*$ ]]
         then
           REF="${GITHUB_REF//refs\/tags\/}"
