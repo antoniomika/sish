@@ -332,25 +332,6 @@ func main() {
 func (s *SSHConnection) CleanUp(state *State) {
 	close(s.Close)
 	s.SSHConn.Close()
-	s.Listeners.Range(func(key, val interface{}) bool {
-		_, ok := key.(*net.UnixAddr)
-
-		if ok {
-			actualUnixListener, ok := val.(*net.UnixListener)
-
-			if ok {
-				actualUnixListener.Close()
-			} else {
-				actualUnixConn := val.(*net.UnixConn)
-				actualUnixConn.Close()
-			}
-		} else {
-			actualTCPListener := val.(*net.TCPListener)
-			actualTCPListener.Close()
-		}
-
-		return true
-	})
 	state.SSHConnections.Delete(s.SSHConn.RemoteAddr())
 	log.Println("Closed SSH connection for:", s.SSHConn.RemoteAddr(), "user:", s.SSHConn.User())
 }

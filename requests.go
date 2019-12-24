@@ -93,11 +93,18 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 	state.Listeners.Store(chanListener.Addr(), chanListener)
 	sshConn.Listeners.Store(chanListener.Addr(), chanListener)
 
-	defer func() {
+	cleanupChanListener := func() {
 		chanListener.Close()
 		state.Listeners.Delete(chanListener.Addr())
 		sshConn.Listeners.Delete(chanListener.Addr())
 		os.Remove(tmpfile.Name())
+	}
+
+	defer cleanupChanListener()
+
+	go func() {
+		<-sshConn.Close
+		cleanupChanListener()
 	}()
 
 	connType := "tcp"
@@ -176,11 +183,6 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 	}
 
 	sendMessage(sshConn, requestMessages, false)
-
-	go func() {
-		<-sshConn.Close
-		chanListener.Close()
-	}()
 
 	for {
 		cl, err := chanListener.Accept()
