@@ -336,8 +336,14 @@ func (s *SSHConnection) CleanUp(state *State) {
 		_, ok := key.(*net.UnixAddr)
 
 		if ok {
-			actualUnixListener := val.(*net.UnixListener)
-			actualUnixListener.Close()
+			actualUnixListener, ok := val.(*net.UnixListener)
+
+			if ok {
+				actualUnixListener.Close()
+			} else {
+				actualUnixConn := val.(*net.UnixConn)
+				actualUnixConn.Close()
+			}
 		} else {
 			actualTCPListener := val.(*net.TCPListener)
 			actualTCPListener.Close()
