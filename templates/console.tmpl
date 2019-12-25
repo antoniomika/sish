@@ -1,7 +1,7 @@
 {{ define "console" }}
 {{ template "header" .}}
 <div class="row">
-    <div class="col">
+    <div class="col-md-6">
         <table id="request-table" class="table table-hover">
             <thead class="thead-dark">
                 <tr>
@@ -16,7 +16,7 @@
         </table>
     </div>
 
-    <div class="col">
+    <div class="col-md-6">
         <div class="row">
             <h2 id="request-info-h2">Request Info</h2>
             <div class="container">
@@ -73,32 +73,20 @@
             
             var requestData = $(this).data("request-data");
 
-            $("#requestHeaders").html(`
-                <pre><code>${JSON.stringify(requestData.requestHeaders, null, 4)}</code></pre>
-            `);
+            $("#requestHeaders").html($("<pre/>").addClass("pre-scrollable").text(JSON.stringify(requestData.requestHeaders, null, 4))[0].outerHTML);
 
             if ("Content-Type" in requestData.requestHeaders && requestData.requestHeaders["Content-Type"][0] == "application/json") {
-                $("#requestBody").html(`
-                    <pre><code>${JSON.stringify(JSON.parse(atob(requestData.requestBody)), null, 4)}</code></pre>
-                `);
+                $("#requestBody").html($("<pre/>").addClass("pre-scrollable").text(JSON.stringify(JSON.parse(atob(requestData.requestBody)), null, 4))[0].outerHTML);
             } else {
-                $("#requestBody").html(`
-                    <pre><code>${atob(requestData.requestBody)}</code></pre>
-                `);
+                $("#requestBody").html($("<pre/>").addClass("pre-scrollable").text(atob(requestData.requestBody))[0].outerHTML);
             }
 
-            $("#responseHeaders").html(`
-                <pre><code>${JSON.stringify(requestData.responseHeaders, null, 4)}</code></pre>
-            `);
+            $("#responseHeaders").html($("<pre/>").addClass("pre-scrollable").text(JSON.stringify(requestData.responseHeaders, null, 4))[0].outerHTML);
 
             if ("Content-Type" in requestData.responseHeaders && requestData.responseHeaders["Content-Type"][0] == "application/json") {
-                $("#responseBody").html(`
-                    <pre><code>${JSON.stringify(JSON.parse(atob(requestData.responseBody)), null, 4)}</code></pre>
-                `);
+                $("#responseBody").html($("<pre/>").addClass("pre-scrollable").text(JSON.stringify(JSON.parse(atob(requestData.responseBody)), null, 4))[0].outerHTML);
             } else {
-                $("#responseBody").html(`
-                    <pre><code>${atob(requestData.responseBody)}</code></pre>
-                `);
+                $("#responseBody").html($("<pre/>").addClass("pre-scrollable").text(atob(requestData.responseBody))[0].outerHTML);
             }
 
             $("#request-info-h2").text(`
