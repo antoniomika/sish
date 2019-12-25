@@ -146,7 +146,22 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 			defer state.Console.RemoveRoute(host)
 
 			if *serviceConsoleEnabled && sendToken {
-				requestMessages += fmt.Sprintf("Service console can be accessed with token: %s\r\n", routeToken)
+				scheme := "http"
+				portString := ""
+				if httpPort != 80 {
+					portString = fmt.Sprintf(":%d", httpPort)
+				}
+
+				if *httpsEnabled {
+					scheme = "https"
+					if httpsPort != 443 {
+						portString = fmt.Sprintf(":%d", httpsPort)
+					}
+				}
+
+				consoleURL := fmt.Sprintf("%s://%s%s", scheme, host, portString)
+
+				requestMessages += fmt.Sprintf("Service console can be accessed here: %s/_sish/console?x-authorization=%s\r\n", consoleURL, routeToken)
 			}
 		}
 
