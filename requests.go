@@ -93,11 +93,18 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 	state.Listeners.Store(chanListener.Addr(), chanListener)
 	sshConn.Listeners.Store(chanListener.Addr(), chanListener)
 
-	defer func() {
+	cleanupChanListener := func() {
 		chanListener.Close()
 		state.Listeners.Delete(chanListener.Addr())
 		sshConn.Listeners.Delete(chanListener.Addr())
 		os.Remove(tmpfile.Name())
+	}
+
+	defer cleanupChanListener()
+
+	go func() {
+		<-sshConn.Close
+		cleanupChanListener()
 	}()
 
 	connType := "tcp"
@@ -126,6 +133,37 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 
 		state.HTTPListeners.Store(host, pH)
 		defer state.HTTPListeners.Delete(host)
+
+		if *adminEnabled || *serviceConsoleEnabled {
+			routeToken := *serviceConsoleToken
+			sendToken := false
+			if routeToken == "" {
+				sendToken = true
+				routeToken = RandStringBytesMaskImprSrc(20)
+			}
+
+			state.Console.AddRoute(host, routeToken)
+			defer state.Console.RemoveRoute(host)
+
+			if *serviceConsoleEnabled && sendToken {
+				scheme := "http"
+				portString := ""
+				if httpPort != 80 {
+					portString = fmt.Sprintf(":%d", httpPort)
+				}
+
+				if *httpsEnabled {
+					scheme = "https"
+					if httpsPort != 443 {
+						portString = fmt.Sprintf(":%d", httpsPort)
+					}
+				}
+
+				consoleURL := fmt.Sprintf("%s://%s%s", scheme, host, portString)
+
+				requestMessages += fmt.Sprintf("Service console can be accessed here: %s/_sish/console?x-authorization=%s\r\n", consoleURL, routeToken)
+			}
+		}
 
 		httpPortString := ""
 		if httpPort != 80 {
@@ -160,11 +198,6 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 	}
 
 	sendMessage(sshConn, requestMessages, false)
-
-	go func() {
-		<-sshConn.Close
-		chanListener.Close()
-	}()
 
 	for {
 		cl, err := chanListener.Accept()

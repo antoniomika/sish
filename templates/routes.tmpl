@@ -1,0 +1,113 @@
+{{ define "routes" }}
+{{ template "header" .}}
+<div class="row">
+    <div class="col">
+        <h2>Clients</h2>
+        <table id="client-table" class="table table-hover">
+            <thead class="thead-dark">
+                <tr>
+                    <th scope="col">Client Remote Address</th>
+                    <th scope="col">Username</th>
+                    <th scope="col">SSH Version</th>
+                    <th scope="col">SSH Session ID</th>
+                    <th scope="col">Listeners</th>
+                    <th scope="col">Disconnect</th>
+                </tr>
+            </thead>
+            <tbody id="client-list">
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="row">
+    <div class="col">
+        <h2>Routes</h2>
+        <table style="display:none;" id="route-table" class="table table-hover table-responsive">
+            <thead class="thead-dark">
+                <tr>
+                    <th scope="col">Type</th>
+                    <th scope="col">Address</th>
+                    <th scope="col">File Address</th>
+                    <th scope="col">Client Remote Address</th>
+                    <th scope="col">Disconnect</th>
+                </tr>
+            </thead>
+            <tbody id="route-list">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script type="text/javascript">
+    function disconnectRoute(type, route) {
+        $.get(window.location.href.replace("console", `api/disconnectroute/${type}/${route}`), function(data) {
+            window.location.reload();
+        });
+    }
+
+    function disconnectClient(client) {
+        $.get(window.location.href.replace("console", `api/disconnectclient/${client}`), function(data) {
+            window.location.reload();
+        });
+    }
+
+    function forwardToConsole(hostname) {
+        window.location.hostname = hostname;
+    }
+
+    $(function() {
+        $.getJSON(window.location.href.replace("console", "api/clients"), function(data) {
+            for (var client in data.clients) {
+                var clientData = data.clients[client]
+                var elementID = clientData.remoteAddr.replace(/(\.|:)/g, "-")
+
+                $("#client-list").append(`
+                    <tr class="client-row" id="${elementID}">
+                        <th scope="row">${clientData.remoteAddr}</th>
+                        <td>${clientData.user}</td>
+                        <td>${clientData.version}</td>
+                        <td>${clientData.session}</td>
+                        <td>${clientData.listeners.length}</td>
+                        <td><a style="text-transform: none; color: white;" class="btn btn-danger" onclick="disconnectClient('${clientData.remoteAddr}')">Disconnect</a></td>
+                    </tr>
+                `)
+
+                $(`#${elementID}`).data("client-data", clientData);
+            }
+        });
+
+        function addRouteRow(clientData, type, routeData) {
+            for (var route in routeData) {
+                var tempRoute = route;
+                if (type == "HTTP") {
+                    tempRoute = `<a style="text-transform: none; color: white;" class="btn btn-primary" onclick="forwardToConsole('${route}')">${route}</a>`;
+                }
+
+                $("#route-list").append(`
+                    <tr>
+                        <th scope="row">${type}</th>
+                        <td>${tempRoute}</td>
+                        <td>${routeData[route]}</td>
+                        <td>${clientData.remoteAddr}</td>
+                        <td><a style="text-transform: none; color: white;" class="btn btn-danger" onclick="disconnectRoute('${(type == "HTTP" ? "httplistener" : (type == "TCPAlias" ? "tcpalias" : "listener"))}', '${route}')">Disconnect</a></td>
+                    </tr>
+                `);
+            }
+        }
+
+        $(document).on("click", "tr.client-row", function(e) {
+            $("#request-list > tr").removeClass("table-active");
+            $(this).addClass("table-active");
+            $("#route-list").html("");
+            $("#route-table").show();
+
+            var clientData = $(this).data("client-data");
+
+            addRouteRow(clientData, "HTTP", clientData.routeListeners.httpListeners);
+            addRouteRow(clientData, "TCPAlias", clientData.routeListeners.tcpAliases);
+            addRouteRow(clientData, "NET", clientData.routeListeners.listeners);
+        });
+    })
+</script>
+{{ template "footer" .}}
+{{ end }}

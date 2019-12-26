@@ -26,7 +26,10 @@ FROM scratch
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 
 WORKDIR /app
-COPY --from=builder /go/bin/sish /app/sish
+
 COPY --from=builder /tmp /tmp
+COPY --from=builder /app/pubkeys /app/pubkeys
+COPY --from=builder /app/templates /app/templates
+COPY --from=builder /go/bin/sish /app/sish
 
 ENTRYPOINT ["/app/sish"]

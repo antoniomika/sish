@@ -14,20 +14,22 @@ jobs:
       uses: crazy-max/ghaction-docker-buildx@v1
       with:
         version: latest
-    - name: Login to GitHub Docker Registry
+    - name: Login to Docker Registry
       env:
         DOCKER_USERNAME: ${{ secrets.GITHUB_DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.GITHUB_DOCKER_PASSWORD }}
       run: echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin
     - name: Build and push the Docker images
       run: |
+        BRANCH_NAME="${GITHUB_REF#refs/heads/}"
         DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        REF="${BRANCH_NAME:-master}"
         OTHER_TAGS=""
-        REF="master"
+
         if [[ ${GITHUB_REF} =~ ^refs\/tags\/v.*$ ]]
         then
           REF="${GITHUB_REF//refs\/tags\/}"
-          OTHER_TAGS="${OTHER_TAGS} -t ${GITHUB_REPOSITORY}:${REF} -t ${GITHUB_REPOSITORY}:latest"
+          OTHER_TAGS="${OTHER_TAGS} -t ${GITHUB_REPOSITORY}:latest"
         fi
 
         docker buildx build \
@@ -37,4 +39,5 @@ jobs:
           --build-arg COMMIT=${GITHUB_SHA} \
           --build-arg DATE=${DATE} \
           -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} \
+          -t ${GITHUB_REPOSITORY}:${REF} \
           ${OTHER_TAGS} .

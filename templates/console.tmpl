@@ -1,0 +1,105 @@
+{{ define "console" }}
+{{ template "header" .}}
+<div class="row">
+    <div class="col-md-6">
+        <table id="request-table" class="table table-hover">
+            <thead class="thead-dark">
+                <tr>
+                    <th scope="col">Method</th>
+                    <th scope="col">Path</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Time</th>
+                </tr>
+            </thead>
+            <tbody id="request-list">
+            </tbody>
+        </table>
+    </div>
+
+    <div class="col-md-6">
+        <div class="row">
+            <h2 id="request-info-h2">Request Info</h2>
+            <div class="container">
+                <h3>Headers</h3>
+                <div id="requestHeaders" class="dataContainers row">
+                </div>
+                
+                <h3>Body</h3>
+                <div id="requestBody" class="dataContainers row">
+                </div>
+            </div>
+        </div>
+
+        <hr>
+
+        <div class="row">
+            <h2>Response Info:</h2>
+            <div class="container">
+                <h3>Headers</h3>
+                <div id="responseHeaders" class="dataContainers row">
+                </div>
+                
+                <h3>Body</h3>
+                <div id="responseBody" class="dataContainers row">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+    $(function() {
+        var ws = new WebSocket(window.location.href.replace('http', 'ws').replace('/console', '/console/ws'));
+
+        ws.onmessage = function(event) {
+            var requestData = JSON.parse(event.data);
+            var tsPart = event.timeStamp.toString().replace(".", "-");
+
+            $("#request-list").prepend(`
+                <tr id="row-timestamp-${tsPart}" class="request-row">
+                    <th scope="row">${requestData.requestMethod}</th>
+                    <td>${requestData.requestUrl.Path}</td>
+                    <td>${requestData.responseStatus}</td>
+                    <td>${requestData.requestTime}</td>
+                </tr>
+            `)
+
+            $(`#row-timestamp-${tsPart}`).data("request-data", requestData)
+        };
+
+        $(document).on("click", "tr.request-row", function(e) {
+            $("#request-list > tr").removeClass("table-active");
+            $(this).addClass("table-active");
+            
+            var requestData = $(this).data("request-data");
+
+            $("#requestHeaders").html($("<pre/>").addClass("pre-scrollable").text(JSON.stringify(requestData.requestHeaders, null, 4))[0].outerHTML);
+
+            if ("Content-Type" in requestData.requestHeaders && requestData.requestHeaders["Content-Type"][0] == "application/json") {
+                $("#requestBody").html($("<pre/>").addClass("pre-scrollable").text(JSON.stringify(JSON.parse(atob(requestData.requestBody)), null, 4))[0].outerHTML);
+            } else {
+                $("#requestBody").html($("<pre/>").addClass("pre-scrollable").text(atob(requestData.requestBody))[0].outerHTML);
+            }
+
+            $("#responseHeaders").html($("<pre/>").addClass("pre-scrollable").text(JSON.stringify(requestData.responseHeaders, null, 4))[0].outerHTML);
+
+            if ("Content-Type" in requestData.responseHeaders && requestData.responseHeaders["Content-Type"][0] == "application/json") {
+                $("#responseBody").html($("<pre/>").addClass("pre-scrollable").text(JSON.stringify(JSON.parse(atob(requestData.responseBody)), null, 4))[0].outerHTML);
+            } else {
+                $("#responseBody").html($("<pre/>").addClass("pre-scrollable").text(atob(requestData.responseBody))[0].outerHTML);
+            }
+
+            $("#request-info-h2").text(`
+                Request Info - Client IP: ${requestData.requestIP}
+            `);
+        });
+    });
+</script>
+
+<style>
+    .dataContainers {
+        padding-left: 16px;
+    }
+</style>
+{{ template "footer" .}}
+{{ end }}
