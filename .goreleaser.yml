@@ -32,4 +32,4 @@ archives:
       - LICENSE*
       - README*
       - pubkeys/
-      - templates/
+      - templates/**/*
