@@ -238,13 +238,13 @@ func (c *WebConsole) HandleClients(hostname string, g *gin.Context) {
 		"status": true,
 	}
 
-	routeListeners := map[string]map[string]string{}
 	clients := map[string]map[string]interface{}{}
 	c.State.SSHConnections.Range(func(key interface{}, val interface{}) bool {
 		clientName := key.(*net.TCPAddr)
 		sshConn := val.(*SSHConnection)
 
 		listeners := []string{}
+		routeListeners := map[string]map[string]string{}
 
 		sshConn.Listeners.Range(func(key interface{}, val interface{}) bool {
 			var tcpListener *net.TCPAddr
