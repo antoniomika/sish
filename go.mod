@@ -11,6 +11,7 @@ require (
 	github.com/koding/websocketproxy v0.0.0-20181220232114-7ed82d81a28c
 	github.com/logrusorgru/aurora v0.0.0-20191116043053-66b7ad493a23
 	github.com/mattn/go-isatty v0.0.10 // indirect
+	github.com/mikesmitty/edkey v0.0.0-20170222072505-3356ea4e686a
 	github.com/oschwald/maxminddb-golang v1.5.0 // indirect
 	github.com/pires/go-proxyproto v0.0.0-20190615163442-2c19fd512994
 	github.com/ugorji/go v1.1.7 // indirect
