@@ -333,7 +333,9 @@ func main() {
 					for {
 						select {
 						case <-ticker:
-							_, _, err := sshConn.SendRequest("keepalive@sish", true, nil)
+							log.Println("Sending ping")
+							a, b, err := sshConn.SendRequest("keepalive@sish", true, nil)
+							log.Println("Received", a, b, err)
 							if err != nil {
 								holderConn.CleanUp(state)
 								return
