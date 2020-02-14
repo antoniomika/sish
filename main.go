@@ -339,11 +339,9 @@ func main() {
 
 						select {
 						case <-ticker:
-							log.Println("Sending ping")
-							a, b, err := sshConn.SendRequest("keepalive@sish", true, nil)
-							log.Println("Received", a, b, err)
+							_, _, err := sshConn.SendRequest("keepalive@sish", true, nil)
 							if err != nil {
-								holderConn.CleanUp(state)
+								log.Println("Error retrieving keepalive response")
 								return
 							}
 						case <-holderConn.Close:
