@@ -272,7 +272,7 @@ type IdleTimeoutConn struct {
 
 // Read is needed to implement the reader part
 func (i IdleTimeoutConn) Read(buf []byte) (int, error) {
-	err := i.Conn.SetDeadline(time.Now().Add(time.Duration(*idleTimeout) * time.Second))
+	err := i.Conn.SetReadDeadline(time.Now().Add(time.Duration(*idleTimeout) * time.Second))
 	if err != nil {
 		return 0, err
 	}
@@ -282,7 +282,7 @@ func (i IdleTimeoutConn) Read(buf []byte) (int, error) {
 
 // Write is needed to implement the writer part
 func (i IdleTimeoutConn) Write(buf []byte) (int, error) {
-	err := i.Conn.SetDeadline(time.Now().Add(time.Duration(*idleTimeout) * time.Second))
+	err := i.Conn.SetWriteDeadline(time.Now().Add(time.Duration(*idleTimeout) * time.Second))
 	if err != nil {
 		return 0, err
 	}

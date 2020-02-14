@@ -329,8 +329,14 @@ func main() {
 
 			if *pingClient {
 				go func() {
-					ticker := time.Tick(time.Duration(*pingClientInterval) * time.Second)
+					tickDuration := time.Duration(*pingClientInterval) * time.Second
+					ticker := time.Tick(tickDuration)
 					for {
+						err := conn.SetDeadline(time.Now().Add(tickDuration).Add(time.Duration(*idleTimeout) * time.Second))
+						if err != nil {
+							log.Println("Unable to set deadline")
+						}
+
 						select {
 						case <-ticker:
 							log.Println("Sending ping")
