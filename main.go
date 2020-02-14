@@ -84,6 +84,8 @@ var (
 	adminToken            = flag.String("sish.admintoken", "S3Cr3tP4$$W0rD", "The token to use for admin access")
 	serviceConsoleEnabled = flag.Bool("sish.serviceconsoleenabled", false, "Whether or not to enable the admin console for each service and send the info to users")
 	serviceConsoleToken   = flag.String("sish.serviceconsoletoken", "", "The token to use for service access. Auto generated if empty.")
+	pingClient            = flag.Bool("sish.pingclient", true, "Whether or not ping the client.")
+	pingClientInterval    = flag.Int("sish.pingclientinterval", 10, "Interval in seconds to ping a client to ensure it is up.")
 	bannedSubdomainList   = []string{""}
 	filter                *ipfilter.IPFilter
 )
@@ -321,6 +323,30 @@ func main() {
 						}
 					case <-holderConn.Close:
 						return
+					}
+				}()
+			}
+
+			if *pingClient {
+				go func() {
+					tickDuration := time.Duration(*pingClientInterval) * time.Second
+					ticker := time.Tick(tickDuration)
+					for {
+						err := conn.SetDeadline(time.Now().Add(tickDuration).Add(time.Duration(*idleTimeout) * time.Second))
+						if err != nil {
+							log.Println("Unable to set deadline")
+						}
+
+						select {
+						case <-ticker:
+							_, _, err := sshConn.SendRequest("keepalive@sish", true, nil)
+							if err != nil {
+								log.Println("Error retrieving keepalive response")
+								return
+							}
+						case <-holderConn.Close:
+							return
+						}
 					}
 				}()
 			}
