@@ -148,6 +148,10 @@ Usage of ./sish:
         Whether or not to log http requests to the client
   -sish.password string
         Password to use for password auth (default "S3Cr3tP4$$W0rD")
+  -sish.pingclient
+        Whether or not ping the client. (default true)
+  -sish.pingclientinterval int
+        Interval in seconds to ping a client to ensure it is up. (default 10)
   -sish.pkloc string
         SSH server private key (default "keys/ssh_key")
   -sish.pkpass string

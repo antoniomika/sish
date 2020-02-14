@@ -20,6 +20,7 @@ jobs:
 
         docker buildx build \
           --platform linux/arm/v7,linux/arm64,linux/amd64 \
+          --cache-from ${GITHUB_REPOSITORY}-cache \
           --build-arg VERSION=${GITHUB_SHA} \
           --build-arg COMMIT=${GITHUB_SHA} \
           --build-arg DATE=${DATE} \
