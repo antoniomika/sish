@@ -114,7 +114,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *SSHConnection, state 
 		connType = "https"
 	}
 
-	requestMessages := fmt.Sprintf("Starting SSH Fowarding service for %s. Forwarded connections can be accessed via the following methods:\r\n", aurora.Sprintf(aurora.Green("%s:%s"), connType, stringPort))
+	requestMessages := fmt.Sprintf("Starting SSH Forwarding service for %s. Forwarded connections can be accessed via the following methods:\r\n", aurora.Sprintf(aurora.Green("%s:%s"), connType, stringPort))
 
 	if stringPort == "80" || stringPort == "443" {
 		scheme := "http"
