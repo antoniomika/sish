@@ -356,11 +356,13 @@ func main() {
 
 // CleanUp closes all allocated resources and cleans them up
 func (s *SSHConnection) CleanUp(state *State) {
-	//Closing the channel has been observed to panic in some situations
-	// Example panic: panic: close of closed channel
-	// If this occurs treat the channel as closed and proceed to close the connection
+	// Closing the channel has been observed to panic in some situations
+	//	Example panic: panic: close of closed channel
+	//	If this occurs treat the channel as closed and proceed to close the connection
 	defer func() {
-		recover()
+		if r := recover(); r != nil {
+			log.Println("Recovered from panic closing a channel")
+		}
 		s.SSHConn.Close()
 		state.SSHConnections.Delete(s.SSHConn.RemoteAddr())
 		log.Println("Closed SSH connection for:", s.SSHConn.RemoteAddr(), "user:", s.SSHConn.User())
