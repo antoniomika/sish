@@ -79,6 +79,7 @@ var (
 	tcpAlias              = flag.Bool("sish.tcpalias", false, "Whether or not to allow the use of TCP aliasing")
 	logToClient           = flag.Bool("sish.logtoclient", false, "Whether or not to log http requests to the client")
 	idleTimeout           = flag.Int("sish.idletimeout", 5, "Number of seconds to wait for activity before closing a connection")
+	connectTimeout        = flag.Int("sish.connecttimeout", 5, "Number of seconds the ssh login process is allowed before closing a connection")
 	appendUserToSubdomain = flag.Bool("sish.appendusertosubdomain", false, "Whether or not to append the user to the subdomain")
 	adminEnabled          = flag.Bool("sish.adminenabled", false, "Whether or not to enable the admin console")
 	adminToken            = flag.String("sish.admintoken", "S3Cr3tP4$$W0rD", "The token to use for admin access")
@@ -261,7 +262,7 @@ func main() {
 
 		if *cleanupUnbound {
 			go func() {
-				<-time.After(5 * time.Second)
+				<-time.After(time.Duration(*connectTimeout) * time.Second)
 				if !clientLoggedIn {
 					conn.Close()
 				}
