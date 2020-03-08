@@ -131,7 +131,7 @@ Usage of ./sish:
   -sish.http string
         The address to listen for HTTP connections (default "localhost:80")
   -sish.httpport int
-        The port to use for http command output
+        Override the port used for HTTP connections
   -sish.https string
         The address to listen for HTTPS connections (default "localhost:443")
   -sish.httpsenabled
@@ -139,7 +139,7 @@ Usage of ./sish:
   -sish.httpspems string
         The location of pem files for HTTPS (fullchain.pem and privkey.pem) (default "ssl/")
   -sish.httpsport int
-        The port to use for https command output
+        Override the port used for HTTPS conections
   -sish.idletimeout int
         Number of seconds to wait for activity before closing a connection (default 5)
   -sish.keysdir string

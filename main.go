@@ -46,9 +46,9 @@ var (
 	httpsPort             int
 	serverAddr            = flag.String("sish.addr", "localhost:2222", "The address to listen for SSH connections")
 	httpAddr              = flag.String("sish.http", "localhost:80", "The address to listen for HTTP connections")
-	httpPortOverride      = flag.Int("sish.httpport", 0, "The port to use for http command output")
+	httpPortOverride      = flag.Int("sish.httpport", 0, "Override the port used for HTTP connections")
 	httpsAddr             = flag.String("sish.https", "localhost:443", "The address to listen for HTTPS connections")
-	httpsPortOverride     = flag.Int("sish.httpsport", 0, "The port to use for https command output")
+	httpsPortOverride     = flag.Int("sish.httpsport", 0, "Override the port used for HTTPS conections")
 	verifyOrigin          = flag.Bool("sish.verifyorigin", true, "Whether or not to verify origin on websocket connection")
 	verifySSL             = flag.Bool("sish.verifyssl", true, "Whether or not to verify SSL on proxy connection")
 	httpsEnabled          = flag.Bool("sish.httpsenabled", false, "Whether or not to listen for HTTPS connections")
