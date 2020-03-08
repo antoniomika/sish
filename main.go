@@ -81,6 +81,7 @@ var (
 	idleTimeout           = flag.Int("sish.idletimeout", 5, "Number of seconds to wait for activity before closing a connection")
 	connectTimeout        = flag.Int("sish.connecttimeout", 5, "Number of seconds the ssh login process is allowed before closing a connection")
 	appendUserToSubdomain = flag.Bool("sish.appendusertosubdomain", false, "Whether or not to append the user to the subdomain")
+	userSubdomainSeparator = flag.String("sish.usersubdomainseparator", "-", "Separator to use when appending username to subdomain")
 	adminEnabled          = flag.Bool("sish.adminenabled", false, "Whether or not to enable the admin console")
 	adminToken            = flag.String("sish.admintoken", "S3Cr3tP4$$W0rD", "The token to use for admin access")
 	serviceConsoleEnabled = flag.Bool("sish.serviceconsoleenabled", false, "Whether or not to enable the admin console for each service and send the info to users")

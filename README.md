@@ -176,6 +176,8 @@ Usage of ./sish:
         Whether or not to allow the use of TCP aliasing
   -sish.usegeodb
         Whether or not to use the maxmind geodb
+  -sish.usersubdomainseparator
+        Separator to use when appending username to subdomain (default "-")
   -sish.verifyorigin
         Whether or not to verify origin on websocket connection (default true)
   -sish.verifyssl
