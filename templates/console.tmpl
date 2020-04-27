@@ -73,20 +73,20 @@
             
             var requestData = $(this).data("request-data");
 
-            $("#requestHeaders").html($("<pre/>").addClass("pre-scrollable").text(JSON.stringify(requestData.requestHeaders, null, 4))[0].outerHTML);
+            $("#requestHeaders").html($("<pre/>").addClass("pre-scrollable w-100").text(JSON.stringify(requestData.requestHeaders, null, 4))[0].outerHTML);
 
             if ("Content-Type" in requestData.requestHeaders && requestData.requestHeaders["Content-Type"][0] == "application/json") {
-                $("#requestBody").html($("<pre/>").addClass("pre-scrollable").text(JSON.stringify(JSON.parse(atob(requestData.requestBody)), null, 4))[0].outerHTML);
+                $("#requestBody").html($("<pre/>").addClass("pre-scrollable w-100").text(JSON.stringify(JSON.parse(atob(requestData.requestBody)), null, 4))[0].outerHTML);
             } else {
-                $("#requestBody").html($("<pre/>").addClass("pre-scrollable").text(atob(requestData.requestBody))[0].outerHTML);
+                $("#requestBody").html($("<pre/>").addClass("pre-scrollable w-100").text(JSON.stringify(JSON.parse(atob(requestData.requestBody)), null, 4))[0].outerHTML);
             }
 
-            $("#responseHeaders").html($("<pre/>").addClass("pre-scrollable").text(JSON.stringify(requestData.responseHeaders, null, 4))[0].outerHTML);
+            $("#responseHeaders").html($("<pre/>").addClass("pre-scrollable w-100").text(JSON.stringify(requestData.responseHeaders, null, 4))[0].outerHTML);
 
             if ("Content-Type" in requestData.responseHeaders && requestData.responseHeaders["Content-Type"][0] == "application/json") {
-                $("#responseBody").html($("<pre/>").addClass("pre-scrollable").text(JSON.stringify(JSON.parse(atob(requestData.responseBody)), null, 4))[0].outerHTML);
+                $("#responseBody").html($("<pre/>").addClass("pre-scrollable w-100").text(JSON.stringify(JSON.parse(atob(requestData.responseBody)), null, 4))[0].outerHTML);
             } else {
-                $("#responseBody").html($("<pre/>").addClass("pre-scrollable").text(atob(requestData.responseBody))[0].outerHTML);
+                $("#responseBody").html($("<pre/>").addClass("pre-scrollable w-100").text(JSON.stringify(JSON.parse(atob(requestData.responseBody)), null, 4))[0].outerHTML);
             }
 
             $("#request-info-h2").text(`
