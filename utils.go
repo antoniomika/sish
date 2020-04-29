@@ -300,7 +300,7 @@ func getOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 
 		hostExtension := ""
 		if *appendUserToSubdomain {
-			hostExtension = "-" + sshConn.SSHConn.User()
+			hostExtension = *userSubdomainSeparator + sshConn.SSHConn.User()
 		}
 
 		host := strings.ToLower(addr + hostExtension + "." + *rootDomain)
