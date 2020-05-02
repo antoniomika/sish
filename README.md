@@ -45,6 +45,9 @@ For more information on how to use this, head to that link above. Generally, you
 docker-compose -f deploy/docker-compose.yml up -d
 ```
 
+The domain and DNS auth info in `deploy/docker-compose.yml` and `deploy/le-config.yml` should be updated
+to reflect your needs. I use these files in my deployment of `ssi.sh` using git-ops.
+
 How it works
 ------------
 
@@ -56,7 +59,7 @@ If you use any other remote port, the server will listen to the port for connect
 but only if that port is available.
 
 You can choose your own subdomain instead of relying on a randomly assigned one
-by setting the `-sish.forcerandomsubdomain` option to `false` and then selecting a
+by setting the `--bind-random-subdomains` option to `false` and then selecting a
 subdomain by prepending it to the remote port specifier:
 
 `ssh -p 2222 -R foo:80:localhost:8080 ssi.sh`
@@ -67,13 +70,13 @@ Authentication
 --------------
 
 If you want to use this service privately, it supports both public key and password
-authentication. To enable authentication, set `-sish.auth=true` as one of your CLI
-options and be sure to configure `-sish.password` or `-sish.keysdir` to your liking.
-The directory provided by `-sish.keysdir` is watched for changes and will reload the
+authentication. To enable authentication, set `--enable-authentication=true` as one of your CLI
+options and be sure to configure `--authentication-password` or `--authentication-keys-directory` to your liking.
+The directory provided by `--authentication-keys-directory` is watched for changes and will reload the
 authorized keys automatically. The authorized cert index is regenerated on directory
 modification, so removed public keys will also automatically be removed. Files in this
 directory can either be single key per file, or multiple keys per file separated by newlines,
-similar to `authorized_keys`. Password auth can be disabled by setting `-sish.password=""` as a CLI option.
+similar to `authorized_keys`. Password auth can be disabled by setting `--authentication-password=""` as a CLI option.
 
 One of my favorite ways of using this for authentication is like so:
 
@@ -88,13 +91,13 @@ Whitelisting IPs
 ----------------
 
 Whitelisting IP ranges or countries is also possible. Whole CIDR ranges can be
-specified with the `-sish.whitelistedips` option that accepts a comma-separated
+specified with the `--whitelisted-ips` option that accepts a comma-separated
 string like "192.30.252.0/22,185.199.108.0/22". If you want to whitelist a single
 IP, use the `/32` range.
 
-To whitelist countries, use `sish.whitelistedcountries` with a comma-separated
+To whitelist countries, use `--whitelisted-countries` with a comma-separated
 string of countries in ISO format (for example, "pt" for Portugal). You'll also
-need to set `-sish.usegeodb` to `true`.
+need to set `--enable-geodb` to `true`.
 
 Demo - At this time, the demo instance has been set to require auth due to abuse
 ----
@@ -121,5 +124,60 @@ CLI Flags
 ---------
 
 ```text
+sish is a command line utility that implements an SSH server
+that can handle HTTP(S)/WS(S)/TCP multiplexing and forwarding.
+It can handle multiple vhosting and reverse tunneling.
 
+Usage:
+  sish [flags]
+
+Flags:
+  -j, --admin-console-token string             The token to use for admin access (default "S3Cr3tP4$$W0rD")
+      --append-user-to-subdomain               Whether or not to append the user to the subdomain
+  -k, --authentication-keys-directory string   Directory for public keys for pubkey auth (default "deploy/pubkeys/")
+  -u, --authentication-password string         Password to use for password auth (default "S3Cr3tP4$$W0rD")
+  -o, --banned-countries string                A comma separated list of banned countries
+  -x, --banned-ips string                      A comma separated list of banned ips
+  -b, --banned-subdomains string               A comma separated list of banned subdomains (default "localhost")
+      --bind-random-ports                      Bind ports randomly (OS chooses) (default true)
+      --bind-random-subdomains                 Whether or not to force a random subdomain (default true)
+  -s, --certificate-directory string           The location of pem files for HTTPS (fullchain.pem and privkey.pem) (default "deploy/ssl/")
+      --cleanup-unbound                        Whether or not to cleanup unbound (forwarded) SSH connections (default true)
+      --cleanup-unbound-timeout duration       Interval in seconds to wait before cleaning up an unbound connection. (default 5s)
+  -c, --config string                          Config file (default "config.yml")
+      --connection-idle-timeout duration       Number of seconds to wait for activity before closing a connection (default 5s)
+      --debug                                  Whether or not to print debug information
+  -d, --domain string                          The domain for HTTP(S) multiplexing (default "ssi.sh")
+      --enable-admin-console                   Whether or not to enable the admin console
+      --enable-authentication                  Whether or not to require auth on the SSH service
+      --enable-geodb                           Whether or not to use the maxmind geodb
+      --enable-https                           Whether or not to listen for HTTPS connections
+      --enable-log-to-client                   Whether or not to log http requests to the client
+      --enable-proxy-protocol                  Whether or not to enable the use of the proxy protocol
+      --enable-redirect-root                   Whether or not to redirect the root domain (default true)
+      --enable-service-console                 Whether or not to enable the admin console for each service and send the info to users
+      --enable-tcp-aliases                     Whether or not to allow the use of TCP aliasing
+  -h, --help                                   help for sish
+  -i, --http-address string                    The address to listen for HTTP connections (default "localhost:80")
+      --http-port-override int                 The port to use for http command output
+  -t, --https-address string                   The address to listen for HTTPS connections (default "localhost:443")
+      --https-port-override int                The port to use for https command output
+      --max-subdomain-length int               The length of the random subdomain to generate (default 3)
+      --ping-client                            Whether or not ping the client. (default true)
+      --ping-client-interval duration          Interval in seconds to ping a client to ensure it is up. (default 5s)
+  -n, --port-bind-range string                 Ports that are allowed to be bound (default "0,1024-65535")
+  -l, --private-key-location string            SSH server private key (default "deploy/keys/ssh_key")
+  -p, --private-key-passphrase string          Passphrase to use for the server private key (default "S3Cr3tP4$$phrAsE")
+  -q, --proxy-protocol-version string          What version of the proxy protocol to use.
+                                               Can either be 1, 2, or userdefined. If userdefined, the user needs to add a command
+                                               to SSH called proxyproto:version (ie proxyproto:1) (default "1")
+  -r, --redirect-root-location string          Where to redirect the root domain to (default "https://github.com/antoniomika/sish")
+  -m, --service-console-token string           The token to use for service access. Auto generated if empty.
+  -a, --ssh-address string                     The address to listen for SSH connections (default "localhost:2222")
+      --user-subdomain-separator string        The token to use for separating username and subdomains in a virtualhost.
+      --verify-origin                          Whether or not to verify origin on websocket connection (default true)
+      --verify-ssl                             Whether or not to verify SSL on proxy connection (default true)
+  -v, --version                                version for sish
+  -y, --whitelisted-countries string           A comma separated list of whitelisted countries
+  -w, --whitelisted-ips string                 A comma separated list of whitelisted ips
 ```
