@@ -89,7 +89,11 @@ func init() {
 func initConfig() {
 	viper.SetConfigFile(configFile)
 
-	viper.BindPFlags(rootCmd.PersistentFlags())
+	err := viper.BindPFlags(rootCmd.PersistentFlags())
+	if err != nil {
+		log.Println("unable to bind pflags:", err)
+	}
+
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err == nil {

@@ -73,7 +73,6 @@ var (
 	proxyProtoEnabled     = flag.Bool("sish.proxyprotoenabled", false, "Whether or not to enable the use of the proxy protocol")
 	proxyProtoVersion     = flag.String("sish.proxyprotoversion", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined. If userdefined, the user needs to add a command to SSH called proxyproto:version (ie proxyproto:1)")
 	debug                 = flag.Bool("sish.debug", false, "Whether or not to print debug information")
-	versionCheck          = flag.Bool("sish.version", false, "Print version and exit")
 	tcpAlias              = flag.Bool("sish.tcpalias", false, "Whether or not to allow the use of TCP aliasing")
 	logToClient           = flag.Bool("sish.logtoclient", false, "Whether or not to log http requests to the client")
 	idleTimeout           = flag.Int("sish.idletimeout", 5, "Number of seconds to wait for activity before closing a connection")
@@ -87,7 +86,12 @@ var (
 )
 
 func main() {
-	cmd.Execute()
+	err := cmd.Execute()
+	if err != nil {
+		log.Println("unable to execute root command:", err)
+	}
+
+	setup()
 }
 
 func setup() {
