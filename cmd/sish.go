@@ -90,6 +90,7 @@ func init() {
 
 	rootCmd.PersistentFlags().DurationP("connection-idle-timeout", "", 5*time.Second, "Number of seconds to wait for activity before closing a connection")
 	rootCmd.PersistentFlags().DurationP("ping-client-interval", "", 5*time.Second, "Interval in seconds to ping a client to ensure it is up.")
+	rootCmd.PersistentFlags().DurationP("cleanup-unbound-timeout", "", 5*time.Second, "Interval in seconds to wait before cleaning up an unbound connection.")
 }
 
 func initConfig() {

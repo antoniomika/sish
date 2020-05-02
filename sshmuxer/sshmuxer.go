@@ -180,7 +180,7 @@ func Start() {
 
 		if viper.GetBool("cleanup-unbound") {
 			go func() {
-				<-time.After(5 * time.Second)
+				<-time.After(viper.GetDuration("cleanup-unbound-timeout"))
 				if !clientLoggedIn {
 					conn.Close()
 				}
