@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/antoniomika/sish/cmd"
 	"github.com/jpillora/ipfilter"
 
 	"golang.org/x/crypto/ssh"
@@ -39,9 +40,6 @@ type State struct {
 }
 
 var (
-	version               = "dev"
-	commit                = "none"
-	date                  = "unknown"
 	httpPort              int
 	httpsPort             int
 	serverAddr            = flag.String("sish.addr", "localhost:2222", "The address to listen for SSH connections")
@@ -89,6 +87,10 @@ var (
 )
 
 func main() {
+	cmd.Execute()
+}
+
+func setup() {
 	flag.Parse()
 
 	_, httpPortString, err := net.SplitHostPort(*httpAddr)
@@ -117,11 +119,6 @@ func main() {
 
 	if *httpsPortOverride != 0 {
 		httpsPort = *httpsPortOverride
-	}
-
-	if *versionCheck {
-		log.Printf("\nVersion: %v\nCommit: %v\nDate: %v\n", version, commit, date)
-		os.Exit(0)
 	}
 
 	commaSplitFields := func(c rune) bool {

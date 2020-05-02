@@ -3,8 +3,10 @@ before:
     - go mod tidy
     - go generate ./...
 builds:
-- env:
-  - CGO_ENABLED=0
+- ldflags:
+    - -s -w -X cmd.Version={{ .Version }} -X cmd.Commit={{ .Commit }} -X cmd.Date={{ .Date }}
+  env:
+    - CGO_ENABLED=0
   goos:
     - linux
     - win

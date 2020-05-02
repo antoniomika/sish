@@ -1,4 +1,4 @@
-FROM golang:1.13.2-alpine as builder
+FROM golang:1.14-alpine as builder
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 
 ENV GOCACHE /gocache
@@ -19,7 +19,7 @@ ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
 
-RUN go install -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
+RUN go install -ldflags="-s -w -X cmd.Version=${VERSION} -X cmd.Commit=${COMMIT} -X cmd.Date=${DATE}"
 RUN go test -i ./...
 
 FROM scratch
