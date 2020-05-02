@@ -6,8 +6,10 @@ banned-countries: ""
 banned-ips: ""
 banned-subdomains: localhost
 bind-random-ports: true
+bind-random-subdomains: true
 certificate-directory: deploy/ssl/
 cleanup-unbound: true
+cleanup-unbound-timeout: 5s
 config: config.yml
 connection-idle-timeout: 5s
 debug: false
@@ -21,12 +23,13 @@ enable-proxy-protocol: false
 enable-redirect-root: true
 enable-service-console: false
 enable-tcp-aliases: false
-bind-random-subdomains: true
 http-address: localhost:80
 http-port-override: 0
 https-address: localhost:443
 https-port-override: 0
 max-subdomain-length: 3
+ping-client: true
+ping-client-interval: 5s
 port-bind-range: 0,1024-65535
 private-key-location: deploy/keys/ssh_key
 private-key-passphrase: S3Cr3tP4$$phrAsE
@@ -34,6 +37,7 @@ proxy-protocol-version: "1"
 redirect-root-location: https://github.com/antoniomika/sish
 service-console-token: ""
 ssh-address: localhost:2222
+user-subdomain-separator: ""
 verify-origin: true
 verify-ssl: true
 whitelisted-countries: ""
