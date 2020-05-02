@@ -1,8 +1,8 @@
 /.git/
 /.github/
 /.gitignore
-!/deploy/pubkeys/.gitkeep
 /deploy/
+!/deploy/pubkeys/.gitkeep
 /dist/
 /sish
 /.vscode/
