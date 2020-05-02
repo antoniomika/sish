@@ -1,7 +1,7 @@
 {{ define "routes" }}
 {{ template "header" .}}
 <div class="row">
-    <div class="col">
+    <div class="col table-responsive">
         <h2>Clients</h2>
         <table id="client-table" class="table table-hover">
             <thead class="thead-dark">
@@ -20,9 +20,9 @@
     </div>
 </div>
 <div class="row">
-    <div class="col">
+    <div class="col table-responsive">
         <h2>Routes</h2>
-        <table style="display:none;" id="route-table" class="table table-hover table-responsive">
+        <table style="display:none;" id="route-table" class="table table-hover">
             <thead class="thead-dark">
                 <tr>
                     <th scope="col">Type</th>

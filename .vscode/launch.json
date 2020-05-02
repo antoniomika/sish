@@ -17,7 +17,7 @@
         "--http-address=:8081",
         "--ssh-address=:2222",
         "--domain=testing.ssi.sh",
-        "--force-random-subdomain=false",
+        "--bind-random-subdomains=false",
         "--bind-random-ports=false",
         "--enable-https=false",
         "--enable-authentication=false",

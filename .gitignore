@@ -1,6 +1,4 @@
 deploy/
-!deploy/*/.gitkeep
-!deploy/docker-compose.yml
 dist/
 sish
 __debug_bin

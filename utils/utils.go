@@ -334,7 +334,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 		}
 
 		checkHost := func(checkHost string) bool {
-			if viper.GetBool("force-random-subdomain") || !first || inBannedList(host, bannedSubdomainList) {
+			if viper.GetBool("bind-random-subdomains") || !first || inBannedList(host, bannedSubdomainList) {
 				reportUnavailable(true)
 				host = getRandomHost()
 			}
@@ -370,7 +370,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 		}
 
 		checkAlias := func(checkAlias string) bool {
-			if viper.GetBool("force-random-subdomain") || !first || inBannedList(alias, bannedSubdomainList) {
+			if viper.GetBool("bind-random-subdomains") || !first || inBannedList(alias, bannedSubdomainList) {
 				reportUnavailable(true)
 				alias = getRandomAlias()
 			}

@@ -21,7 +21,7 @@ enable-proxy-protocol: false
 enable-redirect-root: true
 enable-service-console: false
 enable-tcp-aliases: false
-force-random-subdomain: true
+bind-random-subdomains: true
 http-address: localhost:80
 http-port-override: 0
 https-address: localhost:443
