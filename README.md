@@ -142,12 +142,18 @@ Usage of ./sish:
         The port to use for https command output
   -sish.idletimeout int
         Number of seconds to wait for activity before closing a connection (default 5)
+  -sish.connecttimeout int
+        Number of seconds the ssh login process is allowed before closing a connection (default 5)
   -sish.keysdir string
         Directory for public keys for pubkey auth (default "pubkeys/")
   -sish.logtoclient
         Whether or not to log http requests to the client
   -sish.password string
         Password to use for password auth (default "S3Cr3tP4$$W0rD")
+  -sish.pingclient
+        Whether or not ping the client. (default true)
+  -sish.pingclientinterval int
+        Interval in seconds to ping a client to ensure it is up. (default 10)
   -sish.pkloc string
         SSH server private key (default "keys/ssh_key")
   -sish.pkpass string
@@ -170,6 +176,8 @@ Usage of ./sish:
         Whether or not to allow the use of TCP aliasing
   -sish.usegeodb
         Whether or not to use the maxmind geodb
+  -sish.usersubdomainseparator
+        Separator to use when appending username to subdomain (default "-")
   -sish.verifyorigin
         Whether or not to verify origin on websocket connection (default true)
   -sish.verifyssl

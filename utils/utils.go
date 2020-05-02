@@ -2,8 +2,8 @@ package utils
 
 import (
 	"bytes"
+	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -21,6 +21,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/logrusorgru/aurora"
+	"github.com/mikesmitty/edkey"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
@@ -244,7 +245,7 @@ func GetSSHConfig() *ssh.ServerConfig {
 }
 
 func generatePrivateKey(passphrase string) []byte {
-	pk, err := rsa.GenerateKey(rand.Reader, 2048)
+	_, pk, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -252,8 +253,8 @@ func generatePrivateKey(passphrase string) []byte {
 	log.Println("Generated RSA Keypair")
 
 	pemBlock := &pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(pk),
+		Type:  "OPENSSH PRIVATE KEY",
+		Bytes: edkey.MarshalED25519PrivateKey(pk),
 	}
 
 	var pemData []byte
@@ -318,7 +319,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 
 		hostExtension := ""
 		if viper.GetBool("append-user-to-subdomain") {
-			hostExtension = "-" + sshConn.SSHConn.User()
+			hostExtension = viper.GetString("user-subdomain-separator") + sshConn.SSHConn.User()
 		}
 
 		host := strings.ToLower(addr + hostExtension + "." + viper.GetString("domain"))

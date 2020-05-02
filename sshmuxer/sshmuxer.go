@@ -245,6 +245,30 @@ func Start() {
 					}
 				}()
 			}
+
+			if viper.GetBool("ping-client") {
+				go func() {
+					tickDuration := viper.GetDuration("ping-client-interval")
+					ticker := time.Tick(tickDuration)
+					for {
+						err := conn.SetDeadline(time.Now().Add(tickDuration).Add(viper.GetDuration("connection-idle-timeout")))
+						if err != nil {
+							log.Println("Unable to set deadline")
+						}
+
+						select {
+						case <-ticker:
+							_, _, err := sshConn.SendRequest("keepalive@sish", true, nil)
+							if err != nil {
+								log.Println("Error retrieving keepalive response")
+								return
+							}
+						case <-holderConn.Close:
+							return
+						}
+					}
+				}()
+			}
 		}()
 	}
 }

@@ -116,7 +116,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		connType = "https"
 	}
 
-	requestMessages := fmt.Sprintf("Starting SSH Fowarding service for %s. Forwarded connections can be accessed via the following methods:\r\n", aurora.Sprintf(aurora.Green("%s:%s"), connType, stringPort))
+	requestMessages := fmt.Sprintf("Starting SSH Forwarding service for %s. Forwarded connections can be accessed via the following methods:\r\n", aurora.Sprintf(aurora.Green("%s:%s"), connType, stringPort))
 
 	if stringPort == "80" || stringPort == "443" {
 		scheme := "http"
@@ -274,7 +274,7 @@ type IdleTimeoutConn struct {
 
 // Read is needed to implement the reader part
 func (i IdleTimeoutConn) Read(buf []byte) (int, error) {
-	err := i.Conn.SetDeadline(time.Now().Add(viper.GetDuration("connection-idle-timeout")))
+	err := i.Conn.SetReadDeadline(time.Now().Add(viper.GetDuration("connection-idle-timeout")))
 	if err != nil {
 		return 0, err
 	}
@@ -284,7 +284,7 @@ func (i IdleTimeoutConn) Read(buf []byte) (int, error) {
 
 // Write is needed to implement the writer part
 func (i IdleTimeoutConn) Write(buf []byte) (int, error) {
-	err := i.Conn.SetDeadline(time.Now().Add(viper.GetDuration("connection-idle-timeout")))
+	err := i.Conn.SetWriteDeadline(time.Now().Add(viper.GetDuration("connection-idle-timeout")))
 	if err != nil {
 		return 0, err
 	}

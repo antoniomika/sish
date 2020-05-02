@@ -64,6 +64,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("proxy-protocol-version", "q", "1", "What version of the proxy protocol to use.\nCan either be 1, 2, or userdefined. If userdefined, the user needs to add a command to SSH called proxyproto:version (ie proxyproto:1)")
 	rootCmd.PersistentFlags().StringP("admin-console-token", "j", "S3Cr3tP4$$W0rD", "The token to use for admin access")
 	rootCmd.PersistentFlags().StringP("service-console-token", "m", "", "The token to use for service access. Auto generated if empty.")
+	rootCmd.PersistentFlags().StringP("user-subdomain-separator", "", "", "The token to use for separating username and subdomains in a virtualhost.")
 
 	rootCmd.PersistentFlags().BoolP("force-random-subdomain", "", true, "Whether or not to force a random subdomain")
 	rootCmd.PersistentFlags().BoolP("verify-origin", "", true, "Whether or not to verify origin on websocket connection")
@@ -72,6 +73,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("bind-random-ports", "", true, "Bind ports randomly (OS chooses)")
 	rootCmd.PersistentFlags().BoolP("append-user-to-subdomain", "", false, "Whether or not to append the user to the subdomain")
 	rootCmd.PersistentFlags().BoolP("debug", "", false, "Whether or not to print debug information")
+	rootCmd.PersistentFlags().BoolP("ping-client", "", true, "Whether or not ping the client.")
 	rootCmd.PersistentFlags().BoolP("enable-geodb", "", false, "Whether or not to use the maxmind geodb")
 	rootCmd.PersistentFlags().BoolP("enable-authentication", "", false, "Whether or not to require auth on the SSH service")
 	rootCmd.PersistentFlags().BoolP("enable-proxy-protocol", "", false, "Whether or not to enable the use of the proxy protocol")
@@ -87,6 +89,7 @@ func init() {
 	rootCmd.PersistentFlags().IntP("max-subdomain-length", "", 3, "The length of the random subdomain to generate")
 
 	rootCmd.PersistentFlags().DurationP("connection-idle-timeout", "", 5*time.Second, "Number of seconds to wait for activity before closing a connection")
+	rootCmd.PersistentFlags().DurationP("ping-client-interval", "", 5*time.Second, "Interval in seconds to ping a client to ensure it is up.")
 }
 
 func initConfig() {
