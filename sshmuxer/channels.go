@@ -1,4 +1,4 @@
-package main
+package sshmuxer
 
 import (
 	"fmt"
@@ -7,20 +7,22 @@ import (
 	"net"
 	"strings"
 
+	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
+	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
 
 var proxyProtoPrefix = "proxyproto:"
 
-func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State) {
+func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	connection, requests, err := newChannel.Accept()
 	if err != nil {
 		sshConn.CleanUp(state)
 		return
 	}
 
-	if *debug {
+	if viper.GetBool("debug") {
 		log.Println("Handling session for connection:", connection)
 	}
 
@@ -71,14 +73,14 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 				}
 			case "exec":
 				payloadString := string(req.Payload[4:])
-				if strings.HasPrefix(payloadString, proxyProtoPrefix) && *proxyProtoEnabled {
+				if strings.HasPrefix(payloadString, proxyProtoPrefix) && viper.GetBool("enable-proxy-protocol") {
 					sshConn.ProxyProto = getProxyProtoVersion(strings.TrimPrefix(payloadString, proxyProtoPrefix))
 					if sshConn.ProxyProto != 0 {
-						sendMessage(sshConn, fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)
+						sshConn.SendMessage(fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)
 					}
 				}
 			default:
-				if *debug {
+				if viper.GetBool("debug") {
 					log.Println("Sub Channel Type", req.Type, req.WantReply, string(req.Payload))
 				}
 			}
@@ -86,7 +88,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 	}()
 }
 
-func handleAlias(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State) {
+func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	connection, requests, err := newChannel.Accept()
 	if err != nil {
 		sshConn.CleanUp(state)
@@ -95,7 +97,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State
 
 	go ssh.DiscardRequests(requests)
 
-	if *debug {
+	if viper.GetBool("debug") {
 		log.Println("Handling alias connection for:", connection)
 	}
 
@@ -136,14 +138,14 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State
 
 func writeToSession(connection ssh.Channel, c string) {
 	_, err := connection.Write(append([]byte(c), []byte{'\r', '\n'}...))
-	if err != nil && *debug {
+	if err != nil && viper.GetBool("debug") {
 		log.Println("Error trying to write message to socket:", err)
 	}
 }
 
 func getProxyProtoVersion(proxyProtoUserVersion string) byte {
-	if *proxyProtoVersion != "userdefined" {
-		proxyProtoUserVersion = *proxyProtoVersion
+	if viper.GetString("proxy-protocol-version") != "userdefined" {
+		proxyProtoUserVersion = viper.GetString("proxy-protocol-version")
 	}
 
 	realProtoVersion := 0

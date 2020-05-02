@@ -1,23 +1,25 @@
-package main
+package sshmuxer
 
 import (
 	"fmt"
 	"log"
 	"time"
 
+	"github.com/antoniomika/sish/utils"
+	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
 
-func handleRequests(reqs <-chan *ssh.Request, sshConn *SSHConnection, state *State) {
+func handleRequests(reqs <-chan *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
 	for req := range reqs {
-		if *debug {
+		if viper.GetBool("debug") {
 			log.Println("Main Request Info", req.Type, req.WantReply, string(req.Payload))
 		}
 		go handleRequest(req, sshConn, state)
 	}
 }
 
-func handleRequest(newRequest *ssh.Request, sshConn *SSHConnection, state *State) {
+func handleRequest(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
 	switch req := newRequest.Type; req {
 	case "tcpip-forward":
 		go checkSession(newRequest, sshConn, state)
@@ -35,7 +37,7 @@ func handleRequest(newRequest *ssh.Request, sshConn *SSHConnection, state *State
 	}
 }
 
-func checkSession(newRequest *ssh.Request, sshConn *SSHConnection, state *State) {
+func checkSession(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
 	if sshConn.CleanupHandler {
 		return
 	}
@@ -53,16 +55,16 @@ func checkSession(newRequest *ssh.Request, sshConn *SSHConnection, state *State)
 	}
 }
 
-func handleChannels(chans <-chan ssh.NewChannel, sshConn *SSHConnection, state *State) {
+func handleChannels(chans <-chan ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	for newChannel := range chans {
-		if *debug {
+		if viper.GetBool("debug") {
 			log.Println("Main Channel Info", newChannel.ChannelType(), string(newChannel.ExtraData()))
 		}
 		go handleChannel(newChannel, sshConn, state)
 	}
 }
 
-func handleChannel(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State) {
+func handleChannel(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	switch channel := newChannel.ChannelType(); channel {
 	case "session":
 		close(sshConn.Session)

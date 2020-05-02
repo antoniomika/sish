@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"fmt"
@@ -10,11 +10,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/spf13/viper"
 )
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+}
+
+// ProxyHolder holds proxy and connection info
+type ProxyHolder struct {
+	ProxyHost string
+	ProxyTo   string
+	Scheme    string
+	SSHConn   *SSHConnection
 }
 
 // WebClient represents a primitive web console client
@@ -45,7 +54,7 @@ func NewWebConsole() *WebConsole {
 func (c *WebConsole) HandleRequest(hostname string, hostIsRoot bool, g *gin.Context) {
 	userAuthed := false
 	userIsAdmin := false
-	if (*adminEnabled && *adminToken != "") && (g.Request.URL.Query().Get("x-authorization") == *adminToken || g.Request.Header.Get("x-authorization") == *adminToken) {
+	if (viper.GetBool("enable-admin-console") && viper.GetString("admin-console-token") != "") && (g.Request.URL.Query().Get("x-authorization") == viper.GetString("admin-console-token") || g.Request.Header.Get("x-authorization") == viper.GetString("admin-console-token")) {
 		userIsAdmin = true
 		userAuthed = true
 	}
@@ -53,7 +62,7 @@ func (c *WebConsole) HandleRequest(hostname string, hostIsRoot bool, g *gin.Cont
 	tokenInterface, ok := c.RouteTokens.Load(hostname)
 	if ok {
 		routeToken, ok := tokenInterface.(string)
-		if *serviceConsoleEnabled && ok && (g.Request.URL.Query().Get("x-authorization") == routeToken || g.Request.Header.Get("x-authorization") == routeToken) {
+		if viper.GetBool("enable-service-console") && ok && (g.Request.URL.Query().Get("x-authorization") == routeToken || g.Request.Header.Get("x-authorization") == routeToken) {
 			userAuthed = true
 		}
 	}

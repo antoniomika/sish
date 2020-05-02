@@ -1,4 +1,4 @@
-package main
+package httpmuxer
 
 import (
 	"bytes"
@@ -16,23 +16,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antoniomika/sish/utils"
 	"github.com/gorilla/websocket"
 	"github.com/koding/websocketproxy"
+	"github.com/spf13/viper"
 
 	"github.com/gin-gonic/gin"
 )
 
-// ProxyHolder holds proxy and connection info
-type ProxyHolder struct {
-	ProxyHost string
-	ProxyTo   string
-	Scheme    string
-	SSHConn   *SSHConnection
-}
-
-func startHTTPHandler(state *State) {
+// StartHTTPHandler initializes the HTTP service
+func StartHTTPHandler(state *utils.State) {
 	releaseMode := gin.ReleaseMode
-	if *debug {
+	if viper.GetBool("debug") {
 		releaseMode = gin.DebugMode
 	}
 	gin.SetMode(releaseMode)
@@ -62,12 +57,12 @@ func startHTTPHandler(state *State) {
 			param.Latency = param.Latency - param.Latency%time.Second
 		}
 
-		if *adminToken != "" && strings.Contains(param.Path, *adminToken) {
-			param.Path = strings.Replace(param.Path, *adminToken, "[REDACTED]", 1)
+		if viper.GetString("admin-console-token") != "" && strings.Contains(param.Path, viper.GetString("admin-console-token")) {
+			param.Path = strings.Replace(param.Path, viper.GetString("admin-console-token"), "[REDACTED]", 1)
 		}
 
-		if *serviceConsoleToken != "" && strings.Contains(param.Path, *serviceConsoleToken) {
-			param.Path = strings.Replace(param.Path, *serviceConsoleToken, "[REDACTED]", 1)
+		if viper.GetString("service-console-token") != "" && strings.Contains(param.Path, viper.GetString("service-console-token")) {
+			param.Path = strings.Replace(param.Path, viper.GetString("service-console-token"), "[REDACTED]", 1)
 		}
 
 		logLine := fmt.Sprintf("%v | %s |%s %3d %s| %13v | %15s |%s %-7s %s %s\n%s",
@@ -81,27 +76,27 @@ func startHTTPHandler(state *State) {
 			param.ErrorMessage,
 		)
 
-		if *logToClient {
+		if viper.GetBool("enable-log-to-client") {
 			hostname := strings.Split(param.Request.Host, ":")[0]
 			loc, ok := state.HTTPListeners.Load(hostname)
 			if ok {
-				proxyHolder := loc.(*ProxyHolder)
-				sendMessage(proxyHolder.SSHConn, strings.TrimSpace(logLine), true)
+				proxyHolder := loc.(*utils.ProxyHolder)
+				proxyHolder.SSHConn.SendMessage(strings.TrimSpace(logLine), true)
 			}
 		}
 
 		return logLine
 	}), gin.Recovery(), func(c *gin.Context) {
 		hostname := strings.Split(c.Request.Host, ":")[0]
-		hostIsRoot := hostname == *rootDomain
+		hostIsRoot := hostname == viper.GetString("domain")
 
-		if (*adminEnabled || *serviceConsoleEnabled) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
+		if (viper.GetBool("enable-admin-console") || viper.GetBool("enable-service-console")) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
 			state.Console.HandleRequest(hostname, hostIsRoot, c)
 			return
 		}
 
-		if hostIsRoot && *redirectRoot {
-			c.Redirect(http.StatusFound, *redirectRootLocation)
+		if hostIsRoot && viper.GetBool("enable-redirect-root") {
+			c.Redirect(http.StatusFound, viper.GetString("redirect-root-location"))
 			return
 		}
 
@@ -130,7 +125,7 @@ func startHTTPHandler(state *State) {
 
 		c.Request.Header.Set("X-Forwarded-Proto", requestedScheme)
 
-		proxyHolder := loc.(*ProxyHolder)
+		proxyHolder := loc.(*utils.ProxyHolder)
 
 		url := *c.Request.URL
 		url.Host = "local"
@@ -144,7 +139,7 @@ func startHTTPHandler(state *State) {
 		}
 
 		tlsConfig := &tls.Config{
-			InsecureSkipVerify: !*verifySSL,
+			InsecureSkipVerify: !viper.GetBool("verify-ssl"),
 		}
 
 		if c.IsWebsocket() {
@@ -154,7 +149,7 @@ func startHTTPHandler(state *State) {
 			}
 
 			var checkOrigin func(r *http.Request) bool
-			if !*verifyOrigin {
+			if !viper.GetBool("verify-origin") {
 				checkOrigin = func(r *http.Request) bool {
 					return true
 				}
@@ -181,7 +176,7 @@ func startHTTPHandler(state *State) {
 			TLSClientConfig: tlsConfig,
 		}
 
-		if *adminEnabled || *serviceConsoleEnabled {
+		if viper.GetBool("enable-admin-console") || viper.GetBool("enable-service-console") {
 			proxy.ModifyResponse = func(response *http.Response) error {
 				resBody, err := ioutil.ReadAll(response.Body)
 				if err != nil {
@@ -243,10 +238,10 @@ func startHTTPHandler(state *State) {
 		gin.WrapH(proxy)(c)
 	})
 
-	if *httpsEnabled {
+	if viper.GetBool("enable-https") {
 		go func() {
-			log.Fatal(r.RunTLS(*httpsAddr, filepath.Join(*httpsPems, "fullchain.pem"), filepath.Join(*httpsPems, "privkey.pem")))
+			log.Fatal(r.RunTLS(viper.GetString("https-address"), filepath.Join(viper.GetString("certificate-directory"), "fullchain.pem"), filepath.Join(viper.GetString("certificate-directory"), "privkey.pem")))
 		}()
 	}
-	log.Fatal(r.Run(*httpAddr))
+	log.Fatal(r.Run(viper.GetString("http-address")))
 }

@@ -1,3 +1,7 @@
 /.git/
-/keys/
+/.github/
+/.gitignore
+/deploy/
+/dist/
 /sish
+/.vscode/

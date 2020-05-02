@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"bytes"
@@ -21,15 +21,25 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/logrusorgru/aurora"
+	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
 
 var (
-	certHolder = make([]ssh.PublicKey, 0)
-	holderLock = sync.Mutex{}
+	certHolder          = make([]ssh.PublicKey, 0)
+	holderLock          = sync.Mutex{}
+	bannedSubdomainList = []string{""}
 )
 
-func getRandomPortInRange(portRange string) uint32 {
+func init() {
+	bannedSubdomainList = append(bannedSubdomainList, strings.Split(viper.GetString("banned-subdomains"), ",")...)
+	for k, v := range bannedSubdomainList {
+		bannedSubdomainList[k] = strings.ToLower(strings.TrimSpace(v) + "." + viper.GetString("domain"))
+	}
+}
+
+// GetRandomPortInRange returns a random port in the provided range
+func GetRandomPortInRange(portRange string) uint32 {
 	var bindPort uint32
 
 	ranges := strings.Split(strings.TrimSpace(portRange), ",")
@@ -70,7 +80,7 @@ func getRandomPortInRange(portRange string) uint32 {
 
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", bindPort))
 	if err != nil {
-		return getRandomPortInRange(portRange)
+		return GetRandomPortInRange(portRange)
 	}
 
 	ln.Close()
@@ -78,7 +88,8 @@ func getRandomPortInRange(portRange string) uint32 {
 	return bindPort
 }
 
-func checkPort(port uint32, portRanges string) (uint32, error) {
+// CheckPort verifies if a port exists within the port range
+func CheckPort(port uint32, portRanges string) (uint32, error) {
 	ranges := strings.Split(strings.TrimSpace(portRanges), ",")
 	checks := false
 	for _, r := range ranges {
@@ -119,7 +130,8 @@ func checkPort(port uint32, portRanges string) (uint32, error) {
 	return 0, fmt.Errorf("not a safe port")
 }
 
-func watchCerts() {
+// WatchCerts watches ssh keys for changes
+func WatchCerts() {
 	loadCerts()
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -151,7 +163,7 @@ func watchCerts() {
 		}
 	}()
 
-	err = watcher.Add(*authKeysDir)
+	err = watcher.Add(viper.GetString("authentication-keys-directory"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -160,7 +172,7 @@ func watchCerts() {
 func loadCerts() {
 	tmpCertHolder := make([]ssh.PublicKey, 0)
 
-	files, err := ioutil.ReadDir(*authKeysDir)
+	files, err := ioutil.ReadDir(viper.GetString("authentication-keys-directory"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -184,7 +196,7 @@ func loadCerts() {
 	}
 
 	for _, f := range files {
-		i, e := ioutil.ReadFile(filepath.Join(*authKeysDir, f.Name()))
+		i, e := ioutil.ReadFile(filepath.Join(viper.GetString("authentication-keys-directory"), f.Name()))
 		if e == nil && len(i) > 0 {
 			parseKey(i, f)
 		}
@@ -195,13 +207,14 @@ func loadCerts() {
 	certHolder = tmpCertHolder
 }
 
-func getSSHConfig() *ssh.ServerConfig {
+// GetSSHConfig Returns an SSH config for the ssh muxer
+func GetSSHConfig() *ssh.ServerConfig {
 	sshConfig := &ssh.ServerConfig{
-		NoClientAuth: !*authEnabled,
+		NoClientAuth: !viper.GetBool("enable-authentication"),
 		PasswordCallback: func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 			log.Printf("Login attempt: %s, user %s", c.RemoteAddr(), c.User())
 
-			if string(password) == *authPassword && *authPassword != "" {
+			if string(password) == viper.GetString("authentication-password") && viper.GetString("authentication-password") != "" {
 				return nil, nil
 			}
 
@@ -221,7 +234,7 @@ func getSSHConfig() *ssh.ServerConfig {
 			return nil, fmt.Errorf("public key doesn't match")
 		},
 	}
-	sshConfig.AddHostKey(loadPrivateKey(*pkPass))
+	sshConfig.AddHostKey(loadPrivateKey(viper.GetString("private-key-passphrase")))
 	return sshConfig
 }
 
@@ -251,7 +264,7 @@ func generatePrivateKey(passphrase string) []byte {
 		pemData = pem.EncodeToMemory(pemBlock)
 	}
 
-	err = ioutil.WriteFile(*pkLoc, pemData, 0644)
+	err = ioutil.WriteFile(viper.GetString("private-key-location"), pemData, 0644)
 	if err != nil {
 		log.Println("Error writing to file:", err)
 	}
@@ -263,7 +276,7 @@ func generatePrivateKey(passphrase string) []byte {
 func loadPrivateKey(passphrase string) ssh.Signer {
 	var signer ssh.Signer
 
-	pk, err := ioutil.ReadFile(*pkLoc)
+	pk, err := ioutil.ReadFile(viper.GetString("private-key-location"))
 	if err != nil {
 		pk = generatePrivateKey(passphrase)
 	}
@@ -293,28 +306,29 @@ func inBannedList(host string, bannedList []string) bool {
 	return false
 }
 
-func getOpenHost(addr string, state *State, sshConn *SSHConnection) string {
+// GetOpenHost returns a random open host
+func GetOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 	getUnusedHost := func() string {
 		first := true
 
 		hostExtension := ""
-		if *appendUserToSubdomain {
+		if viper.GetBool("append-user-to-subdomain") {
 			hostExtension = "-" + sshConn.SSHConn.User()
 		}
 
-		host := strings.ToLower(addr + hostExtension + "." + *rootDomain)
+		host := strings.ToLower(addr + hostExtension + "." + viper.GetString("domain"))
 
 		getRandomHost := func() string {
-			return strings.ToLower(RandStringBytesMaskImprSrc(*domainLen) + "." + *rootDomain)
+			return strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("max-subdomain-length")) + "." + viper.GetString("domain"))
 		}
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
-				sendMessage(sshConn, aurora.Sprintf("The subdomain %s is unavailable. Assigning a random subdomain.", aurora.Red(host)), true)
+				sshConn.SendMessage(aurora.Sprintf("The subdomain %s is unavailable. Assigning a random subdomain.", aurora.Red(host)), true)
 			}
 		}
 
 		checkHost := func(checkHost string) bool {
-			if *forceRandomSubdomain || !first || inBannedList(host, bannedSubdomainList) {
+			if viper.GetBool("force-random-subdomain") || !first || inBannedList(host, bannedSubdomainList) {
 				reportUnavailable(true)
 				host = getRandomHost()
 			}
@@ -335,21 +349,22 @@ func getOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 	return getUnusedHost()
 }
 
-func getOpenAlias(addr string, port string, state *State, sshConn *SSHConnection) string {
+// GetOpenAlias returns open aliases
+func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection) string {
 	getUnusedAlias := func() string {
 		first := true
 		alias := fmt.Sprintf("%s:%s", strings.ToLower(addr), port)
 		getRandomAlias := func() string {
-			return fmt.Sprintf("%s:%s", strings.ToLower(RandStringBytesMaskImprSrc(*domainLen)), port)
+			return fmt.Sprintf("%s:%s", strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("max-subdomain-length"))), port)
 		}
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
-				sendMessage(sshConn, aurora.Sprintf("The alias %s is unavaible. Assigning a random alias.", aurora.Red(alias)), true)
+				sshConn.SendMessage(aurora.Sprintf("The alias %s is unavaible. Assigning a random alias.", aurora.Red(alias)), true)
 			}
 		}
 
 		checkAlias := func(checkAlias string) bool {
-			if *forceRandomSubdomain || !first || inBannedList(alias, bannedSubdomainList) {
+			if viper.GetBool("force-random-subdomain") || !first || inBannedList(alias, bannedSubdomainList) {
 				reportUnavailable(true)
 				alias = getRandomAlias()
 			}
@@ -396,23 +411,4 @@ func RandStringBytesMaskImprSrc(n int) string {
 	}
 
 	return string(b)
-}
-
-func sendMessage(sshConn *SSHConnection, message string, block bool) {
-	if block {
-		sshConn.Messages <- message
-		return
-	}
-
-	for i := 0; i < 5; {
-		select {
-		case <-sshConn.Close:
-			return
-		case sshConn.Messages <- message:
-			return
-		default:
-			time.Sleep(100 * time.Millisecond)
-			i++
-		}
-	}
 }
