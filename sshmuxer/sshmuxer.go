@@ -55,7 +55,7 @@ func Start() {
 	}
 
 	upperList := func(stringList string) []string {
-		list := strings.Split(stringList, ",")
+		list := strings.FieldsFunc(stringList, utils.CommaSplitFields)
 		for k, v := range list {
 			list[k] = strings.ToUpper(v)
 		}
@@ -64,12 +64,12 @@ func Start() {
 	}
 
 	whitelistedCountriesList := upperList(viper.GetString("whitelisted-countries"))
-	whitelistedIPList := strings.Split(viper.GetString("whitelisted-ips"), ",")
+	whitelistedIPList := strings.FieldsFunc(viper.GetString("whitelisted-ips"), utils.CommaSplitFields)
 
 	ipfilterOpts := ipfilter.Options{
 		BlockedCountries: upperList(viper.GetString("banned-countries")),
 		AllowedCountries: whitelistedCountriesList,
-		BlockedIPs:       strings.Split(viper.GetString("banned-ips"), ","),
+		BlockedIPs:       strings.FieldsFunc(viper.GetString("banned-ips"), utils.CommaSplitFields),
 		AllowedIPs:       whitelistedIPList,
 		BlockByDefault:   len(whitelistedIPList) > 0 || len(whitelistedCountriesList) > 0,
 	}

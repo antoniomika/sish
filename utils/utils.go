@@ -32,10 +32,15 @@ var (
 )
 
 func init() {
-	bannedSubdomainList = append(bannedSubdomainList, strings.Split(viper.GetString("banned-subdomains"), ",")...)
+	bannedSubdomainList = append(bannedSubdomainList, strings.FieldsFunc(viper.GetString("banned-subdomains"), CommaSplitFields)...)
 	for k, v := range bannedSubdomainList {
 		bannedSubdomainList[k] = strings.ToLower(strings.TrimSpace(v) + "." + viper.GetString("domain"))
 	}
+}
+
+// CommaSplitFields is a function used by strings.FieldsFunc to split around commas
+func CommaSplitFields(c rune) bool {
+	return c == ','
 }
 
 // GetRandomPortInRange returns a random port in the provided range
