@@ -4,7 +4,7 @@ before:
     - go generate ./...
 builds:
 - ldflags:
-    - -s -w -X cmd.Version={{ .Version }} -X cmd.Commit={{ .Commit }} -X cmd.Date={{ .Date }}
+    - -s -w -X github.com/antoniomika/sish/cmd.Version={{ .Version }} -X github.com/antoniomika/sish/cmd.Commit={{ .Commit }} -X github.com/antoniomika/sish/cmd.Date={{ .Date }}
   env:
     - CGO_ENABLED=0
   goos:
