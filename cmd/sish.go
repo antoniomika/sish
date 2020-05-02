@@ -13,7 +13,9 @@ const (
 	longCommandInfo = `sish is a command line utility that implements an SSH server 
 that can handle HTTP(S)/WS(S)/TCP multiplexing and forwarding.
 It can handle multiple vhosting and reverse tunneling.`
+)
 
+var (
 	// Version describes the version of the current build
 	Version = "dev"
 
@@ -22,9 +24,7 @@ It can handle multiple vhosting and reverse tunneling.`
 
 	// Date describes the date of the current build
 	Date = "unknown"
-)
 
-var (
 	configFile string
 
 	rootCmd = &cobra.Command{
