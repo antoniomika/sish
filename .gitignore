@@ -1,7 +1,5 @@
-deploy/*/*
-!deploy/keys/.gitkeep
-!deploy/pubkeys/.gitkeep
-!deploy/ssl/.gitkeep
+deploy/
+!deploy/*/.gitkeep
 !deploy/docker-compose.yml
 dist/
 sish
