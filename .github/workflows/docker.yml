@@ -29,7 +29,10 @@ jobs:
         if [[ ${GITHUB_REF} =~ ^refs\/tags\/v.*$ ]]
         then
           REF="${GITHUB_REF//refs\/tags\/}"
-          OTHER_TAGS="${OTHER_TAGS} -t ${GITHUB_REPOSITORY}:latest"
+          if ! [[ ${GITHUB_REF} =~ ^refs\/tags\/v.*-.*$ ]]
+          then
+            OTHER_TAGS="${OTHER_TAGS} -t ${GITHUB_REPOSITORY}:latest"
+          fi
         fi
 
         docker buildx build \
