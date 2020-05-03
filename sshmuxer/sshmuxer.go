@@ -131,7 +131,7 @@ func Start() {
 					log.Println(key, value)
 					return true
 				})
-				log.Print("========End==========\n\n")
+				log.Print("========End==========\n")
 
 				time.Sleep(2 * time.Second)
 			}

@@ -5,10 +5,11 @@
         <table id="request-table" class="table table-hover">
             <thead class="thead-dark">
                 <tr>
+                    <th scope="col">Date</th>
                     <th scope="col">Method</th>
                     <th scope="col">Path</th>
                     <th scope="col">Status</th>
-                    <th scope="col">Time</th>
+                    <th scope="col">Duration</th>
                 </tr>
             </thead>
             <tbody id="request-list">
@@ -57,6 +58,7 @@
 
             $("#request-list").prepend(`
                 <tr id="row-timestamp-${tsPart}" class="request-row">
+                    <th scope="row">${requestData.startTimePretty}</th>
                     <th scope="row">${requestData.requestMethod}</th>
                     <td>${requestData.requestUrl.Path}</td>
                     <td>${requestData.responseStatus}</td>

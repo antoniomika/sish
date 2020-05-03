@@ -66,7 +66,7 @@ func StartHTTPHandler(state *utils.State) {
 		}
 
 		logLine := fmt.Sprintf("%v | %s |%s %3d %s| %13v | %15s |%s %-7s %s %s\n%s",
-			param.TimeStamp.Format("2006/01/02 - 15:04:05"),
+			param.TimeStamp.Format(viper.GetString("time-format")),
 			param.Request.Host,
 			statusColor, param.StatusCode, resetColor,
 			param.Latency,
@@ -212,6 +212,7 @@ func StartHTTPHandler(state *utils.State) {
 
 				data, err := json.Marshal(map[string]interface{}{
 					"startTime":       startTime,
+					"startTimePretty": startTime.Format(viper.GetString("time-format")),
 					"currentTime":     currentTime,
 					"requestIP":       c.ClientIP(),
 					"requestTime":     diffTime.Round(roundTime).String(),

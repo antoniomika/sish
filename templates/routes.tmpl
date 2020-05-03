@@ -58,8 +58,8 @@
     $(function() {
         $.getJSON(window.location.href.replace("console", "api/clients"), function(data) {
             for (var client in data.clients) {
-                var clientData = data.clients[client]
-                var elementID = clientData.remoteAddr.replace(/(\.|:)/g, "-")
+                var clientData = data.clients[client];
+                var elementID = clientData.remoteAddr.replace(/(\.|:|\[|\])/g, "-");
 
                 $("#client-list").append(`
                     <tr class="client-row" id="${elementID}">
@@ -70,7 +70,7 @@
                         <td>${clientData.listeners.length}</td>
                         <td><a style="text-transform: none; color: white;" class="btn btn-danger" onclick="disconnectClient('${clientData.remoteAddr}')">Disconnect</a></td>
                     </tr>
-                `)
+                `);
 
                 $(`#${elementID}`).data("client-data", clientData);
             }

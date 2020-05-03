@@ -37,6 +37,7 @@ proxy-protocol-version: "1"
 redirect-root-location: https://github.com/antoniomika/sish
 service-console-token: ""
 ssh-address: localhost:2222
+time-format: 2006/01/02 - 15:04:05
 user-subdomain-separator: ""
 verify-origin: true
 verify-ssl: true

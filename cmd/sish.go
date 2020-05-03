@@ -38,6 +38,14 @@ var (
 	}
 )
 
+type logWriter struct {
+	TimeFmt string
+}
+
+func (w logWriter) Write(bytes []byte) (int, error) {
+	return fmt.Printf("%v | %s", time.Now().Format(w.TimeFmt), string(bytes))
+}
+
 func init() {
 	cobra.OnInitialize(initConfig)
 
@@ -65,6 +73,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("admin-console-token", "j", "S3Cr3tP4$$W0rD", "The token to use for admin access")
 	rootCmd.PersistentFlags().StringP("service-console-token", "m", "", "The token to use for service access. Auto generated if empty.")
 	rootCmd.PersistentFlags().StringP("user-subdomain-separator", "", "", "The token to use for separating username and subdomains in a virtualhost.")
+	rootCmd.PersistentFlags().StringP("time-format", "", "2006/01/02 - 15:04:05", "The time format to use for both HTTP and general log messages.")
 
 	rootCmd.PersistentFlags().BoolP("bind-random-subdomains", "", true, "Whether or not to force a random subdomain")
 	rootCmd.PersistentFlags().BoolP("verify-origin", "", true, "Whether or not to verify origin on websocket connection")
@@ -111,6 +120,16 @@ func initConfig() {
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
 		log.Println("Reloaded configuration file.")
+
+		log.SetFlags(0)
+		log.SetOutput(logWriter{
+			TimeFmt: viper.GetString("time-format"),
+		})
+	})
+
+	log.SetFlags(0)
+	log.SetOutput(logWriter{
+		TimeFmt: viper.GetString("time-format"),
 	})
 }
 
