@@ -36,7 +36,8 @@ var (
 	bannedSubdomainList = []string{""}
 )
 
-func init() {
+// Setup main utils
+func Setup() {
 	upperList := func(stringList string) []string {
 		list := strings.FieldsFunc(stringList, CommaSplitFields)
 		for k, v := range list {

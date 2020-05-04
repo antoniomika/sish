@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/antoniomika/sish/sshmuxer"
+	"github.com/antoniomika/sish/utils"
 	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -125,6 +126,8 @@ func initConfig() {
 	log.SetOutput(logWriter{
 		TimeFmt: viper.GetString("time-format"),
 	})
+
+	utils.Setup()
 }
 
 // Execute executes the root command.

@@ -207,14 +207,14 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			break
 		}
 
-		defer cl.Close()
-
 		if connType == "tcp" {
-			clientRemote, _, err := net.SplitHostPort(cl.RemoteAddr().String())
+			if _, ok := cl.RemoteAddr().(*net.TCPAddr); ok {
+				clientRemote, _, err := net.SplitHostPort(cl.RemoteAddr().String())
 
-			if err != nil || state.IPFilter.Blocked(clientRemote) {
-				cl.Close()
-				continue
+				if err != nil || state.IPFilter.Blocked(clientRemote) {
+					cl.Close()
+					continue
+				}
 			}
 
 			logLine := fmt.Sprintf("Accepted connection from %s -> %s", cl.RemoteAddr().String(), sshConn.SSHConn.RemoteAddr().String())
@@ -238,8 +238,6 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			cl.Close()
 			continue
 		}
-
-		defer newChan.Close()
 
 		if sshConn.ProxyProto != 0 && (listenType != "unix" || handleTCPAliasing) {
 			var sourceInfo *net.TCPAddr
