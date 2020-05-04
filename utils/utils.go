@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/jpillora/ipfilter"
 	"github.com/logrusorgru/aurora"
 	"github.com/mikesmitty/edkey"
 	"github.com/spf13/viper"
@@ -27,12 +28,41 @@ import (
 )
 
 var (
+	// Filter is the IPFilter used to block connections
+	Filter *ipfilter.IPFilter
+
 	certHolder          = make([]ssh.PublicKey, 0)
 	holderLock          = sync.Mutex{}
 	bannedSubdomainList = []string{""}
 )
 
 func init() {
+	upperList := func(stringList string) []string {
+		list := strings.FieldsFunc(stringList, CommaSplitFields)
+		for k, v := range list {
+			list[k] = strings.ToUpper(v)
+		}
+
+		return list
+	}
+
+	whitelistedCountriesList := upperList(viper.GetString("whitelisted-countries"))
+	whitelistedIPList := strings.FieldsFunc(viper.GetString("whitelisted-ips"), CommaSplitFields)
+
+	ipfilterOpts := ipfilter.Options{
+		BlockedCountries: upperList(viper.GetString("banned-countries")),
+		AllowedCountries: whitelistedCountriesList,
+		BlockedIPs:       strings.FieldsFunc(viper.GetString("banned-ips"), CommaSplitFields),
+		AllowedIPs:       whitelistedIPList,
+		BlockByDefault:   len(whitelistedIPList) > 0 || len(whitelistedCountriesList) > 0,
+	}
+
+	if viper.GetBool("geodb") {
+		Filter = ipfilter.NewLazy(ipfilterOpts)
+	} else {
+		Filter = ipfilter.NewNoDB(ipfilterOpts)
+	}
+
 	bannedSubdomainList = append(bannedSubdomainList, strings.FieldsFunc(viper.GetString("banned-subdomains"), CommaSplitFields)...)
 	for k, v := range bannedSubdomainList {
 		bannedSubdomainList[k] = strings.ToLower(strings.TrimSpace(v) + "." + viper.GetString("domain"))
@@ -216,7 +246,7 @@ func loadCerts() {
 // GetSSHConfig Returns an SSH config for the ssh muxer
 func GetSSHConfig() *ssh.ServerConfig {
 	sshConfig := &ssh.ServerConfig{
-		NoClientAuth: !viper.GetBool("enable-authentication"),
+		NoClientAuth: !viper.GetBool("authentication"),
 		PasswordCallback: func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 			log.Printf("Login attempt: %s, user %s", c.RemoteAddr(), c.User())
 
@@ -319,13 +349,13 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 
 		hostExtension := ""
 		if viper.GetBool("append-user-to-subdomain") {
-			hostExtension = viper.GetString("user-subdomain-separator") + sshConn.SSHConn.User()
+			hostExtension = viper.GetString("append-user-to-subdomain-separator") + sshConn.SSHConn.User()
 		}
 
 		host := strings.ToLower(addr + hostExtension + "." + viper.GetString("domain"))
 
 		getRandomHost := func() string {
-			return strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("max-subdomain-length")) + "." + viper.GetString("domain"))
+			return strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("bind-random-subdomains-length")) + "." + viper.GetString("domain"))
 		}
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
@@ -361,7 +391,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 		first := true
 		alias := fmt.Sprintf("%s:%s", strings.ToLower(addr), port)
 		getRandomAlias := func() string {
-			return fmt.Sprintf("%s:%s", strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("max-subdomain-length"))), port)
+			return fmt.Sprintf("%s:%s", strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("bind-random-subdomains-length"))), port)
 		}
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {

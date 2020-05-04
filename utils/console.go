@@ -54,7 +54,7 @@ func NewWebConsole() *WebConsole {
 func (c *WebConsole) HandleRequest(hostname string, hostIsRoot bool, g *gin.Context) {
 	userAuthed := false
 	userIsAdmin := false
-	if (viper.GetBool("enable-admin-console") && viper.GetString("admin-console-token") != "") && (g.Request.URL.Query().Get("x-authorization") == viper.GetString("admin-console-token") || g.Request.Header.Get("x-authorization") == viper.GetString("admin-console-token")) {
+	if (viper.GetBool("admin-console") && viper.GetString("admin-console-token") != "") && (g.Request.URL.Query().Get("x-authorization") == viper.GetString("admin-console-token") || g.Request.Header.Get("x-authorization") == viper.GetString("admin-console-token")) {
 		userIsAdmin = true
 		userAuthed = true
 	}
@@ -62,7 +62,7 @@ func (c *WebConsole) HandleRequest(hostname string, hostIsRoot bool, g *gin.Cont
 	tokenInterface, ok := c.RouteTokens.Load(hostname)
 	if ok {
 		routeToken, ok := tokenInterface.(string)
-		if viper.GetBool("enable-service-console") && ok && (g.Request.URL.Query().Get("x-authorization") == routeToken || g.Request.Header.Get("x-authorization") == routeToken) {
+		if viper.GetBool("service-console") && ok && (g.Request.URL.Query().Get("x-authorization") == routeToken || g.Request.Header.Get("x-authorization") == routeToken) {
 			userAuthed = true
 		}
 	}

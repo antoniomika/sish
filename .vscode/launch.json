@@ -13,19 +13,19 @@
       "env": {},
       "args": [
         "--debug=true",
-        "--max-subdomain-length=3",
+        "--bind-random-subdomains-length=3",
         "--http-address=:8081",
         "--ssh-address=:2222",
         "--domain=testing.ssi.sh",
         "--bind-random-subdomains=false",
         "--bind-random-ports=false",
-        "--enable-https=false",
-        "--enable-authentication=false",
-        "--enable-tcp-aliases=true",
-        "--enable-proxy-protocol=false",
-        "--enable-log-to-client=true",
-        "--enable-admin-console=true",
-        "--enable-service-console=true"
+        "--https=false",
+        "--authentication=false",
+        "--tcp-aliases=true",
+        "--proxy-protocol=false",
+        "--log-to-client=true",
+        "--admin-console=true",
+        "--service-console=true"
       ]
     }
   ]

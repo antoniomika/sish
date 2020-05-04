@@ -22,8 +22,8 @@ services:
       --ssh-address=:22
       --http-address=:80
       --https-address=:443
-      --enable-https=true
-      --certificate-directory=/etc/letsencrypt/live/ssi.sh
+      --https=true
+      --https-certificate-directory=/etc/letsencrypt/live/ssi.sh
       --authentication-keys-directory=/pubkeys
       --private-key-location=/keys/ssh_key
       --bind-random-ports=false

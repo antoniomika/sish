@@ -7,13 +7,11 @@ import (
 	"os/signal"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/antoniomika/sish/httpmuxer"
 	"github.com/antoniomika/sish/utils"
-	"github.com/jpillora/ipfilter"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
@@ -21,7 +19,6 @@ import (
 var (
 	httpPort  int
 	httpsPort int
-	filter    *ipfilter.IPFilter
 )
 
 // Start initializes the ssh muxer service
@@ -54,43 +51,9 @@ func Start() {
 		httpsPort = viper.GetInt("https-port-override")
 	}
 
-	upperList := func(stringList string) []string {
-		list := strings.FieldsFunc(stringList, utils.CommaSplitFields)
-		for k, v := range list {
-			list[k] = strings.ToUpper(v)
-		}
-
-		return list
-	}
-
-	whitelistedCountriesList := upperList(viper.GetString("whitelisted-countries"))
-	whitelistedIPList := strings.FieldsFunc(viper.GetString("whitelisted-ips"), utils.CommaSplitFields)
-
-	ipfilterOpts := ipfilter.Options{
-		BlockedCountries: upperList(viper.GetString("banned-countries")),
-		AllowedCountries: whitelistedCountriesList,
-		BlockedIPs:       strings.FieldsFunc(viper.GetString("banned-ips"), utils.CommaSplitFields),
-		AllowedIPs:       whitelistedIPList,
-		BlockByDefault:   len(whitelistedIPList) > 0 || len(whitelistedCountriesList) > 0,
-	}
-
-	if viper.GetBool("enable-geodb") {
-		filter = ipfilter.NewLazy(ipfilterOpts)
-	} else {
-		filter = ipfilter.NewNoDB(ipfilterOpts)
-	}
-
 	utils.WatchCerts()
 
-	state := &utils.State{
-		SSHConnections: &sync.Map{},
-		Listeners:      &sync.Map{},
-		HTTPListeners:  &sync.Map{},
-		TCPListeners:   &sync.Map{},
-		IPFilter:       filter,
-		Console:        utils.NewWebConsole(),
-	}
-
+	state := utils.NewState()
 	state.Console.State = state
 
 	go httpmuxer.StartHTTPHandler(state)
@@ -171,7 +134,7 @@ func Start() {
 
 		clientRemote, _, err := net.SplitHostPort(conn.RemoteAddr().String())
 
-		if err != nil || filter.Blocked(clientRemote) {
+		if err != nil || state.IPFilter.Blocked(clientRemote) {
 			conn.Close()
 			continue
 		}

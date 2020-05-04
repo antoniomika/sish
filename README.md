@@ -23,8 +23,8 @@ would like access to Google Cloud Build's output (including pre-made PR binaries
         --ssh-address=:22 \
         --http-address=:80 \
         --https-address=:443 \
-        --enable-https=true \
-        --certificate-directory=/ssl \
+        --https=true \
+        --https-certificate-directory=/ssl \
         --authentication-keys-directory=/pubkeys \
         --private-key-location=/keys/ssh_key \
         --bind-random-ports=false
@@ -70,7 +70,7 @@ Authentication
 --------------
 
 If you want to use this service privately, it supports both public key and password
-authentication. To enable authentication, set `--enable-authentication=true` as one of your CLI
+authentication. To enable authentication, set `--authentication=true` as one of your CLI
 options and be sure to configure `--authentication-password` or `--authentication-keys-directory` to your liking.
 The directory provided by `--authentication-keys-directory` is watched for changes and will reload the
 authorized keys automatically. The authorized cert index is regenerated on directory
@@ -97,7 +97,7 @@ IP, use the `/32` range.
 
 To whitelist countries, use `--whitelisted-countries` with a comma-separated
 string of countries in ISO format (for example, "pt" for Portugal). You'll also
-need to set `--enable-geodb` to `true`.
+need to set `--geodb` to `true`.
 
 Demo - At this time, the demo instance has been set to require auth due to abuse
 ----
@@ -124,60 +124,64 @@ CLI Flags
 ---------
 
 ```text
-sish is a command line utility that implements an SSH server
-that can handle HTTP(S)/WS(S)/TCP multiplexing and forwarding.
-It can handle multiple vhosting and reverse tunneling.
+sish is a command line utility that implements an SSH server that can handle HTTP(S)/WS(S)/TCP multiplexing and forwarding.
+It can handle multiple vhosting and reverse tunneling endpoints for a large number of clients.
 
 Usage:
   sish [flags]
 
 Flags:
-  -j, --admin-console-token string             The token to use for admin access (default "S3Cr3tP4$$W0rD")
-      --append-user-to-subdomain               Whether or not to append the user to the subdomain
-  -k, --authentication-keys-directory string   Directory for public keys for pubkey auth (default "deploy/pubkeys/")
-  -u, --authentication-password string         Password to use for password auth (default "S3Cr3tP4$$W0rD")
-  -o, --banned-countries string                A comma separated list of banned countries
-  -x, --banned-ips string                      A comma separated list of banned ips
-  -b, --banned-subdomains string               A comma separated list of banned subdomains (default "localhost")
-      --bind-random-ports                      Bind ports randomly (OS chooses) (default true)
-      --bind-random-subdomains                 Whether or not to force a random subdomain (default true)
-  -s, --certificate-directory string           The location of pem files for HTTPS (fullchain.pem and privkey.pem) (default "deploy/ssl/")
-      --cleanup-unbound                        Whether or not to cleanup unbound (forwarded) SSH connections (default true)
-      --cleanup-unbound-timeout duration       Interval in seconds to wait before cleaning up an unbound connection. (default 5s)
-  -c, --config string                          Config file (default "config.yml")
-      --connection-idle-timeout duration       Number of seconds to wait for activity before closing a connection (default 5s)
-      --debug                                  Whether or not to print debug information
-  -d, --domain string                          The domain for HTTP(S) multiplexing (default "ssi.sh")
-      --enable-admin-console                   Whether or not to enable the admin console
-      --enable-authentication                  Whether or not to require auth on the SSH service
-      --enable-geodb                           Whether or not to use the maxmind geodb
-      --enable-https                           Whether or not to listen for HTTPS connections
-      --enable-log-to-client                   Whether or not to log http requests to the client
-      --enable-proxy-protocol                  Whether or not to enable the use of the proxy protocol
-      --enable-redirect-root                   Whether or not to redirect the root domain (default true)
-      --enable-service-console                 Whether or not to enable the admin console for each service and send the info to users
-      --enable-tcp-aliases                     Whether or not to allow the use of TCP aliasing
-  -h, --help                                   help for sish
-  -i, --http-address string                    The address to listen for HTTP connections (default "localhost:80")
-      --http-port-override int                 The port to use for http command output
-  -t, --https-address string                   The address to listen for HTTPS connections (default "localhost:443")
-      --https-port-override int                The port to use for https command output
-      --max-subdomain-length int               The length of the random subdomain to generate (default 3)
-      --ping-client                            Whether or not ping the client. (default true)
-      --ping-client-interval duration          Interval in seconds to ping a client to ensure it is up. (default 5s)
-  -n, --port-bind-range string                 Ports that are allowed to be bound (default "0,1024-65535")
-  -l, --private-key-location string            SSH server private key (default "deploy/keys/ssh_key")
-  -p, --private-key-passphrase string          Passphrase to use for the server private key (default "S3Cr3tP4$$phrAsE")
-  -q, --proxy-protocol-version string          What version of the proxy protocol to use.
-                                               Can either be 1, 2, or userdefined. If userdefined, the user needs to add a command
-                                               to SSH called proxyproto:version (ie proxyproto:1) (default "1")
-  -r, --redirect-root-location string          Where to redirect the root domain to (default "https://github.com/antoniomika/sish")
-  -m, --service-console-token string           The token to use for service access. Auto generated if empty.
-  -a, --ssh-address string                     The address to listen for SSH connections (default "localhost:2222")
-      --user-subdomain-separator string        The token to use for separating username and subdomains in a virtualhost.
-      --verify-origin                          Whether or not to verify origin on websocket connection (default true)
-      --verify-ssl                             Whether or not to verify SSL on proxy connection (default true)
-  -v, --version                                version for sish
-  -y, --whitelisted-countries string           A comma separated list of whitelisted countries
-  -w, --whitelisted-ips string                 A comma separated list of whitelisted ips
+      --admin-console                               Enable the admin console accessible at http(s)://domain/_sish/console?x-authorization=admin-console-token
+  -j, --admin-console-token string                  The token to use for admin console access if it's enabled (default "S3Cr3tP4$$W0rD")
+      --append-user-to-subdomain                    Append the SSH user to the subdomain. This is useful in multitenant environments
+      --append-user-to-subdomain-separator string   The token to use for separating username and subdomain selection in a virtualhost (default "-")
+      --authentication                              Require authentication for the SSH service
+  -k, --authentication-keys-directory string        Directory where public keys for public key authentication are stored.
+                                                    sish will watch this directory and automatically load new keys and remove keys
+                                                    from the authentication list (default "deploy/pubkeys/")
+  -u, --authentication-password string              Password to use for ssh server password authentication (default "S3Cr3tP4$$W0rD")
+  -o, --banned-countries string                     A comma separated list of banned countries. Applies to HTTP, TCP, and SSH connections
+  -x, --banned-ips string                           A comma separated list of banned ips that are unable to access the service. Applies to HTTP, TCP, and SSH connections
+  -b, --banned-subdomains string                    A comma separated list of banned subdomains that users are unable to bind (default "localhost")
+      --bind-random-ports                           Force TCP tunnels to bind a random port, where the kernel will randomly assign it (default true)
+      --bind-random-subdomains                      Force bound HTTP tunnels to use random subdomains instead of user provided ones (default true)
+      --bind-random-subdomains-length int           The length of the random subdomain to generate if a subdomain is unavailable or if random subdomains are enforced (default 3)
+      --cleanup-unbound                             Cleanup unbound (unforwarded) SSH connections after a set timeout (default true)
+      --cleanup-unbound-timeout duration            Interval in seconds to wait before cleaning up an unbound (unforwarded) connection (default 5s)
+  -c, --config string                               Config file (default "config.yml")
+      --connection-idle-timeout duration            Number of seconds to wait for activity before closing a connection (default 5s)
+      --debug                                       Enable debugging information
+  -d, --domain string                               The root domain for HTTP(S) multiplexing that will be appended to subdomains (default "ssi.sh")
+      --geodb                                       Use a geodb to verify country IP address association for IP filtering
+  -h, --help                                        help for sish
+  -i, --http-address string                         The address to listen for HTTP connections (default "localhost:80")
+      --http-port-override int                      The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only
+      --https                                       Listen for HTTPS connections. Requires a correct --https-certificate-directory
+  -t, --https-address string                        The address to listen for HTTPS connections (default "localhost:443")
+  -s, --https-certificate-directory string          The directory containing HTTPS certificate files (fullchain.pem and privkey.pem) (default "deploy/ssl/")
+      --https-port-override int                     The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only
+      --log-to-client                               Enable logging HTTP and TCP requests to the client
+      --ping-client                                 Send ping requests to the underlying SSH client.
+                                                    This is useful to ensure that SSH connections are kept open or close cleanly (default true)
+      --ping-client-interval duration               Interval in seconds to ping a client to ensure it is up (default 5s)
+  -n, --port-bind-range string                      Ports or port ranges that sish will allow to be bound when a user attempts to use TCP forwarding (default "0,1024-65535")
+  -l, --private-key-location string                 The location of the SSH server private key. sish will create a private key here if
+                                                    it doesn't exist using the --private-key-passphrase to encrypt it if supplied (default "deploy/keys/ssh_key")
+  -p, --private-key-passphrase string               Passphrase to use to encrypt the server private key (default "S3Cr3tP4$$phrAsE")
+      --proxy-protocol                              Use the proxy-protocol while proxying connections in order to pass-on IP address and port information
+  -q, --proxy-protocol-version string               What version of the proxy protocol to use. Can either be 1, 2, or userdefined.
+                                                    If userdefined, the user needs to add a command to SSH called proxyproto:version (ie proxyproto:1) (default "1")
+      --redirect-root                               Redirect the root domain to the location defined in --redirect-root-location (default true)
+  -r, --redirect-root-location string               The location to redirect requests to the root domain
+                                                    to instead of responding with a 404 (default "https://github.com/antoniomika/sish")
+      --service-console                             Enable the service console for each service and send the info to connected clients
+  -m, --service-console-token string                The token to use for service console access. Auto generated if empty for each connected tunnel
+  -a, --ssh-address string                          The address to listen for SSH connections (default "localhost:2222")
+      --tcp-aliases                                 Enable the use of TCP aliasing
+      --time-format string                          The time format to use for both HTTP and general log messages. (default "2006/01/02 - 15:04:05")
+      --verify-origin                               Verify the request origin on websocket connections (default true)
+      --verify-ssl                                  Verify SSL certificates made on proxied HTTP connections (default true)
+  -v, --version                                     version for sish
+  -y, --whitelisted-countries string                A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections
+  -w, --whitelisted-ips string                      A comma separated list of whitelisted ips. Applies to HTTP, TCP, and SSH connections
 ```

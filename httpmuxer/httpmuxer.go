@@ -76,7 +76,7 @@ func StartHTTPHandler(state *utils.State) {
 			param.ErrorMessage,
 		)
 
-		if viper.GetBool("enable-log-to-client") {
+		if viper.GetBool("log-to-client") {
 			hostname := strings.Split(param.Request.Host, ":")[0]
 			loc, ok := state.HTTPListeners.Load(hostname)
 			if ok {
@@ -90,12 +90,12 @@ func StartHTTPHandler(state *utils.State) {
 		hostname := strings.Split(c.Request.Host, ":")[0]
 		hostIsRoot := hostname == viper.GetString("domain")
 
-		if (viper.GetBool("enable-admin-console") || viper.GetBool("enable-service-console")) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
+		if (viper.GetBool("admin-console") || viper.GetBool("service-console")) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
 			state.Console.HandleRequest(hostname, hostIsRoot, c)
 			return
 		}
 
-		if hostIsRoot && viper.GetBool("enable-redirect-root") {
+		if hostIsRoot && viper.GetBool("redirect-root") {
 			c.Redirect(http.StatusFound, viper.GetString("redirect-root-location"))
 			return
 		}
@@ -176,7 +176,7 @@ func StartHTTPHandler(state *utils.State) {
 			TLSClientConfig: tlsConfig,
 		}
 
-		if viper.GetBool("enable-admin-console") || viper.GetBool("enable-service-console") {
+		if viper.GetBool("admin-console") || viper.GetBool("service-console") {
 			proxy.ModifyResponse = func(response *http.Response) error {
 				resBody, err := ioutil.ReadAll(response.Body)
 				if err != nil {
@@ -239,9 +239,9 @@ func StartHTTPHandler(state *utils.State) {
 		gin.WrapH(proxy)(c)
 	})
 
-	if viper.GetBool("enable-https") {
+	if viper.GetBool("https") {
 		go func() {
-			log.Fatal(r.RunTLS(viper.GetString("https-address"), filepath.Join(viper.GetString("certificate-directory"), "fullchain.pem"), filepath.Join(viper.GetString("certificate-directory"), "privkey.pem")))
+			log.Fatal(r.RunTLS(viper.GetString("https-address"), filepath.Join(viper.GetString("https-certificate-directory"), "fullchain.pem"), filepath.Join(viper.GetString("https-certificate-directory"), "privkey.pem")))
 		}()
 	}
 	log.Fatal(r.Run(viper.GetString("http-address")))

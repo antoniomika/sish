@@ -73,7 +73,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 				}
 			case "exec":
 				payloadString := string(req.Payload[4:])
-				if strings.HasPrefix(payloadString, proxyProtoPrefix) && viper.GetBool("enable-proxy-protocol") {
+				if strings.HasPrefix(payloadString, proxyProtoPrefix) && viper.GetBool("proxy-protocol") {
 					sshConn.ProxyProto = getProxyProtoVersion(strings.TrimPrefix(payloadString, proxyProtoPrefix))
 					if sshConn.ProxyProto != 0 {
 						sshConn.SendMessage(fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)

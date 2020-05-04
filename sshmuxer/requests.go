@@ -41,7 +41,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	handleTCPAliasing := false
 	if bindPort != uint32(80) && bindPort != uint32(443) {
-		if viper.GetBool("enable-tcp-aliases") && check.Addr != "localhost" {
+		if viper.GetBool("tcp-aliases") && check.Addr != "localhost" {
 			handleTCPAliasing = true
 		} else {
 			checkedPort, err := utils.CheckPort(check.Rport, viper.GetString("port-bind-range"))
@@ -136,7 +136,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		state.HTTPListeners.Store(host, pH)
 		defer state.HTTPListeners.Delete(host)
 
-		if viper.GetBool("enable-admin-console") || viper.GetBool("enable-service-console") {
+		if viper.GetBool("admin-console") || viper.GetBool("service-console") {
 			routeToken := viper.GetString("service-console-token")
 			sendToken := false
 			if routeToken == "" {
@@ -147,14 +147,14 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			state.Console.AddRoute(host, routeToken)
 			defer state.Console.RemoveRoute(host)
 
-			if viper.GetBool("enable-service-console") && sendToken {
+			if viper.GetBool("service-console") && sendToken {
 				scheme := "http"
 				portString := ""
 				if httpPort != 80 {
 					portString = fmt.Sprintf(":%d", httpPort)
 				}
 
-				if viper.GetBool("enable-https") {
+				if viper.GetBool("https") {
 					scheme = "https"
 					if httpsPort != 443 {
 						portString = fmt.Sprintf(":%d", httpsPort)
@@ -175,7 +175,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		requestMessages += fmt.Sprintf("%s: http://%s%s\r\n", aurora.BgBlue("HTTP"), host, httpPortString)
 		log.Printf("%s forwarding started: http://%s%s -> %s for client: %s\n", aurora.BgBlue("HTTP"), host, httpPortString, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 
-		if viper.GetBool("enable-https") {
+		if viper.GetBool("https") {
 			httpsPortString := ""
 			if httpsPort != 443 {
 				httpsPortString = fmt.Sprintf(":%d", httpsPort)
@@ -210,10 +210,17 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		defer cl.Close()
 
 		if connType == "tcp" {
+			clientRemote, _, err := net.SplitHostPort(cl.RemoteAddr().String())
+
+			if err != nil || state.IPFilter.Blocked(clientRemote) {
+				cl.Close()
+				continue
+			}
+
 			logLine := fmt.Sprintf("Accepted connection from %s -> %s", cl.RemoteAddr().String(), sshConn.SSHConn.RemoteAddr().String())
 			log.Println(logLine)
 
-			if viper.GetBool("enable-log-to-client") {
+			if viper.GetBool("log-to-client") {
 				sshConn.SendMessage(logLine, true)
 			}
 		}
