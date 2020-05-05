@@ -6,42 +6,55 @@
             <thead class="thead-dark">
                 <tr>
                     <th scope="col">Date</th>
+                    <th scope="col">Client IP</th>
                     <th scope="col">Method</th>
                     <th scope="col">Path</th>
                     <th scope="col">Status</th>
                     <th scope="col">Duration</th>
                 </tr>
             </thead>
-            <tbody id="request-list">
+            <tbody id="request-list" data-bind="foreach: requests">
+                <tr class="request-row" data-bind="click: showRequest, css: {'table-active' : active}">
+                    <th scope="row" data-bind="text: startTimePretty"></th>
+                    <th scope="row" data-bind="text: requestIP"></th>
+                    <th scope="row" data-bind="text: requestMethod"></th>
+                    <td data-bind="text: requestUrl.Path"></td>
+                    <td data-bind="text: responseStatus"></td>
+                    <td data-bind="text: requestTime"></td>
+                </tr>
             </tbody>
         </table>
     </div>
 
     <div class="col-md-6">
-        <div class="row">
+        <div class="row" data-bind="foreach: request">
             <h2 id="request-info-h2">Request Info</h2>
             <div class="container">
                 <h3>Headers</h3>
                 <div id="requestHeaders" class="dataContainers row">
+                    <pre class="pre-scrollable w-100" data-bind="text: JSON.stringify(headers, null, 4)"></pre>
                 </div>
                 
                 <h3>Body</h3>
                 <div id="requestBody" class="dataContainers row">
+                    <pre class="pre-scrollable w-100" data-bind="text: atob(body)"></pre>
                 </div>
             </div>
         </div>
 
         <hr>
 
-        <div class="row">
+        <div class="row" data-bind="foreach: response">
             <h2>Response Info:</h2>
             <div class="container">
                 <h3>Headers</h3>
                 <div id="responseHeaders" class="dataContainers row">
+                    <pre class="pre-scrollable w-100" data-bind="text: JSON.stringify(headers, null, 4)"></pre>
                 </div>
                 
                 <h3>Body</h3>
                 <div id="responseBody" class="dataContainers row">
+                    <pre class="pre-scrollable w-100" data-bind="text: atob(body)"></pre>
                 </div>
             </div>
         </div>
@@ -49,52 +62,62 @@
 </div>
 
 <script type="text/javascript">
+    var requests = {
+        requests: ko.observableArray([]),
+        request: ko.observableArray([]),
+        response: ko.observableArray([]),
+    };
+
+    var Request = function(requestData) {
+        this.data = requestData;
+
+        this.startTimePretty = requestData.startTimePretty;
+        this.requestMethod = requestData.requestMethod;
+        this.requestUrl = requestData.requestUrl;
+        this.responseStatus = requestData.responseStatus;
+        this.requestTime = requestData.requestTime;
+        this.requestIP = requestData.requestIP;
+
+        this.active = ko.observable(false);
+
+        this.showRequest = function() {
+            requests.request.removeAll();
+            requests.response.removeAll();
+
+            if ("Content-Type" in requestData.requestHeaders && requestData.requestHeaders["Content-Type"][0] == "application/json") {
+                requestData.requestBody = btoa(JSON.stringify(JSON.parse(atob(requestData.requestBody)), null, 4));
+            }
+
+            if ("Content-Type" in requestData.responseHeaders && requestData.responseHeaders["Content-Type"][0] == "application/json") {
+                requestData.responseBody = btoa(JSON.stringify(JSON.parse(atob(requestData.responseBody)), null, 4));
+            }
+
+            requests.request.push({
+                headers: requestData.requestHeaders,
+                body: requestData.requestBody
+            });
+
+            requests.response.push({
+                headers: requestData.responseHeaders,
+                body: requestData.responseBody
+            });
+
+            for (var request of requests.requests()) {
+                request.active(false);
+            }
+
+            this.active(true);
+        }.bind(this);
+    };
+
     $(function() {
         var ws = new WebSocket(window.location.href.replace('http', 'ws').replace('/console', '/console/ws'));
+        ko.applyBindings(requests);
 
         ws.onmessage = function(event) {
             var requestData = JSON.parse(event.data);
-            var tsPart = event.timeStamp.toString().replace(".", "-");
-
-            $("#request-list").prepend(`
-                <tr id="row-timestamp-${tsPart}" class="request-row">
-                    <th scope="row">${requestData.startTimePretty}</th>
-                    <th scope="row">${requestData.requestMethod}</th>
-                    <td>${requestData.requestUrl.Path}</td>
-                    <td>${requestData.responseStatus}</td>
-                    <td>${requestData.requestTime}</td>
-                </tr>
-            `)
-
-            $(`#row-timestamp-${tsPart}`).data("request-data", requestData)
+            requests.requests.unshift(new Request(requestData));
         };
-
-        $(document).on("click", "tr.request-row", function(e) {
-            $("#request-list > tr").removeClass("table-active");
-            $(this).addClass("table-active");
-            
-            var requestData = $(this).data("request-data");
-
-            $("#requestHeaders").html($("<pre/>").addClass("pre-scrollable w-100").text(JSON.stringify(requestData.requestHeaders, null, 4))[0].outerHTML);
-
-            if ("Content-Type" in requestData.requestHeaders && requestData.requestHeaders["Content-Type"][0] == "application/json") {
-                $("#requestBody").html($("<pre/>").addClass("pre-scrollable w-100").text(JSON.stringify(JSON.parse(atob(requestData.requestBody)), null, 4))[0].outerHTML);
-            } else {
-                $("#requestBody").html($("<pre/>").addClass("pre-scrollable w-100").text(atob(requestData.requestBody))[0].outerHTML);
-            }
-
-            $("#responseHeaders").html($("<pre/>").addClass("pre-scrollable w-100").text(JSON.stringify(requestData.responseHeaders, null, 4))[0].outerHTML);
-
-            if ("Content-Type" in requestData.responseHeaders && requestData.responseHeaders["Content-Type"][0] == "application/json") {
-                $("#responseBody").html($("<pre/>").addClass("pre-scrollable w-100").text(JSON.stringify(JSON.parse(atob(requestData.responseBody)), null, 4))[0].outerHTML);
-            } else {
-                $("#responseBody").html($("<pre/>").addClass("pre-scrollable w-100").text(atob(requestData.responseBody))[0].outerHTML);
-            }
-
-            $("#request-info-h2").text(`
-                Request Info - Client IP: ${requestData.requestIP}
-            `);
-        });
     });
 </script>
 

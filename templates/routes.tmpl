@@ -14,7 +14,15 @@
                     <th scope="col">Disconnect</th>
                 </tr>
             </thead>
-            <tbody id="client-list">
+            <tbody id="client-list" data-bind="foreach: clients">
+                <tr class="client-row" data-bind="click: showRoutes, css: {'table-active' : active}">
+                    <th scope="row" data-bind="text: remoteAddr"></th>
+                    <td data-bind="text: user"></td>
+                    <td data-bind="text: version"></td>
+                    <td data-bind="text: session"></td>
+                    <td data-bind="text: listeners.length"></td>
+                    <td><a style="text-transform: none; color: white;" class="btn btn-danger" data-bind="click: disconnectClient">Disconnect</a></td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -22,7 +30,7 @@
 <div class="row">
     <div class="col table-responsive">
         <h2>Routes</h2>
-        <table style="display:none;" id="route-table" class="table table-hover">
+        <table id="route-table" class="table table-hover">
             <thead class="thead-dark">
                 <tr>
                     <th scope="col">Type</th>
@@ -32,82 +40,90 @@
                     <th scope="col">Disconnect</th>
                 </tr>
             </thead>
-            <tbody id="route-list">
+            <tbody id="route-list" data-bind="foreach: routes">
+                <tr>
+                    <th scope="row" data-bind="text: type"></th>
+                    <td>
+                        <span data-bind="if: type == 'HTTP'"><a style="text-transform: none; color: white;" class="btn btn-primary" data-bind="click: forwardToConsole, text: name"></a></span>
+                        <span data-bind="ifnot: type == 'HTTP'"><span data-bind="text: name"></span></span>
+                    </td>
+                    <td data-bind="text: data"></td>
+                    <td data-bind="text: clientData.remoteAddr"></td>
+                    <td><a style="text-transform: none; color: white;" class="btn btn-danger" data-bind="click: disconnectRoute">Disconnect</a></td>
+                </tr>
             </tbody>
         </table>
     </div>
 </div>
 
 <script type="text/javascript">
-    function disconnectRoute(type, route) {
-        $.get(window.location.href.replace("console", `api/disconnectroute/${type}/${route}`), function(data) {
-            window.location.reload();
-        });
-    }
+    var clients = {
+        clients: ko.observableArray([]),
+        routes: ko.observableArray([])
+    };
 
-    function disconnectClient(client) {
-        $.get(window.location.href.replace("console", `api/disconnectclient/${client}`), function(data) {
-            window.location.reload();
-        });
-    }
+    var Route = function(clientData, routeType, routeName, routeData, disconnectType) {
+        this.clientData = clientData;
+        this.data = routeData;
+        this.type = routeType;
+        this.name = routeName;
+        this.disconnectType = disconnectType;
 
-    function forwardToConsole(hostname) {
-        window.location.hostname = hostname;
-    }
+        this.disconnectRoute = function() {
+            $.get(window.location.href.replace("console", `api/disconnectroute/${this.disconnectType}/${this.name}`), function(data) {
+                window.location.reload();
+            });
+        }.bind(this);
+
+        this.forwardToConsole = function() {
+            window.location.hostname = this.name;
+        }.bind(this);
+    };
+
+    var Client = function(clientData) {
+        this.data = clientData;
+
+        this.remoteAddr = clientData.remoteAddr;
+        this.user =clientData.user;
+        this.version = clientData.version;
+        this.session = clientData.session;
+        this.listeners = clientData.listeners;
+
+        this.active = ko.observable(false);
+
+        this.disconnectClient = function() {
+            $.get(window.location.href.replace("console", `api/disconnectclient/${this.remoteAddr}`), function(data) {
+                window.location.reload();
+            });
+        }.bind(this);
+
+        this.showRoutes = function() {
+            clients.routes.removeAll();
+
+            for (var client of clients.clients()) {
+                client.active(false);
+            }
+
+            this.active(true);
+
+            var routeTypes = {HTTP: ["httpListeners", "httplistener"], TCPAlias: ["tcpAliases", "tcpalias"], NET: ["listeners", "listener"]};
+            for (var routeType in routeTypes) {
+                for (var route in this.data.routeListeners[routeTypes[routeType][0]]) {
+                    clients.routes.push(new Route(this.data, routeType, route, this.data.routeListeners[routeTypes[routeType][0]][route], routeTypes[routeType][1]));
+                }
+            }
+        }.bind(this);
+    };
 
     $(function() {
         $.getJSON(window.location.href.replace("console", "api/clients"), function(data) {
             for (var client in data.clients) {
-                var clientData = data.clients[client];
-                var elementID = clientData.remoteAddr.replace(/(\.|:|\[|\])/g, "-");
-
-                $("#client-list").append(`
-                    <tr class="client-row" id="${elementID}">
-                        <th scope="row">${clientData.remoteAddr}</th>
-                        <td>${clientData.user}</td>
-                        <td>${clientData.version}</td>
-                        <td>${clientData.session}</td>
-                        <td>${clientData.listeners.length}</td>
-                        <td><a style="text-transform: none; color: white;" class="btn btn-danger" onclick="disconnectClient('${clientData.remoteAddr}')">Disconnect</a></td>
-                    </tr>
-                `);
-
-                $(`#${elementID}`).data("client-data", clientData);
+                clients.clients.push(new Client(data.clients[client]));
             }
+
+            ko.applyBindings(clients);
         });
-
-        function addRouteRow(clientData, type, routeData) {
-            for (var route in routeData) {
-                var tempRoute = route;
-                if (type == "HTTP") {
-                    tempRoute = `<a style="text-transform: none; color: white;" class="btn btn-primary" onclick="forwardToConsole('${route}')">${route}</a>`;
-                }
-
-                $("#route-list").append(`
-                    <tr>
-                        <th scope="row">${type}</th>
-                        <td>${tempRoute}</td>
-                        <td>${routeData[route]}</td>
-                        <td>${clientData.remoteAddr}</td>
-                        <td><a style="text-transform: none; color: white;" class="btn btn-danger" onclick="disconnectRoute('${(type == "HTTP" ? "httplistener" : (type == "TCPAlias" ? "tcpalias" : "listener"))}', '${route}')">Disconnect</a></td>
-                    </tr>
-                `);
-            }
-        }
-
-        $(document).on("click", "tr.client-row", function(e) {
-            $("#client-list > tr").removeClass("table-active");
-            $(this).addClass("table-active");
-            $("#route-list").html("");
-            $("#route-table").show();
-
-            var clientData = $(this).data("client-data");
-
-            addRouteRow(clientData, "HTTP", clientData.routeListeners.httpListeners);
-            addRouteRow(clientData, "TCPAlias", clientData.routeListeners.tcpAliases);
-            addRouteRow(clientData, "NET", clientData.routeListeners.listeners);
-        });
-    })
+    });
 </script>
 {{ template "footer" .}}
 {{ end }}
