@@ -24,8 +24,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// StartHTTPHandler initializes the HTTP service
-func StartHTTPHandler(state *utils.State) {
+// Start initializes the HTTP service
+func Start(state *utils.State) {
 	releaseMode := gin.ReleaseMode
 	if viper.GetBool("debug") {
 		releaseMode = gin.DebugMode

@@ -56,7 +56,7 @@ func Start() {
 	state := utils.NewState()
 	state.Console.State = state
 
-	go httpmuxer.StartHTTPHandler(state)
+	go httpmuxer.Start(state)
 
 	if viper.GetBool("debug") {
 		go func() {
