@@ -14,7 +14,6 @@ bind-random-subdomains-length: 3
 cleanup-unbound: true
 cleanup-unbound-timeout: 5s
 config: config.yml
-connection-idle-timeout: 5s
 debug: false
 domain: ssi.sh
 geodb: false
@@ -24,9 +23,12 @@ https: false
 https-address: localhost:443
 https-certificate-directory: deploy/ssl/
 https-port-override: 0
+idle-connection: true
+idle-connection-timeout: 5s
 log-to-client: false
 ping-client: true
 ping-client-interval: 5s
+ping-client-timeout: 5s
 port-bind-range: 0,1024-65535
 private-key-location: deploy/keys/ssh_key
 private-key-passphrase: S3Cr3tP4$$phrAsE

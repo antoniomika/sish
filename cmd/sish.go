@@ -87,14 +87,16 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("service-console", "", false, "Enable the service console for each service and send the info to connected clients")
 	rootCmd.PersistentFlags().BoolP("tcp-aliases", "", false, "Enable the use of TCP aliasing")
 	rootCmd.PersistentFlags().BoolP("log-to-client", "", false, "Enable logging HTTP and TCP requests to the client")
+	rootCmd.PersistentFlags().BoolP("idle-connection", "", true, "Enable connection idle timeouts for reads and writes")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("bind-random-subdomains-length", "", 3, "The length of the random subdomain to generate if a subdomain is unavailable or if random subdomains are enforced")
 
-	rootCmd.PersistentFlags().DurationP("connection-idle-timeout", "", 5*time.Second, "Number of seconds to wait for activity before closing a connection")
-	rootCmd.PersistentFlags().DurationP("ping-client-interval", "", 5*time.Second, "Interval in seconds to ping a client to ensure it is up")
-	rootCmd.PersistentFlags().DurationP("cleanup-unbound-timeout", "", 5*time.Second, "Interval in seconds to wait before cleaning up an unbound (unforwarded) connection")
+	rootCmd.PersistentFlags().DurationP("idle-connection-timeout", "", 5*time.Second, "Duration to wait for activity before closing a connection for all reads and writes")
+	rootCmd.PersistentFlags().DurationP("ping-client-interval", "", 5*time.Second, "Duration representing an interval to ping a client to ensure it is up")
+	rootCmd.PersistentFlags().DurationP("ping-client-timeout", "", 5*time.Second, "Duration to wait for activity before closing a connection after sending a ping to a client")
+	rootCmd.PersistentFlags().DurationP("cleanup-unbound-timeout", "", 5*time.Second, "Duration to wait before cleaning up an unbound (unforwarded) connection")
 }
 
 func initConfig() {

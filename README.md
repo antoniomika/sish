@@ -147,9 +147,8 @@ Flags:
       --bind-random-subdomains                      Force bound HTTP tunnels to use random subdomains instead of user provided ones (default true)
       --bind-random-subdomains-length int           The length of the random subdomain to generate if a subdomain is unavailable or if random subdomains are enforced (default 3)
       --cleanup-unbound                             Cleanup unbound (unforwarded) SSH connections after a set timeout (default true)
-      --cleanup-unbound-timeout duration            Interval in seconds to wait before cleaning up an unbound (unforwarded) connection (default 5s)
+      --cleanup-unbound-timeout duration            Duration to wait before cleaning up an unbound (unforwarded) connection (default 5s)
   -c, --config string                               Config file (default "config.yml")
-      --connection-idle-timeout duration            Number of seconds to wait for activity before closing a connection (default 5s)
       --debug                                       Enable debugging information
   -d, --domain string                               The root domain for HTTP(S) multiplexing that will be appended to subdomains (default "ssi.sh")
       --geodb                                       Use a geodb to verify country IP address association for IP filtering
@@ -160,10 +159,13 @@ Flags:
   -t, --https-address string                        The address to listen for HTTPS connections (default "localhost:443")
   -s, --https-certificate-directory string          The directory containing HTTPS certificate files (fullchain.pem and privkey.pem) (default "deploy/ssl/")
       --https-port-override int                     The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only
+      --idle-connection                             Enable connection idle timeouts for reads and writes (default true)
+      --idle-connection-timeout duration            Duration to wait for activity before closing a connection for all reads and writes (default 5s)
       --log-to-client                               Enable logging HTTP and TCP requests to the client
       --ping-client                                 Send ping requests to the underlying SSH client.
                                                     This is useful to ensure that SSH connections are kept open or close cleanly (default true)
-      --ping-client-interval duration               Interval in seconds to ping a client to ensure it is up (default 5s)
+      --ping-client-interval duration               Duration representing an interval to ping a client to ensure it is up (default 5s)
+      --ping-client-timeout duration                Duration to wait for activity before closing a connection after sending a ping to a client (default 5s)
   -n, --port-bind-range string                      Ports or port ranges that sish will allow to be bound when a user attempts to use TCP forwarding (default "0,1024-65535")
   -l, --private-key-location string                 The location of the SSH server private key. sish will create a private key here if
                                                     it doesn't exist using the --private-key-passphrase to encrypt it if supplied (default "deploy/keys/ssh_key")

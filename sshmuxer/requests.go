@@ -279,7 +279,7 @@ type IdleTimeoutConn struct {
 
 // Read is needed to implement the reader part
 func (i IdleTimeoutConn) Read(buf []byte) (int, error) {
-	err := i.Conn.SetReadDeadline(time.Now().Add(viper.GetDuration("connection-idle-timeout")))
+	err := i.Conn.SetReadDeadline(time.Now().Add(viper.GetDuration("idle-connection-timeout")))
 	if err != nil {
 		return 0, err
 	}
@@ -289,7 +289,7 @@ func (i IdleTimeoutConn) Read(buf []byte) (int, error) {
 
 // Write is needed to implement the writer part
 func (i IdleTimeoutConn) Write(buf []byte) (int, error) {
-	err := i.Conn.SetWriteDeadline(time.Now().Add(viper.GetDuration("connection-idle-timeout")))
+	err := i.Conn.SetWriteDeadline(time.Now().Add(viper.GetDuration("idle-connection-timeout")))
 	if err != nil {
 		return 0, err
 	}
@@ -303,8 +303,14 @@ func copyBoth(writer net.Conn, reader ssh.Channel) {
 		writer.Close()
 	}
 
-	tcon := IdleTimeoutConn{
-		Conn: writer,
+	var tcon io.ReadWriter
+
+	if viper.GetBool("idle-connection") {
+		tcon = IdleTimeoutConn{
+			Conn: writer,
+		}
+	} else {
+		tcon = writer
 	}
 
 	copyToReader := func() {

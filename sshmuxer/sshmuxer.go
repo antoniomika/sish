@@ -215,7 +215,7 @@ func Start() {
 					ticker := time.NewTicker(tickDuration)
 
 					for {
-						err := conn.SetDeadline(time.Now().Add(tickDuration).Add(viper.GetDuration("connection-idle-timeout")))
+						err := conn.SetDeadline(time.Now().Add(tickDuration).Add(viper.GetDuration("ping-idle-timeout")))
 						if err != nil {
 							log.Println("Unable to set deadline")
 						}
