@@ -215,7 +215,7 @@ func Start() {
 					ticker := time.NewTicker(tickDuration)
 
 					for {
-						err := conn.SetDeadline(time.Now().Add(tickDuration).Add(viper.GetDuration("ping-idle-timeout")))
+						err := conn.SetDeadline(time.Now().Add(tickDuration).Add(viper.GetDuration("ping-client-timeout")))
 						if err != nil {
 							log.Println("Unable to set deadline")
 						}
@@ -224,7 +224,7 @@ func Start() {
 						case <-ticker.C:
 							_, _, err := sshConn.SendRequest("keepalive@sish", true, nil)
 							if err != nil {
-								log.Println("Error retrieving keepalive response")
+								log.Println("Error retrieving keepalive response:", err)
 								return
 							}
 						case <-holderConn.Close:

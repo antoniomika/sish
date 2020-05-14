@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"github.com/antoniomika/sish/utils"
+	"github.com/antoniomika/websocketproxy"
 	"github.com/gorilla/websocket"
-	"github.com/koding/websocketproxy"
 	"github.com/spf13/viper"
 
 	"github.com/gin-gonic/gin"
