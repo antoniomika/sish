@@ -73,6 +73,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("bind-random-subdomains", "", true, "Force bound HTTP tunnels to use random subdomains instead of user provided ones")
 	rootCmd.PersistentFlags().BoolP("verify-origin", "", true, "Verify the request origin on websocket connections")
 	rootCmd.PersistentFlags().BoolP("verify-ssl", "", true, "Verify SSL certificates made on proxied HTTP connections")
+	rootCmd.PersistentFlags().BoolP("verify-dns", "", true, "Verify DNS information for hosts and ensure it matches a connecting users sha256 key fingerprint")
 	rootCmd.PersistentFlags().BoolP("cleanup-unbound", "", true, "Cleanup unbound (unforwarded) SSH connections after a set timeout")
 	rootCmd.PersistentFlags().BoolP("bind-random-ports", "", true, "Force TCP tunnels to bind a random port, where the kernel will randomly assign it")
 	rootCmd.PersistentFlags().BoolP("append-user-to-subdomain", "", false, "Append the SSH user to the subdomain. This is useful in multitenant environments")

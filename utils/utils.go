@@ -27,6 +27,10 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+const (
+	sishDNSPrefix = "sish="
+)
+
 var (
 	// Filter is the IPFilter used to block connections
 	Filter *ipfilter.IPFilter
@@ -264,7 +268,14 @@ func GetSSHConfig() *ssh.ServerConfig {
 			defer holderLock.Unlock()
 			for _, i := range certHolder {
 				if bytes.Equal(key.Marshal(), i.Marshal()) {
-					return nil, nil
+					permssionsData := &ssh.Permissions{
+						Extensions: map[string]string{
+							"pubKey":            string(key.Marshal()),
+							"pubKeyFingerprint": ssh.FingerprintSHA256(key),
+						},
+					}
+
+					return permssionsData, nil
 				}
 			}
 
@@ -343,8 +354,30 @@ func inBannedList(host string, bannedList []string) bool {
 	return false
 }
 
+func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
+	if !viper.GetBool("verify-dns") {
+		return false, "", nil
+	}
+
+	dnsPubKeyFingerprint := ""
+	records, err := net.LookupTXT(addr)
+
+	for _, v := range records {
+		if strings.HasPrefix(v, sishDNSPrefix) {
+			dnsPubKeyFingerprint = strings.TrimSpace(strings.TrimPrefix(v, sishDNSPrefix))
+		}
+	}
+
+	return sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"] == dnsPubKeyFingerprint, dnsPubKeyFingerprint, err
+}
+
 // GetOpenHost returns a random open host
 func GetOpenHost(addr string, state *State, sshConn *SSHConnection) string {
+	dnsMatch, _, err := verifyDNS(addr, sshConn)
+	if err != nil && viper.GetBool("debug") {
+		log.Println("Error looking up txt records for domain:", addr)
+	}
+
 	getUnusedHost := func() string {
 		first := true
 
@@ -353,7 +386,12 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 			hostExtension = viper.GetString("append-user-to-subdomain-separator") + sshConn.SSHConn.User()
 		}
 
-		host := strings.ToLower(addr + hostExtension + "." + viper.GetString("domain"))
+		proposedHost := addr + hostExtension + "." + viper.GetString("domain")
+		if dnsMatch {
+			proposedHost = addr
+		}
+
+		host := strings.ToLower(proposedHost)
 
 		getRandomHost := func() string {
 			return strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("bind-random-subdomains-length")) + "." + viper.GetString("domain"))
