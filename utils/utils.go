@@ -367,16 +367,20 @@ func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
 		return false, "", nil
 	}
 
-	dnsPubKeyFingerprint := ""
 	records, err := net.LookupTXT(addr)
 
 	for _, v := range records {
 		if strings.HasPrefix(v, sishDNSPrefix) {
-			dnsPubKeyFingerprint = strings.TrimSpace(strings.TrimPrefix(v, sishDNSPrefix))
+			dnsPubKeyFingerprint := strings.TrimSpace(strings.TrimPrefix(v, sishDNSPrefix))
+
+			match := sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"] == dnsPubKeyFingerprint
+			if match {
+				return match, dnsPubKeyFingerprint, err
+			}
 		}
 	}
 
-	return sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"] == dnsPubKeyFingerprint, dnsPubKeyFingerprint, err
+	return false, "", nil
 }
 
 // GetOpenPort returns open ports

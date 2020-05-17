@@ -13,6 +13,7 @@ import (
 
 	"github.com/antoniomika/oxy/forward"
 	"github.com/antoniomika/sish/utils"
+	"github.com/caddyserver/certmagic"
 	"github.com/spf13/viper"
 
 	"github.com/gin-gonic/gin"
@@ -137,8 +138,46 @@ func Start(state *utils.State) {
 	})
 
 	if viper.GetBool("https") {
+		certManager := certmagic.NewDefault()
+
+		certManager.Storage = &certmagic.FileStorage{
+			Path: filepath.Join(viper.GetString("https-certificate-directory"), "certmagic"),
+		}
+
+		certManager.OnDemand = &certmagic.OnDemandConfig{
+			DecisionFunc: func(name string) error {
+				if !viper.GetBool("https-ondemand-certificate") {
+					return fmt.Errorf("ondemand certificate retrieval is not enabled")
+				}
+
+				_, ok := state.HTTPListeners.Load(name)
+				if !ok {
+					return fmt.Errorf("cannot find connection for host: %s", name)
+				}
+
+				log.Println("Requesting certificate for host:", name)
+				return nil
+			},
+		}
+
+		err := certManager.CacheUnmanagedCertificatePEMFile(
+			filepath.Join(viper.GetString("https-certificate-directory"), "fullchain.pem"),
+			filepath.Join(viper.GetString("https-certificate-directory"), "privkey.pem"),
+			[]string{},
+		)
+
+		if err != nil {
+			log.Println("Error loading unmanaged certificates:", err)
+		}
+
+		s := &http.Server{
+			Addr:      viper.GetString("https-address"),
+			TLSConfig: certManager.TLSConfig(),
+			Handler:   r,
+		}
+
 		go func() {
-			log.Fatal(r.RunTLS(viper.GetString("https-address"), filepath.Join(viper.GetString("https-certificate-directory"), "fullchain.pem"), filepath.Join(viper.GetString("https-certificate-directory"), "privkey.pem")))
+			log.Fatal(s.ListenAndServeTLS("", ""))
 		}()
 	}
 	log.Fatal(r.Run(viper.GetString("http-address")))

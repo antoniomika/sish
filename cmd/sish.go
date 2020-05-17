@@ -31,7 +31,7 @@ var (
 	rootCmd = &cobra.Command{
 		Use:     "sish",
 		Short:   "The sish command initializes and runs the sish ssh multiplexer",
-		Long:    "sish is a command line utility that implements an SSH server that can handle HTTP(S)/WS(S)/TCP multiplexing and forwarding.\nIt can handle multiple vhosting and reverse tunneling endpoints for a large number of clients.",
+		Long:    "sish is a command line utility that implements an SSH server that can handle HTTP(S)/WS(S)/TCP multiplexing, forwarding and loadbalancing.\nIt can handle multiple vhosting and reverse tunneling endpoints for a large number of clients.",
 		Run:     runCommand,
 		Version: Version,
 	}
@@ -73,8 +73,8 @@ func init() {
 	rootCmd.PersistentFlags().StringP("admin-console-token", "j", "S3Cr3tP4$$W0rD", "The token to use for admin console access if it's enabled")
 	rootCmd.PersistentFlags().StringP("service-console-token", "m", "", "The token to use for service console access. Auto generated if empty for each connected tunnel")
 	rootCmd.PersistentFlags().StringP("append-user-to-subdomain-separator", "", "-", "The token to use for separating username and subdomain selection in a virtualhost")
-	rootCmd.PersistentFlags().StringP("time-format", "", "2006/01/02 - 15:04:05", "The time format to use for both HTTP and general log messages.")
-	rootCmd.PersistentFlags().StringP("log-to-file-path", "", "/tmp/sish.log", "The file to write log output to.")
+	rootCmd.PersistentFlags().StringP("time-format", "", "2006/01/02 - 15:04:05", "The time format to use for both HTTP and general log messages")
+	rootCmd.PersistentFlags().StringP("log-to-file-path", "", "/tmp/sish.log", "The file to write log output to")
 
 	rootCmd.PersistentFlags().BoolP("bind-random-subdomains", "", true, "Force bound HTTP tunnels to use random subdomains instead of user provided ones")
 	rootCmd.PersistentFlags().BoolP("verify-ssl", "", true, "Verify SSL certificates made on proxied HTTP connections")
@@ -98,16 +98,17 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("tcp-load-balancer", "", false, "Enable the TCP load balancer (multiple clients can bind the same port)")
 	rootCmd.PersistentFlags().BoolP("alias-load-balancer", "", false, "Enable the alias load balancer (multiple clients can bind the same alias)")
 	rootCmd.PersistentFlags().BoolP("localhost-as-all", "", true, "Enable forcing localhost to mean all interfaces for tcp listeners")
-	rootCmd.PersistentFlags().BoolP("log-to-stdout", "", true, "Whether or not to write log output to stdout")
-	rootCmd.PersistentFlags().BoolP("log-to-file", "", false, "Whether or not to write log output to file, specified by log-to-file-path")
-	rootCmd.PersistentFlags().BoolP("log-to-file-compress", "", false, "Whether or not to compress log output files")
+	rootCmd.PersistentFlags().BoolP("log-to-stdout", "", true, "Enable writing log output to stdout")
+	rootCmd.PersistentFlags().BoolP("log-to-file", "", false, "Enable writing log output to file, specified by log-to-file-path")
+	rootCmd.PersistentFlags().BoolP("log-to-file-compress", "", false, "Enable compressing log output files")
+	rootCmd.PersistentFlags().BoolP("https-ondemand-certificate", "", false, "Enable retrieving certificates on demand via Let's Encrypt")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("bind-random-subdomains-length", "", 3, "The length of the random subdomain to generate if a subdomain is unavailable or if random subdomains are enforced")
-	rootCmd.PersistentFlags().IntP("log-to-file-max-size", "", 500, "The maximum size of outputed log files in megabytes.")
-	rootCmd.PersistentFlags().IntP("log-to-file-max-backups", "", 3, "The maxium number of rotated logs files to keep.")
-	rootCmd.PersistentFlags().IntP("log-to-file-max-age", "", 28, "The maxium number of days to store log output in a file.")
+	rootCmd.PersistentFlags().IntP("log-to-file-max-size", "", 500, "The maximum size of outputed log files in megabytes")
+	rootCmd.PersistentFlags().IntP("log-to-file-max-backups", "", 3, "The maxium number of rotated logs files to keep")
+	rootCmd.PersistentFlags().IntP("log-to-file-max-age", "", 28, "The maxium number of days to store log output in a file")
 
 	rootCmd.PersistentFlags().DurationP("idle-connection-timeout", "", 5*time.Second, "Duration to wait for activity before closing a connection for all reads and writes")
 	rootCmd.PersistentFlags().DurationP("ping-client-interval", "", 5*time.Second, "Duration representing an interval to ping a client to ensure it is up")
