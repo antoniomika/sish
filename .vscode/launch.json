@@ -25,7 +25,11 @@
         "--proxy-protocol=false",
         "--log-to-client=true",
         "--admin-console=true",
-        "--service-console=true"
+        "--service-console=true",
+        "--verify-ssl=false",
+        "--http-load-balancer=true",
+        "--tcp-load-balancer=true",
+        "--alias-load-balancer=true"
       ]
     }
   ]

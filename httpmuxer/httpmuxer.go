@@ -2,23 +2,17 @@ package httpmuxer
 
 import (
 	"bytes"
-	"compress/gzip"
-	"crypto/tls"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
-	"net/http/httputil"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/antoniomika/oxy/forward"
 	"github.com/antoniomika/sish/utils"
-	"github.com/antoniomika/websocketproxy"
-	"github.com/gorilla/websocket"
 	"github.com/spf13/viper"
 
 	"github.com/gin-gonic/gin"
@@ -80,13 +74,28 @@ func Start(state *utils.State) {
 			hostname := strings.Split(param.Request.Host, ":")[0]
 			loc, ok := state.HTTPListeners.Load(hostname)
 			if ok {
-				proxyHolder := loc.(*utils.ProxyHolder)
-				proxyHolder.SSHConn.SendMessage(strings.TrimSpace(logLine), true)
+				proxyHolder := loc.(*utils.HTTPHolder)
+				sshConnTmp, ok := proxyHolder.SSHConns.Load(param.Keys["proxySocket"])
+				if ok {
+					sshConn := sshConnTmp.(*utils.SSHConnection)
+					sshConn.SendMessage(strings.TrimSpace(logLine), true)
+				} else {
+					proxyHolder.SSHConns.Range(func(key, val interface{}) bool {
+						sshConn := val.(*utils.SSHConnection)
+						sshConn.SendMessage(strings.TrimSpace(logLine), true)
+						return true
+					})
+				}
 			}
 		}
 
 		return logLine
 	}), gin.Recovery(), func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/favicon.ico") {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+
 		hostname := strings.Split(c.Request.Host, ":")[0]
 		hostIsRoot := hostname == viper.GetString("domain")
 
@@ -117,126 +126,14 @@ func Start(state *utils.State) {
 
 		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(reqBody))
 
-		requestedScheme := "http"
+		proxyHolder := loc.(*utils.HTTPHolder)
 
-		if c.Request.TLS != nil {
-			requestedScheme = "https"
+		err = forward.ResponseModifier(ResponseModifier(state, hostname, reqBody, c))(proxyHolder.Forward)
+		if err != nil {
+			log.Println("Unable to set response modifier:", err)
 		}
 
-		c.Request.Header.Set("X-Forwarded-Proto", requestedScheme)
-
-		proxyHolder := loc.(*utils.ProxyHolder)
-
-		url := *c.Request.URL
-		url.Host = "local"
-		url.Path = ""
-		url.RawQuery = ""
-		url.Fragment = ""
-		url.Scheme = proxyHolder.Scheme
-
-		dialer := func(network, addr string) (net.Conn, error) {
-			return net.Dial("unix", proxyHolder.ProxyTo)
-		}
-
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify: !viper.GetBool("verify-ssl"),
-		}
-
-		if c.IsWebsocket() {
-			scheme := "ws"
-			if url.Scheme == "https" {
-				scheme = "wss"
-			}
-
-			var checkOrigin func(r *http.Request) bool
-			if !viper.GetBool("verify-origin") {
-				checkOrigin = func(r *http.Request) bool {
-					return true
-				}
-			}
-
-			url.Scheme = scheme
-			wsProxy := websocketproxy.NewProxy(&url)
-			wsProxy.Upgrader = &websocket.Upgrader{
-				ReadBufferSize:  1024,
-				WriteBufferSize: 1024,
-				CheckOrigin:     checkOrigin,
-			}
-			wsProxy.Dialer = &websocket.Dialer{
-				NetDial:         dialer,
-				TLSClientConfig: tlsConfig,
-			}
-			gin.WrapH(wsProxy)(c)
-			return
-		}
-
-		proxy := httputil.NewSingleHostReverseProxy(&url)
-		proxy.Transport = &http.Transport{
-			Dial:            dialer,
-			TLSClientConfig: tlsConfig,
-		}
-
-		if viper.GetBool("admin-console") || viper.GetBool("service-console") {
-			proxy.ModifyResponse = func(response *http.Response) error {
-				resBody, err := ioutil.ReadAll(response.Body)
-				if err != nil {
-					log.Println("error reading response for webconsole:", err)
-				}
-
-				response.Body = ioutil.NopCloser(bytes.NewBuffer(resBody))
-
-				startTime := c.GetTime("startTime")
-				currentTime := time.Now()
-				diffTime := currentTime.Sub(startTime)
-
-				roundTime := 10 * time.Microsecond
-				if diffTime > time.Second {
-					roundTime = 10 * time.Millisecond
-				}
-
-				if response.Header.Get("Content-Encoding") == "gzip" {
-					gzData := bytes.NewBuffer(resBody)
-					gzReader, err := gzip.NewReader(gzData)
-					if err != nil {
-						log.Println("error reading gzip data:", err)
-					}
-
-					resBody, err = ioutil.ReadAll(gzReader)
-					if err != nil {
-						log.Println("error reading gzip data:", err)
-					}
-				}
-
-				requestHeaders := c.Request.Header.Clone()
-				requestHeaders.Add("Host", hostname)
-
-				data, err := json.Marshal(map[string]interface{}{
-					"startTime":       startTime,
-					"startTimePretty": startTime.Format(viper.GetString("time-format")),
-					"currentTime":     currentTime,
-					"requestIP":       c.ClientIP(),
-					"requestTime":     diffTime.Round(roundTime).String(),
-					"requestMethod":   c.Request.Method,
-					"requestUrl":      c.Request.URL,
-					"requestHeaders":  requestHeaders,
-					"requestBody":     base64.StdEncoding.EncodeToString(reqBody),
-					"responseHeaders": response.Header,
-					"responseCode":    response.StatusCode,
-					"responseStatus":  response.Status,
-					"responseBody":    base64.StdEncoding.EncodeToString(resBody),
-				})
-
-				if err != nil {
-					log.Println("error marshaling json for webconsole:", err)
-				}
-
-				state.Console.BroadcastRoute(hostname, data)
-
-				return nil
-			}
-		}
-
-		gin.WrapH(proxy)(c)
+		gin.WrapH(proxyHolder.Balancer)(c)
 	})
 
 	if viper.GetBool("https") {

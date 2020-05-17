@@ -9,6 +9,6 @@ import (
 func main() {
 	err := cmd.Execute()
 	if err != nil {
-		log.Println("unable to execute root command:", err)
+		log.Println("Unable to execute root command:", err)
 	}
 }

@@ -2,13 +2,11 @@ package sshmuxer
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
@@ -38,35 +36,17 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	}
 
 	bindPort := check.Rport
+	stringPort := strconv.FormatUint(uint64(bindPort), 10)
 
-	handleTCPAliasing := false
+	listenerType := utils.HTTPListener
 	if bindPort != uint32(80) && bindPort != uint32(443) {
-		if viper.GetBool("tcp-aliases") && check.Addr != "localhost" {
-			handleTCPAliasing = true
-		} else {
-			checkedPort, err := utils.CheckPort(check.Rport, viper.GetString("port-bind-range"))
-			if err != nil && !viper.GetBool("bind-random-ports") {
-				err = newRequest.Reply(false, nil)
-				if err != nil {
-					log.Println("Error replying to socket request:", err)
-				}
-				return
-			}
-
-			bindPort = checkedPort
-			if viper.GetBool("bind-random-ports") {
-				bindPort = 0
-
-				if viper.GetString("port-bind-range") != "" {
-					bindPort = utils.GetRandomPortInRange(viper.GetString("port-bind-range"))
-				}
-			}
+		testAddr := net.ParseIP(check.Addr)
+		if viper.GetBool("tcp-aliases") && check.Addr != "localhost" && testAddr == nil {
+			listenerType = utils.AliasListener
+		} else if check.Addr == "localhost" || testAddr != nil {
+			listenerType = utils.TCPListener
 		}
 	}
-
-	stringPort := strconv.FormatUint(uint64(bindPort), 10)
-	listenAddr := ":" + stringPort
-	listenType := "tcp"
 
 	tmpfile, err := ioutil.TempFile("", sshConn.SSHConn.RemoteAddr().String()+":"+stringPort)
 	if err != nil {
@@ -78,12 +58,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	}
 	os.Remove(tmpfile.Name())
 
-	if stringPort == "80" || stringPort == "443" || handleTCPAliasing {
-		listenType = "unix"
-		listenAddr = tmpfile.Name()
-	}
+	listenAddr := tmpfile.Name()
 
-	chanListener, err := net.Listen(listenType, listenAddr)
+	chanListener, err := net.Listen("unix", listenAddr)
 	if err != nil {
 		err = newRequest.Reply(false, nil)
 		if err != nil {
@@ -92,14 +69,21 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		return
 	}
 
-	state.Listeners.Store(chanListener.Addr(), chanListener)
-	sshConn.Listeners.Store(chanListener.Addr(), chanListener)
+	listenerHolder := &utils.ListenerHolder{
+		ListenAddr: listenAddr,
+		Listener:   chanListener,
+		Type:       listenerType,
+		SSHConn:    sshConn,
+	}
+
+	state.Listeners.Store(listenAddr, listenerHolder)
+	sshConn.Listeners.Store(listenAddr, listenerHolder)
 
 	cleanupChanListener := func() {
-		chanListener.Close()
-		state.Listeners.Delete(chanListener.Addr())
-		sshConn.Listeners.Delete(chanListener.Addr())
-		os.Remove(tmpfile.Name())
+		listenerHolder.Close()
+		state.Listeners.Delete(listenAddr)
+		sshConn.Listeners.Delete(listenAddr)
+		os.Remove(listenAddr)
 	}
 
 	defer cleanupChanListener()
@@ -116,113 +100,85 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		connType = "https"
 	}
 
-	requestMessages := fmt.Sprintf("Starting SSH Forwarding service for %s. Forwarded connections can be accessed via the following methods:\r\n", aurora.Sprintf(aurora.Green("%s:%s"), connType, stringPort))
+	mainRequestMessages := fmt.Sprintf("Starting SSH Forwarding service for %s. Forwarded connections can be accessed via the following methods:\r\n", aurora.Sprintf(aurora.Green("%s:%s"), connType, stringPort))
 
-	if stringPort == "80" || stringPort == "443" {
-		scheme := "http"
-		if stringPort == "443" {
-			scheme = "https"
+	switch listenerType {
+	case utils.HTTPListener:
+		pH, serverURL, host, requestMessages, err := handleHTTPListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn)
+		if err != nil {
+			return
 		}
 
-		host := utils.GetOpenHost(check.Addr, state, sshConn)
+		mainRequestMessages = requestMessages
 
-		pH := &utils.ProxyHolder{
-			ProxyHost: host,
-			ProxyTo:   chanListener.Addr().String(),
-			Scheme:    scheme,
-			SSHConn:   sshConn,
-		}
-
-		state.HTTPListeners.Store(host, pH)
-		defer state.HTTPListeners.Delete(host)
-
-		if viper.GetBool("admin-console") || viper.GetBool("service-console") {
-			routeToken := viper.GetString("service-console-token")
-			sendToken := false
-			if routeToken == "" {
-				sendToken = true
-				routeToken = utils.RandStringBytesMaskImprSrc(20)
+		defer func() {
+			err := pH.Balancer.RemoveServer(serverURL)
+			if err != nil {
+				log.Println("Unable to add server to balancer")
 			}
 
-			state.Console.AddRoute(host, routeToken)
-			defer state.Console.RemoveRoute(host)
+			pH.SSHConns.Delete(listenerHolder.Addr().String())
 
-			if viper.GetBool("service-console") && sendToken {
-				scheme := "http"
-				portString := ""
-				if httpPort != 80 {
-					portString = fmt.Sprintf(":%d", httpPort)
+			if len(pH.Balancer.Servers()) == 0 {
+				state.HTTPListeners.Delete(host)
+
+				if viper.GetBool("admin-console") || viper.GetBool("service-console") {
+					state.Console.RemoveRoute(host)
 				}
-
-				if viper.GetBool("https") {
-					scheme = "https"
-					if httpsPort != 443 {
-						portString = fmt.Sprintf(":%d", httpsPort)
-					}
-				}
-
-				consoleURL := fmt.Sprintf("%s://%s%s", scheme, host, portString)
-
-				requestMessages += fmt.Sprintf("Service console can be accessed here: %s/_sish/console?x-authorization=%s\r\n", consoleURL, routeToken)
 			}
+		}()
+	case utils.AliasListener:
+		aH, serverURL, validAlias, requestMessages, err := handleAliasListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn)
+		if err != nil {
+			return
 		}
 
-		httpPortString := ""
-		if httpPort != 80 {
-			httpPortString = fmt.Sprintf(":%d", httpPort)
-		}
+		mainRequestMessages = requestMessages
 
-		requestMessages += fmt.Sprintf("%s: http://%s%s\r\n", aurora.BgBlue("HTTP"), host, httpPortString)
-		log.Printf("%s forwarding started: http://%s%s -> %s for client: %s\n", aurora.BgBlue("HTTP"), host, httpPortString, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
-
-		if viper.GetBool("https") {
-			httpsPortString := ""
-			if httpsPort != 443 {
-				httpsPortString = fmt.Sprintf(":%d", httpsPort)
+		defer func() {
+			err := aH.Balancer.RemoveServer(serverURL)
+			if err != nil {
+				log.Println("Unable to add server to balancer")
 			}
 
-			requestMessages += fmt.Sprintf("%s: https://%s%s\r\n", aurora.BgBlue("HTTPS"), host, httpsPortString)
-			log.Printf("%s forwarding started: https://%s%s -> %s for client: %s\n", aurora.BgBlue("HTTPS"), host, httpPortString, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
-		}
-	} else {
-		if handleTCPAliasing {
-			validAlias := utils.GetOpenAlias(check.Addr, stringPort, state, sshConn)
+			aH.SSHConns.Delete(listenerHolder.Addr().String())
 
-			state.TCPListeners.Store(validAlias, chanListener.Addr().String())
-			defer state.TCPListeners.Delete(validAlias)
-
-			requestMessages += fmt.Sprintf("%s: %s\r\n", aurora.BgBlue("TCP Alias"), validAlias)
-			log.Printf("%s forwarding started: %s -> %s for client: %s\n", aurora.BgBlue("TCP Alias"), validAlias, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
-		} else {
-			requestMessages += fmt.Sprintf("%s: %s:%d\r\n", aurora.BgBlue("TCP"), viper.GetString("domain"), chanListener.Addr().(*net.TCPAddr).Port)
-			log.Printf("%s forwarding started: %s:%d -> %s for client: %s\n", aurora.BgBlue("TCP"), viper.GetString("domain"), chanListener.Addr().(*net.TCPAddr).Port, chanListener.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
+			if len(aH.Balancer.Servers()) == 0 {
+				state.AliasListeners.Delete(validAlias)
+			}
+		}()
+	case utils.TCPListener:
+		tH, serverURL, tcpAddr, requestMessages, err := handleTCPListener(check, bindPort, mainRequestMessages, listenerHolder, state, sshConn)
+		if err != nil {
+			return
 		}
+
+		mainRequestMessages = requestMessages
+
+		go tH.Handle(state)
+
+		defer func() {
+			err := tH.Balancer.RemoveServer(serverURL)
+			if err != nil {
+				log.Println("Unable to add server to balancer")
+			}
+
+			tH.SSHConns.Delete(listenerHolder.Addr().String())
+
+			if len(tH.Balancer.Servers()) == 0 {
+				tH.Listener.Close()
+				state.Listeners.Delete(tcpAddr)
+				state.TCPListeners.Delete(tcpAddr)
+			}
+		}()
 	}
 
-	sshConn.SendMessage(requestMessages, false)
+	sshConn.SendMessage(mainRequestMessages, false)
 
 	for {
-		cl, err := chanListener.Accept()
+		cl, err := listenerHolder.Accept()
 		if err != nil {
 			break
-		}
-
-		if connType == "tcp" {
-			if _, ok := cl.RemoteAddr().(*net.TCPAddr); ok {
-				clientRemote, _, err := net.SplitHostPort(cl.RemoteAddr().String())
-
-				if err != nil || state.IPFilter.Blocked(clientRemote) {
-					cl.Close()
-					continue
-				}
-			}
-
-			logLine := fmt.Sprintf("Accepted connection from %s -> %s", cl.RemoteAddr().String(), sshConn.SSHConn.RemoteAddr().String())
-			log.Println(logLine)
-
-			if viper.GetBool("log-to-client") {
-				sshConn.SendMessage(logLine, true)
-			}
 		}
 
 		resp := &forwardedTCPPayload{
@@ -239,7 +195,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			continue
 		}
 
-		if sshConn.ProxyProto != 0 && (listenType != "unix" || handleTCPAliasing) {
+		if sshConn.ProxyProto != 0 && listenerType == utils.TCPListener {
 			var sourceInfo *net.TCPAddr
 			var destInfo *net.TCPAddr
 			if _, ok := cl.RemoteAddr().(*net.TCPAddr); !ok {
@@ -266,71 +222,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			}
 		}
 
-		go copyBoth(cl, newChan)
+		go utils.CopyBoth(cl, newChan)
 		go ssh.DiscardRequests(newReqs)
 	}
-}
-
-// IdleTimeoutConn handles the connection with a context deadline
-// code adapted from https://qiita.com/kwi/items/b38d6273624ad3f6ae79
-type IdleTimeoutConn struct {
-	Conn net.Conn
-}
-
-// Read is needed to implement the reader part
-func (i IdleTimeoutConn) Read(buf []byte) (int, error) {
-	err := i.Conn.SetReadDeadline(time.Now().Add(viper.GetDuration("idle-connection-timeout")))
-	if err != nil {
-		return 0, err
-	}
-
-	return i.Conn.Read(buf)
-}
-
-// Write is needed to implement the writer part
-func (i IdleTimeoutConn) Write(buf []byte) (int, error) {
-	err := i.Conn.SetWriteDeadline(time.Now().Add(viper.GetDuration("idle-connection-timeout")))
-	if err != nil {
-		return 0, err
-	}
-
-	return i.Conn.Write(buf)
-}
-
-func copyBoth(writer net.Conn, reader ssh.Channel) {
-	closeBoth := func() {
-		reader.Close()
-		writer.Close()
-	}
-
-	var tcon io.ReadWriter
-
-	if viper.GetBool("idle-connection") {
-		tcon = IdleTimeoutConn{
-			Conn: writer,
-		}
-	} else {
-		tcon = writer
-	}
-
-	copyToReader := func() {
-		_, err := io.Copy(reader, tcon)
-		if err != nil && viper.GetBool("debug") {
-			log.Println("Error copying to reader:", err)
-		}
-
-		closeBoth()
-	}
-
-	copyToWriter := func() {
-		_, err := io.Copy(tcon, reader)
-		if err != nil && viper.GetBool("debug") {
-			log.Println("Error copying to writer:", err)
-		}
-
-		closeBoth()
-	}
-
-	go copyToReader()
-	copyToWriter()
 }

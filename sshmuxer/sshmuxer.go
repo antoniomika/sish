@@ -80,7 +80,7 @@ func Start() {
 					return true
 				})
 				log.Println("===TCP Aliases====")
-				state.TCPListeners.Range(func(key, value interface{}) bool {
+				state.AliasListeners.Range(func(key, value interface{}) bool {
 					log.Println(key, value)
 					return true
 				})
@@ -110,11 +110,11 @@ func Start() {
 		log.Fatal(err)
 	}
 
-	state.Listeners.Store(listener.Addr(), listener)
+	state.Listeners.Store(viper.GetString("ssh-address"), listener)
 
 	defer func() {
 		listener.Close()
-		state.Listeners.Delete(listener.Addr())
+		state.Listeners.Delete(viper.GetString("ssh-address"))
 	}()
 
 	c := make(chan os.Signal, 1)
@@ -191,7 +191,7 @@ func Start() {
 			if viper.GetBool("cleanup-unbound") {
 				go func() {
 					select {
-					case <-time.After(1 * time.Second):
+					case <-time.After(viper.GetDuration("cleanup-unbound-timeout")):
 						count := 0
 						holderConn.Listeners.Range(func(key, value interface{}) bool {
 							count++

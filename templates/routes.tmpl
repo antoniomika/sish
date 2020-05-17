@@ -10,6 +10,7 @@
                     <th scope="col">Username</th>
                     <th scope="col">SSH Version</th>
                     <th scope="col">SSH Session ID</th>
+                    <th scope="col">SSH Pubkey Fingerprint</th>
                     <th scope="col">Listeners</th>
                     <th scope="col">Disconnect</th>
                 </tr>
@@ -20,6 +21,7 @@
                     <td data-bind="text: user"></td>
                     <td data-bind="text: version"></td>
                     <td data-bind="text: session"></td>
+                    <td data-bind="text: pubKeyFingerprint"></td>
                     <td data-bind="text: listeners.length"></td>
                     <td><a style="text-transform: none; color: white;" class="btn btn-danger" data-bind="click: disconnectClient">Disconnect</a></td>
                 </tr>
@@ -70,7 +72,7 @@
         this.disconnectType = disconnectType;
 
         this.disconnectRoute = function() {
-            $.get(window.location.href.replace("console", `api/disconnectroute/${this.disconnectType}/${this.name}`), function(data) {
+            $.get(window.location.href.replace("console", `api/disconnectroute/${this.disconnectType}/${btoa(this.data)}`), function(data) {
                 window.location.reload();
             });
         }.bind(this);
@@ -83,6 +85,7 @@
     var Client = function(clientData) {
         this.data = clientData;
 
+        this.pubKeyFingerprint = clientData.pubKeyFingerprint;
         this.remoteAddr = clientData.remoteAddr;
         this.user =clientData.user;
         this.version = clientData.version;

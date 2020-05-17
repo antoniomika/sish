@@ -8,6 +8,7 @@ import (
 	"github.com/antoniomika/sish/sshmuxer"
 	"github.com/antoniomika/sish/utils"
 	"github.com/fsnotify/fsnotify"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -71,7 +72,6 @@ func init() {
 	rootCmd.PersistentFlags().StringP("time-format", "", "2006/01/02 - 15:04:05", "The time format to use for both HTTP and general log messages.")
 
 	rootCmd.PersistentFlags().BoolP("bind-random-subdomains", "", true, "Force bound HTTP tunnels to use random subdomains instead of user provided ones")
-	rootCmd.PersistentFlags().BoolP("verify-origin", "", true, "Verify the request origin on websocket connections")
 	rootCmd.PersistentFlags().BoolP("verify-ssl", "", true, "Verify SSL certificates made on proxied HTTP connections")
 	rootCmd.PersistentFlags().BoolP("verify-dns", "", true, "Verify DNS information for hosts and ensure it matches a connecting users sha256 key fingerprint")
 	rootCmd.PersistentFlags().BoolP("cleanup-unbound", "", true, "Cleanup unbound (unforwarded) SSH connections after a set timeout")
@@ -89,6 +89,10 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("tcp-aliases", "", false, "Enable the use of TCP aliasing")
 	rootCmd.PersistentFlags().BoolP("log-to-client", "", false, "Enable logging HTTP and TCP requests to the client")
 	rootCmd.PersistentFlags().BoolP("idle-connection", "", true, "Enable connection idle timeouts for reads and writes")
+	rootCmd.PersistentFlags().BoolP("http-load-balancer", "", false, "Enable the HTTP load balancer (multiple clients can bind the same domain)")
+	rootCmd.PersistentFlags().BoolP("tcp-load-balancer", "", false, "Enable the TCP load balancer (multiple clients can bind the same port)")
+	rootCmd.PersistentFlags().BoolP("alias-load-balancer", "", false, "Enable the alias load balancer (multiple clients can bind the same alias)")
+	rootCmd.PersistentFlags().BoolP("localhost-as-all", "", true, "Enable forcing localhost to mean all interfaces for tcp listeners")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only")
@@ -105,7 +109,7 @@ func initConfig() {
 
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
 	if err != nil {
-		log.Println("unable to bind pflags:", err)
+		log.Println("Unable to bind pflags:", err)
 	}
 
 	viper.AutomaticEnv()
@@ -123,12 +127,20 @@ func initConfig() {
 		log.SetOutput(logWriter{
 			TimeFmt: viper.GetString("time-format"),
 		})
+
+		if viper.GetBool("debug") {
+			logrus.SetLevel(logrus.DebugLevel)
+		}
 	})
 
 	log.SetFlags(0)
 	log.SetOutput(logWriter{
 		TimeFmt: viper.GetString("time-format"),
 	})
+
+	if viper.GetBool("debug") {
+		logrus.SetLevel(logrus.DebugLevel)
+	}
 
 	utils.Setup()
 }

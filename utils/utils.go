@@ -355,7 +355,11 @@ func inBannedList(host string, bannedList []string) bool {
 }
 
 func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
-	if !viper.GetBool("verify-dns") {
+	if !viper.GetBool("verify-dns") || sshConn.SSHConn.Permissions == nil {
+		return false, "", nil
+	}
+
+	if _, ok := sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"]; !ok {
 		return false, "", nil
 	}
 
@@ -371,17 +375,85 @@ func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
 	return sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"] == dnsPubKeyFingerprint, dnsPubKeyFingerprint, err
 }
 
+// GetOpenPort returns open ports
+func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection) (string, uint32, *TCPHolder) {
+	getUnusedPort := func() (string, uint32, *TCPHolder) {
+		var tH *TCPHolder
+
+		first := true
+		bindPort := port
+		bindAddr := addr
+		listenAddr := ""
+
+		if bindAddr == "localhost" && viper.GetBool("localhost-as-all") {
+			bindAddr = ""
+		}
+
+		reportUnavailable := func(unavailable bool) {
+			if first && unavailable {
+				sshConn.SendMessage(aurora.Sprintf("The TCP port %s is unavaible. Assigning a random port.", aurora.Red(listenAddr)), true)
+			}
+		}
+
+		checkPort := func(checkerAddr string, checkerPort uint32) bool {
+			listenAddr = fmt.Sprintf("%s:%d", bindAddr, bindPort)
+			checkedPort, err := CheckPort(checkerPort, viper.GetString("port-bind-range"))
+			if err == nil && !viper.GetBool("tcp-load-balancer") {
+				ln, listenErr := net.Listen("tcp", fmt.Sprintf(":%d", port))
+				if listenErr != nil {
+					err = listenErr
+				} else {
+					ln.Close()
+				}
+			}
+
+			if viper.GetBool("bind-random-ports") || !first || err != nil {
+				reportUnavailable(true)
+
+				if viper.GetString("port-bind-range") != "" {
+					bindPort = GetRandomPortInRange(viper.GetString("port-bind-range"))
+				} else {
+					bindPort = 0
+				}
+			} else {
+				bindPort = checkedPort
+			}
+
+			listenAddr = fmt.Sprintf("%s:%d", bindAddr, bindPort)
+			holder, ok := state.TCPListeners.Load(listenAddr)
+			if ok && viper.GetBool("tcp-load-balancer") {
+				tH = holder.(*TCPHolder)
+				ok = false
+			}
+
+			reportUnavailable(ok)
+
+			first = false
+			return ok
+		}
+
+		for checkPort(bindAddr, bindPort) {
+		}
+
+		return listenAddr, bindPort, tH
+	}
+
+	return getUnusedPort()
+}
+
 // GetOpenHost returns a random open host
-func GetOpenHost(addr string, state *State, sshConn *SSHConnection) string {
+func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HTTPHolder) {
 	dnsMatch, _, err := verifyDNS(addr, sshConn)
 	if err != nil && viper.GetBool("debug") {
 		log.Println("Error looking up txt records for domain:", addr)
 	}
 
-	getUnusedHost := func() string {
-		first := true
+	getUnusedHost := func() (string, *HTTPHolder) {
+		var pH *HTTPHolder
 
+		first := true
 		hostExtension := ""
+
 		if viper.GetBool("append-user-to-subdomain") {
 			hostExtension = viper.GetString("append-user-to-subdomain-separator") + sshConn.SSHConn.User()
 		}
@@ -396,6 +468,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 		getRandomHost := func() string {
 			return strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("bind-random-subdomains-length")) + "." + viper.GetString("domain"))
 		}
+
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
 				sshConn.SendMessage(aurora.Sprintf("The subdomain %s is unavailable. Assigning a random subdomain.", aurora.Red(host)), true)
@@ -408,7 +481,12 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 				host = getRandomHost()
 			}
 
-			_, ok := state.HTTPListeners.Load(host)
+			holder, ok := state.HTTPListeners.Load(host)
+			if ok && viper.GetBool("http-load-balancer") {
+				pH = holder.(*HTTPHolder)
+				ok = false
+			}
+
 			reportUnavailable(ok)
 
 			first = false
@@ -418,20 +496,24 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) string {
 		for checkHost(host) {
 		}
 
-		return host
+		return host, pH
 	}
 
 	return getUnusedHost()
 }
 
 // GetOpenAlias returns open aliases
-func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection) string {
-	getUnusedAlias := func() string {
+func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection) (string, *AliasHolder) {
+	getUnusedAlias := func() (string, *AliasHolder) {
+		var aH *AliasHolder
+
 		first := true
 		alias := fmt.Sprintf("%s:%s", strings.ToLower(addr), port)
+
 		getRandomAlias := func() string {
 			return fmt.Sprintf("%s:%s", strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("bind-random-subdomains-length"))), port)
 		}
+
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
 				sshConn.SendMessage(aurora.Sprintf("The alias %s is unavaible. Assigning a random alias.", aurora.Red(alias)), true)
@@ -444,7 +526,12 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 				alias = getRandomAlias()
 			}
 
-			_, ok := state.TCPListeners.Load(alias)
+			holder, ok := state.AliasListeners.Load(alias)
+			if ok && viper.GetBool("alias-load-balancer") {
+				aH = holder.(*AliasHolder)
+				ok = false
+			}
+
 			reportUnavailable(ok)
 
 			first = false
@@ -454,7 +541,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 		for checkAlias(alias) {
 		}
 
-		return alias
+		return alias, aH
 	}
 
 	return getUnusedAlias()

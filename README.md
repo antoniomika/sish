@@ -133,6 +133,7 @@ Usage:
 Flags:
       --admin-console                               Enable the admin console accessible at http(s)://domain/_sish/console?x-authorization=admin-console-token
   -j, --admin-console-token string                  The token to use for admin console access if it's enabled (default "S3Cr3tP4$$W0rD")
+      --alias-load-balancer                         Enable the alias load balancer (multiple clients can bind the same alias)
       --append-user-to-subdomain                    Append the SSH user to the subdomain. This is useful in multitenant environments
       --append-user-to-subdomain-separator string   The token to use for separating username and subdomain selection in a virtualhost (default "-")
       --authentication                              Require authentication for the SSH service
@@ -154,6 +155,7 @@ Flags:
       --geodb                                       Use a geodb to verify country IP address association for IP filtering
   -h, --help                                        help for sish
   -i, --http-address string                         The address to listen for HTTP connections (default "localhost:80")
+      --http-load-balancer                          Enable the HTTP load balancer (multiple clients can bind the same domain)
       --http-port-override int                      The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only
       --https                                       Listen for HTTPS connections. Requires a correct --https-certificate-directory
   -t, --https-address string                        The address to listen for HTTPS connections (default "localhost:443")
@@ -161,6 +163,7 @@ Flags:
       --https-port-override int                     The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only
       --idle-connection                             Enable connection idle timeouts for reads and writes (default true)
       --idle-connection-timeout duration            Duration to wait for activity before closing a connection for all reads and writes (default 5s)
+      --localhost-as-all                            Enable forcing localhost to mean all interfaces for tcp listeners (default true)
       --log-to-client                               Enable logging HTTP and TCP requests to the client
       --ping-client                                 Send ping requests to the underlying SSH client.
                                                     This is useful to ensure that SSH connections are kept open or close cleanly (default true)
@@ -180,8 +183,9 @@ Flags:
   -m, --service-console-token string                The token to use for service console access. Auto generated if empty for each connected tunnel
   -a, --ssh-address string                          The address to listen for SSH connections (default "localhost:2222")
       --tcp-aliases                                 Enable the use of TCP aliasing
+      --tcp-load-balancer                           Enable the TCP load balancer (multiple clients can bind the same port)
       --time-format string                          The time format to use for both HTTP and general log messages. (default "2006/01/02 - 15:04:05")
-      --verify-origin                               Verify the request origin on websocket connections (default true)
+      --verify-dns                                  Verify DNS information for hosts and ensure it matches a connecting users sha256 key fingerprint (default true)
       --verify-ssl                                  Verify SSL certificates made on proxied HTTP connections (default true)
   -v, --version                                     version for sish
   -y, --whitelisted-countries string                A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections

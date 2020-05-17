@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net"
@@ -16,14 +17,6 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-}
-
-// ProxyHolder holds proxy and connection info
-type ProxyHolder struct {
-	ProxyHost string
-	ProxyTo   string
-	Scheme    string
-	SSHConn   *SSHConnection
 }
 
 // WebClient represents a primitive web console client
@@ -156,64 +149,29 @@ func (c *WebConsole) HandleDisconnectClient(hostname string, g *gin.Context) {
 // HandleDisconnectRoute handles the disconnection request for a route
 func (c *WebConsole) HandleDisconnectRoute(hostname string, g *gin.Context) {
 	route := strings.Split(strings.TrimPrefix(g.Request.URL.Path, "/_sish/api/disconnectroute/"), "/")
-	routeType := route[0]
-	routeName := route[1]
+	encRouteName := route[1]
 
-	var listenerAddr string
+	decRouteName, err := base64.StdEncoding.DecodeString(encRouteName)
+	if err != nil {
+		log.Println("Error decoding route name:", err)
+		err := g.AbortWithError(http.StatusInternalServerError, err)
 
-	switch routeType {
-	case "tcpalias":
-		c.State.TCPListeners.Range(func(key interface{}, val interface{}) bool {
-			tcpAlias := key.(string)
-			if routeName == tcpAlias {
-				listenerAddr = val.(string)
-			}
-
-			return true
-		})
-	case "httplistener":
-		c.State.HTTPListeners.Range(func(key interface{}, val interface{}) bool {
-			httpListener := key.(string)
-			if routeName == httpListener {
-				listenerAddrTmp := val.(*ProxyHolder)
-				listenerAddr = listenerAddrTmp.ProxyTo
-			}
-
-			return true
-		})
+		if err != nil {
+			log.Println("Error aborting with error:", err)
+		}
+		return
 	}
 
-	if listenerAddr == "" {
-		listenerAddr = routeName
+	routeName := string(decRouteName)
+
+	listenerTmp, ok := c.State.Listeners.Load(routeName)
+	if ok {
+		listener, ok := listenerTmp.(*ListenerHolder)
+
+		if ok {
+			listener.Close()
+		}
 	}
-
-	c.State.Listeners.Range(func(key interface{}, val interface{}) bool {
-		var tcpListener *net.TCPAddr
-		unixListener, ok := key.(*net.UnixAddr)
-		if !ok {
-			tcpListener = key.(*net.TCPAddr)
-		}
-
-		var name string
-
-		if unixListener != nil {
-			name = unixListener.String()
-		} else {
-			name = tcpListener.String()
-		}
-
-		if listenerAddr == name {
-			if unixListener != nil {
-				actualUnixListener := val.(*net.UnixListener)
-				actualUnixListener.Close()
-			} else {
-				actualTCPListener := val.(*net.TCPListener)
-				actualTCPListener.Close()
-			}
-		}
-
-		return true
-	})
 
 	data := map[string]interface{}{
 		"status": true,
@@ -253,80 +211,85 @@ func (c *WebConsole) HandleClients(hostname string, g *gin.Context) {
 		sshConn := val.(*SSHConnection)
 
 		listeners := []string{}
-		routeListeners := map[string]map[string]string{}
+		routeListeners := map[string]map[string]interface{}{}
 
 		sshConn.Listeners.Range(func(key interface{}, val interface{}) bool {
-			var tcpListener *net.TCPAddr
-			unixListener, ok := key.(*net.UnixAddr)
-			if !ok {
-				tcpListener = key.(*net.TCPAddr)
-			}
-
-			var name string
+			name, ok := key.(string)
 
 			if ok {
-				name = unixListener.String()
-			} else {
-				name = tcpListener.String()
+				listeners = append(listeners, name)
 			}
-
-			altName, ok := val.(string)
-			if ok {
-				name = altName
-			}
-
-			listeners = append(listeners, name)
 
 			return true
 		})
 
-		tcpAliases := map[string]string{}
+		tcpAliases := map[string]interface{}{}
+		c.State.AliasListeners.Range(func(key interface{}, val interface{}) bool {
+			tcpAlias := key.(string)
+			aliasHolder := val.(*AliasHolder)
+
+			for _, v := range listeners {
+				for _, server := range aliasHolder.Balancer.Servers() {
+					serverAddr, err := base64.StdEncoding.DecodeString(server.Host)
+					if err != nil {
+						log.Println("Error decoding server host:", err)
+						continue
+					}
+
+					aliasAddress := string(serverAddr)
+
+					if v == aliasAddress {
+						tcpAliases[tcpAlias] = aliasAddress
+					}
+				}
+			}
+
+			return true
+		})
+
+		listenerParts := map[string]interface{}{}
 		c.State.TCPListeners.Range(func(key interface{}, val interface{}) bool {
 			tcpAlias := key.(string)
-			aliasAddress := val.(string)
+			aliasHolder := val.(*TCPHolder)
 
 			for _, v := range listeners {
-				if v == aliasAddress {
-					tcpAliases[tcpAlias] = aliasAddress
+				for _, server := range aliasHolder.Balancer.Servers() {
+					serverAddr, err := base64.StdEncoding.DecodeString(server.Host)
+					if err != nil {
+						log.Println("Error decoding server host:", err)
+						continue
+					}
+
+					aliasAddress := string(serverAddr)
+
+					if v == aliasAddress {
+						listenerParts[tcpAlias] = aliasAddress
+					}
 				}
 			}
 
 			return true
 		})
 
-		listenerParts := map[string]string{}
-		c.State.Listeners.Range(func(key interface{}, val interface{}) bool {
-			var tcpListener *net.TCPAddr
-			unixListener, ok := key.(*net.UnixAddr)
-			if !ok {
-				tcpListener = key.(*net.TCPAddr)
-			}
-
-			var addr string
-			if unixListener != nil {
-				addr = unixListener.String()
-			} else {
-				addr = tcpListener.String()
-			}
-
-			for _, v := range listeners {
-				if v == addr {
-					listenerParts[addr] = addr
-				}
-			}
-
-			return true
-		})
-
-		httpListeners := map[string]string{}
+		httpListeners := map[string]interface{}{}
 		c.State.HTTPListeners.Range(func(key interface{}, val interface{}) bool {
 			httpListener := key.(string)
-			aliasAddress := val.(*ProxyHolder)
+			aliasAddress := val.(*HTTPHolder)
 
-			for _, v := range listeners {
-				if v == aliasAddress.ProxyTo {
-					httpListeners[httpListener] = aliasAddress.ProxyTo
+			listenerHandlers := []string{}
+			aliasAddress.SSHConns.Range(func(key interface{}, val interface{}) bool {
+				aliasAddr := key.(string)
+
+				for _, v := range listeners {
+					if v == aliasAddr {
+						listenerHandlers = append(listenerHandlers, aliasAddr)
+					}
 				}
+				return true
+			})
+
+			if len(listenerHandlers) > 0 {
+				httpListeners[httpListener] = listenerHandlers
 			}
 
 			return true
@@ -336,13 +299,24 @@ func (c *WebConsole) HandleClients(hostname string, g *gin.Context) {
 		routeListeners["listeners"] = listenerParts
 		routeListeners["httpListeners"] = httpListeners
 
+		pubKey := ""
+		pubKeyFingerprint := ""
+		if sshConn.SSHConn.Permissions != nil {
+			if _, ok := sshConn.SSHConn.Permissions.Extensions["pubKey"]; ok {
+				pubKey = sshConn.SSHConn.Permissions.Extensions["pubKey"]
+				pubKeyFingerprint = sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"]
+			}
+		}
+
 		clients[clientName.String()] = map[string]interface{}{
-			"remoteAddr":     sshConn.SSHConn.RemoteAddr().String(),
-			"user":           sshConn.SSHConn.User(),
-			"version":        string(sshConn.SSHConn.ClientVersion()),
-			"session":        sshConn.SSHConn.SessionID(),
-			"listeners":      listeners,
-			"routeListeners": routeListeners,
+			"remoteAddr":        sshConn.SSHConn.RemoteAddr().String(),
+			"user":              sshConn.SSHConn.User(),
+			"version":           string(sshConn.SSHConn.ClientVersion()),
+			"session":           sshConn.SSHConn.SessionID(),
+			"pubKey":            pubKey,
+			"pubKeyFingerprint": pubKeyFingerprint,
+			"listeners":         listeners,
+			"routeListeners":    routeListeners,
 		}
 
 		return true
@@ -360,7 +334,7 @@ func (c *WebConsole) HandleAllRoutes(hostname string, g *gin.Context) {
 	}
 
 	tcpAliases := []string{}
-	c.State.TCPListeners.Range(func(key interface{}, val interface{}) bool {
+	c.State.AliasListeners.Range(func(key interface{}, val interface{}) bool {
 		tcpAlias := key.(string)
 		tcpAliases = append(tcpAliases, tcpAlias)
 
@@ -399,9 +373,21 @@ func (c *WebConsole) HandleAllRoutes(hostname string, g *gin.Context) {
 	g.JSON(http.StatusOK, data)
 }
 
+// RouteToken returns the route token for a specific route
+func (c *WebConsole) RouteToken(route string) (string, bool) {
+	token, ok := c.RouteTokens.Load(route)
+	routeToken := ""
+
+	if ok {
+		routeToken = token.(string)
+	}
+
+	return routeToken, ok
+}
+
 // RouteExists check if a route exists
 func (c *WebConsole) RouteExists(route string) bool {
-	_, ok := c.Clients.Load(route)
+	_, ok := c.RouteToken(route)
 	return ok
 }
 
@@ -526,6 +512,6 @@ func (c *WebClient) Handle() {
 
 	err := c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 	if err != nil {
-		log.Println("error writing to websocket:", err)
+		log.Println("Error writing to websocket:", err)
 	}
 }

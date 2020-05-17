@@ -1,6 +1,7 @@
 package sshmuxer
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -110,23 +111,64 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 	}
 
 	tcpAliasToConnect := fmt.Sprintf("%s:%d", check.Addr, check.Port)
-	loc, ok := state.TCPListeners.Load(tcpAliasToConnect)
+	loc, ok := state.AliasListeners.Load(tcpAliasToConnect)
 	if !ok {
 		log.Println("Unable to load tcp alias:", tcpAliasToConnect)
 		sshConn.CleanUp(state)
 		return
 	}
 
-	conn, err := net.Dial("unix", loc.(string))
+	aH := loc.(*utils.AliasHolder)
+
+	connectionLocation, err := aH.Balancer.NextServer()
+	if err != nil {
+		log.Println("Unable to load connection location:", err)
+		sshConn.CleanUp(state)
+		return
+	}
+
+	host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
+	if err != nil {
+		log.Println("Unable to decode connection location:", err)
+		sshConn.CleanUp(state)
+		return
+	}
+
+	aliasAddr := string(host)
+
+	logLine := fmt.Sprintf("Accepted connection from %s -> %s", sshConn.SSHConn.RemoteAddr().String(), tcpAliasToConnect)
+	log.Println(logLine)
+
+	if viper.GetBool("log-to-client") {
+		aH.SSHConns.Range(func(key, val interface{}) bool {
+			sshConn := val.(*utils.SSHConnection)
+
+			sshConn.Listeners.Range(func(key, val interface{}) bool {
+				listenerAddr := key.(string)
+
+				if listenerAddr == aliasAddr {
+					sshConn.SendMessage(logLine, true)
+
+					return false
+				}
+
+				return true
+			})
+
+			return true
+		})
+	}
+
+	conn, err := net.Dial("unix", aliasAddr)
 	if err != nil {
 		log.Println("Error connecting to alias:", err)
 		sshConn.CleanUp(state)
 		return
 	}
 
-	sshConn.Listeners.Store(conn.RemoteAddr(), conn)
+	sshConn.Listeners.Store(aliasAddr, conn)
 
-	copyBoth(conn, connection)
+	utils.CopyBoth(conn, connection)
 
 	select {
 	case <-sshConn.Close:

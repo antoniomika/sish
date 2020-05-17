@@ -1,5 +1,6 @@
 admin-console: false
 admin-console-token: S3Cr3tP4$$W0rD
+alias-load-balancer: false
 append-user-to-subdomain: false
 append-user-to-subdomain-separator: '-'
 authentication: false
@@ -18,6 +19,7 @@ debug: false
 domain: ssi.sh
 geodb: false
 http-address: localhost:80
+http-load-balancer: false
 http-port-override: 0
 https: false
 https-address: localhost:443
@@ -25,6 +27,7 @@ https-certificate-directory: deploy/ssl/
 https-port-override: 0
 idle-connection: true
 idle-connection-timeout: 5s
+localhost-as-all: true
 log-to-client: false
 ping-client: true
 ping-client-interval: 5s
@@ -40,8 +43,9 @@ service-console: false
 service-console-token: ""
 ssh-address: localhost:2222
 tcp-aliases: false
+tcp-load-balancer: false
 time-format: 2006/01/02 - 15:04:05
-verify-origin: true
+verify-dns: true
 verify-ssl: true
 whitelisted-countries: ""
 whitelisted-ips: ""
