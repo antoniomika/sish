@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/base64"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"sync"
@@ -136,6 +137,7 @@ type State struct {
 	AliasListeners *sync.Map
 	TCPListeners   *sync.Map
 	IPFilter       *ipfilter.IPFilter
+	LogWriter      io.Writer
 }
 
 // NewState returns a new state struct
@@ -148,5 +150,6 @@ func NewState() *State {
 		TCPListeners:   &sync.Map{},
 		IPFilter:       Filter,
 		Console:        NewWebConsole(),
+		LogWriter:      multiWriter,
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	mathrand "math/rand"
@@ -38,10 +39,13 @@ var (
 	certHolder          = make([]ssh.PublicKey, 0)
 	holderLock          = sync.Mutex{}
 	bannedSubdomainList = []string{""}
+	multiWriter         io.Writer
 )
 
 // Setup main utils
-func Setup() {
+func Setup(logWriter io.Writer) {
+	multiWriter = logWriter
+
 	upperList := func(stringList string) []string {
 		list := strings.FieldsFunc(stringList, CommaSplitFields)
 		for k, v := range list {

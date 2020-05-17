@@ -1,7 +1,7 @@
 module github.com/antoniomika/sish
 
 require (
-	github.com/antoniomika/oxy v1.1.1-0.20200517061651-1c954f761f98
+	github.com/antoniomika/oxy v1.1.1-0.20200517194743-bedd7c62c77e
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/gin-gonic/gin v1.6.3
 	github.com/golang/protobuf v1.4.2 // indirect
@@ -25,6 +25,7 @@ require (
 	golang.org/x/sys v0.0.0-20200515095857-1151b9dac4a9 // indirect
 	gopkg.in/ini.v1 v1.56.0 // indirect
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.3.0 // indirect
 )
 

@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"log"
+	"os"
 	"time"
 
 	"github.com/antoniomika/sish/sshmuxer"
@@ -11,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
@@ -35,11 +38,12 @@ var (
 )
 
 type logWriter struct {
-	TimeFmt string
+	TimeFmt     string
+	MultiWriter io.Writer
 }
 
 func (w logWriter) Write(bytes []byte) (int, error) {
-	return fmt.Printf("%v | %s", time.Now().Format(w.TimeFmt), string(bytes))
+	return fmt.Fprintf(w.MultiWriter, "%v | %s", time.Now().Format(w.TimeFmt), string(bytes))
 }
 
 func init() {
@@ -70,6 +74,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("service-console-token", "m", "", "The token to use for service console access. Auto generated if empty for each connected tunnel")
 	rootCmd.PersistentFlags().StringP("append-user-to-subdomain-separator", "", "-", "The token to use for separating username and subdomain selection in a virtualhost")
 	rootCmd.PersistentFlags().StringP("time-format", "", "2006/01/02 - 15:04:05", "The time format to use for both HTTP and general log messages.")
+	rootCmd.PersistentFlags().StringP("log-to-file-path", "", "/tmp/sish.log", "The file to write log output to.")
 
 	rootCmd.PersistentFlags().BoolP("bind-random-subdomains", "", true, "Force bound HTTP tunnels to use random subdomains instead of user provided ones")
 	rootCmd.PersistentFlags().BoolP("verify-ssl", "", true, "Verify SSL certificates made on proxied HTTP connections")
@@ -93,10 +98,16 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("tcp-load-balancer", "", false, "Enable the TCP load balancer (multiple clients can bind the same port)")
 	rootCmd.PersistentFlags().BoolP("alias-load-balancer", "", false, "Enable the alias load balancer (multiple clients can bind the same alias)")
 	rootCmd.PersistentFlags().BoolP("localhost-as-all", "", true, "Enable forcing localhost to mean all interfaces for tcp listeners")
+	rootCmd.PersistentFlags().BoolP("log-to-stdout", "", true, "Whether or not to write log output to stdout")
+	rootCmd.PersistentFlags().BoolP("log-to-file", "", false, "Whether or not to write log output to file, specified by log-to-file-path")
+	rootCmd.PersistentFlags().BoolP("log-to-file-compress", "", false, "Whether or not to compress log output files")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("bind-random-subdomains-length", "", 3, "The length of the random subdomain to generate if a subdomain is unavailable or if random subdomains are enforced")
+	rootCmd.PersistentFlags().IntP("log-to-file-max-size", "", 500, "The maximum size of outputed log files in megabytes.")
+	rootCmd.PersistentFlags().IntP("log-to-file-max-backups", "", 3, "The maxium number of rotated logs files to keep.")
+	rootCmd.PersistentFlags().IntP("log-to-file-max-age", "", 28, "The maxium number of days to store log output in a file.")
 
 	rootCmd.PersistentFlags().DurationP("idle-connection-timeout", "", 5*time.Second, "Duration to wait for activity before closing a connection for all reads and writes")
 	rootCmd.PersistentFlags().DurationP("ping-client-interval", "", 5*time.Second, "Duration representing an interval to ping a client to ensure it is up")
@@ -120,12 +131,31 @@ func initConfig() {
 
 	viper.WatchConfig()
 
+	writers := []io.Writer{}
+
+	if viper.GetBool("log-to-stdout") {
+		writers = append(writers, os.Stdout)
+	}
+
+	if viper.GetBool("log-to-file") {
+		writers = append(writers, &lumberjack.Logger{
+			Filename:   viper.GetString("log-to-file-path"),
+			MaxSize:    viper.GetInt("log-to-file-max-size"),
+			MaxBackups: viper.GetInt("log-to-file-max-backups"),
+			MaxAge:     viper.GetInt("log-to-file-max-age"),
+			Compress:   viper.GetBool("log-to-file-compress"),
+		})
+	}
+
+	multiWriter := io.MultiWriter(writers...)
+
 	viper.OnConfigChange(func(e fsnotify.Event) {
 		log.Println("Reloaded configuration file.")
 
 		log.SetFlags(0)
 		log.SetOutput(logWriter{
-			TimeFmt: viper.GetString("time-format"),
+			TimeFmt:     viper.GetString("time-format"),
+			MultiWriter: multiWriter,
 		})
 
 		if viper.GetBool("debug") {
@@ -135,14 +165,17 @@ func initConfig() {
 
 	log.SetFlags(0)
 	log.SetOutput(logWriter{
-		TimeFmt: viper.GetString("time-format"),
+		TimeFmt:     viper.GetString("time-format"),
+		MultiWriter: multiWriter,
 	})
 
 	if viper.GetBool("debug") {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
-	utils.Setup()
+	logrus.SetOutput(multiWriter)
+
+	utils.Setup(multiWriter)
 }
 
 // Execute executes the root command.

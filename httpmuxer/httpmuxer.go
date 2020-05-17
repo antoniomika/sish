@@ -25,7 +25,7 @@ func Start(state *utils.State) {
 		releaseMode = gin.DebugMode
 	}
 	gin.SetMode(releaseMode)
-
+	gin.DefaultWriter = state.LogWriter
 	gin.ForceConsoleColor()
 
 	r := gin.New()
