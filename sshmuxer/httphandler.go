@@ -29,7 +29,7 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 		fwd, err := forward.New(
 			forward.PassHostHeader(true),
 			forward.RoundTripper(rT),
-			// lint:ignore SA1019 Use dialer for now
+			//lint:ignore SA1019 Use dialer for now
 			forward.WebsocketDialer(rT.Dial),
 		)
 
