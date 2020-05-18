@@ -37,7 +37,6 @@ jobs:
 
         docker buildx build \
           --push \
-          --squash \
           --platform linux/arm/v7,linux/arm64,linux/amd64 \
           --cache-to type=registry,ref=${GITHUB_REPOSITORY}-cache,mode=max \
           --cache-from ${GITHUB_REPOSITORY}-cache \
