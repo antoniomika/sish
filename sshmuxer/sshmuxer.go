@@ -12,6 +12,7 @@ import (
 
 	"github.com/antoniomika/sish/httpmuxer"
 	"github.com/antoniomika/sish/utils"
+	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
@@ -105,9 +106,13 @@ func Start() {
 
 	sshConfig := utils.GetSSHConfig()
 
-	listener, err := net.Listen("tcp", viper.GetString("ssh-address"))
+	l, err := net.Listen("tcp", viper.GetString("ssh-address"))
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	listener := &proxyproto.Listener{
+		Listener: l,
 	}
 
 	state.Listeners.Store(viper.GetString("ssh-address"), listener)

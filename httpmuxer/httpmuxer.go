@@ -14,6 +14,7 @@ import (
 	"github.com/antoniomika/oxy/forward"
 	"github.com/antoniomika/sish/utils"
 	"github.com/caddyserver/certmagic"
+	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
 
 	"github.com/gin-gonic/gin"
@@ -170,15 +171,43 @@ func Start(state *utils.State) {
 			log.Println("Error loading unmanaged certificates:", err)
 		}
 
-		s := &http.Server{
+		httpsServer := &http.Server{
 			Addr:      viper.GetString("https-address"),
 			TLSConfig: certManager.TLSConfig(),
 			Handler:   r,
 		}
 
 		go func() {
-			log.Fatal(s.ListenAndServeTLS("", ""))
+			l, err := net.Listen("tcp", httpsServer.Addr)
+			if err != nil {
+				log.Fatalf("couldn't listen to %q: %q\n", httpsServer.Addr, err.Error())
+			}
+
+			httpsListener := &proxyproto.Listener{
+				Listener: l,
+			}
+
+			defer httpsListener.Close()
+
+			log.Fatal(httpsServer.ServeTLS(httpsListener, "", ""))
 		}()
 	}
-	log.Fatal(r.Run(viper.GetString("http-address")))
+
+	httpServer := &http.Server{
+		Addr:    viper.GetString("http-address"),
+		Handler: r,
+	}
+
+	l, err := net.Listen("tcp", httpServer.Addr)
+	if err != nil {
+		log.Fatalf("couldn't listen to %q: %q\n", httpServer.Addr, err.Error())
+	}
+
+	httpsListener := &proxyproto.Listener{
+		Listener: l,
+	}
+
+	defer httpsListener.Close()
+
+	log.Fatal(httpServer.Serve(httpsListener))
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/antoniomika/oxy/roundrobin"
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
+	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
 )
 
@@ -31,10 +32,14 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 			Balancer: lb,
 		}
 
-		ln, err := net.Listen("tcp", tcpAddr)
+		l, err := net.Listen("tcp", tcpAddr)
 		if err != nil {
 			log.Println("Error listening on addr:", err)
 			return nil, nil, "", "", err
+		}
+
+		ln := &proxyproto.Listener{
+			Listener: l,
 		}
 
 		tH.Listener = ln

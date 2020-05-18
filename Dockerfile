@@ -6,7 +6,7 @@ ENV CGO_ENABLED 0
 
 WORKDIR /app
 
-RUN apk add --no-cache git
+RUN apk add --no-cache git ca-certificates
 
 COPY go.mod .
 COPY go.sum .
@@ -28,6 +28,7 @@ LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 WORKDIR /app
 
 COPY --from=builder /tmp /tmp
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /app/deploy/pubkeys /app/deploy/pubkeys
 COPY --from=builder /app/templates /app/templates
 COPY --from=builder /go/bin/sish /app/sish
