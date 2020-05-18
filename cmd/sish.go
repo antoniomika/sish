@@ -58,6 +58,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("https-address", "t", "localhost:443", "The address to listen for HTTPS connections")
 	rootCmd.PersistentFlags().StringP("redirect-root-location", "r", "https://github.com/antoniomika/sish", "The location to redirect requests to the root domain\nto instead of responding with a 404")
 	rootCmd.PersistentFlags().StringP("https-certificate-directory", "s", "deploy/ssl/", "The directory containing HTTPS certificate files (fullchain.pem and privkey.pem)")
+	rootCmd.PersistentFlags().StringP("https-ondemand-certificate-email", "", "", "The email to use with Let's Encrypt for cert notifications. Can be left blank")
 	rootCmd.PersistentFlags().StringP("domain", "d", "ssi.sh", "The root domain for HTTP(S) multiplexing that will be appended to subdomains")
 	rootCmd.PersistentFlags().StringP("banned-subdomains", "b", "localhost", "A comma separated list of banned subdomains that users are unable to bind")
 	rootCmd.PersistentFlags().StringP("banned-ips", "x", "", "A comma separated list of banned ips that are unable to access the service. Applies to HTTP, TCP, and SSH connections")
@@ -102,6 +103,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("log-to-file", "", false, "Enable writing log output to file, specified by log-to-file-path")
 	rootCmd.PersistentFlags().BoolP("log-to-file-compress", "", false, "Enable compressing log output files")
 	rootCmd.PersistentFlags().BoolP("https-ondemand-certificate", "", false, "Enable retrieving certificates on demand via Let's Encrypt")
+	rootCmd.PersistentFlags().BoolP("https-ondemand-certificate-accept-terms", "", false, "Accept the Let's Encrypt terms")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only")

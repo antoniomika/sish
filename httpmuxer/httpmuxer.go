@@ -141,6 +141,13 @@ func Start(state *utils.State) {
 	if viper.GetBool("https") {
 		certManager := certmagic.NewDefault()
 
+		acmeManager := certmagic.NewACMEManager(certManager, certmagic.DefaultACME)
+
+		acmeManager.Agreed = viper.GetBool("https-ondemand-certificate-accept-tos")
+		acmeManager.Email = viper.GetString("https-ondemand-certificate-email")
+
+		certManager.Issuer = acmeManager
+
 		certManager.Storage = &certmagic.FileStorage{
 			Path: filepath.Join(viper.GetString("https-certificate-directory"), "certmagic"),
 		}
