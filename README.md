@@ -247,6 +247,8 @@ Flags:
   -t, --https-address string                        The address to listen for HTTPS connections (default "localhost:443")
   -s, --https-certificate-directory string          The directory containing HTTPS certificate files (fullchain.pem and privkey.pem) (default "deploy/ssl/")
       --https-ondemand-certificate                  Enable retrieving certificates on demand via Let's Encrypt
+      --https-ondemand-certificate-accept-terms     Accept the Let's Encrypt terms
+      --https-ondemand-certificate-email string     The email to use with Let's Encrypt for cert notifications. Can be left blank
       --https-port-override int                     The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only
       --idle-connection                             Enable connection idle timeouts for reads and writes (default true)
       --idle-connection-timeout duration            Duration to wait for activity before closing a connection for all reads and writes (default 5s)

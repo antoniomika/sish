@@ -1,3 +1,5 @@
+/.dockerignore
+/Dockerfile
 /.git/
 /.github/
 /.gitignore

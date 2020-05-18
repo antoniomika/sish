@@ -143,7 +143,7 @@ func Start(state *utils.State) {
 
 		acmeManager := certmagic.NewACMEManager(certManager, certmagic.DefaultACME)
 
-		acmeManager.Agreed = viper.GetBool("https-ondemand-certificate-accept-tos")
+		acmeManager.Agreed = viper.GetBool("https-ondemand-certificate-accept-terms")
 		acmeManager.Email = viper.GetString("https-ondemand-certificate-email")
 
 		certManager.Issuer = acmeManager
