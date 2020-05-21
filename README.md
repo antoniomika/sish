@@ -96,7 +96,7 @@ I can use an SSH command on my laptop like so to forward the connection:
 ssh -R 2222:localhost:22 ssi.sh
 ```
 
-I can use the forwarded connection access my laptop from anywhere:
+I can use the forwarded connection to then access my laptop from anywhere:
 
 ```bash
 ssh -p 2222 ssi.sh
@@ -117,7 +117,7 @@ ssh -R mylaptop:22:localhost:22 ssi.sh
 
 sish won't publish port 22 or 2222 to the rest of the world anymore, instead it'll retain a pointer saying that TCP connections
 made from within SSH after a user has authenticated to `mylaptop:22` should be forwarded to the forwarded TCP tunnel.
-And then access then I can use the forwarded connection access my laptop from anywhere using:
+Then I can use the forwarded connection access my laptop from anywhere using:
 
 ```bash
 ssh -o ProxyCommand="ssh -W %h:%p ssi.sh" mylaptop
@@ -126,7 +126,7 @@ ssh -o ProxyCommand="ssh -W %h:%p ssi.sh" mylaptop
 Shorthand for which is this with newer SSH versions:
 
 ```bash
-ssh -J mylaptop:22 ssi.sh
+ssh -J ssi.sh mylaptop
 ```
 
 ## Authentication
@@ -161,18 +161,18 @@ sish=SSHKEYFINGERPRINT
 ```
 
 Where `SSHKEYFINGERPRINT` is the fingerprint of the key used for logging into the server. You can set multiple TXT
-records and sish will check all of them to ensure at least matches. You can retrieve your key fingerprint by running:
+records and sish will check all of them to ensure at least one is a match. You can retrieve your key fingerprint by running:
 
 ```bash
 ssh-keygen -lf ~/.ssh/id_rsa | awk '{print $2}'
 ```
 
-## Loadbalancing
+## Load balancing
 
 sish can load balance any type of forwarded connection, but this needs to be enabled when starting sish using the `--http-load-balancer`,
-`--http-load-balancer`, and `--http-load-balancer` flags. Let's say you have a few edge nodes (raspberry pis) that
+`--tcp-load-balancer`, and `--alias-load-balancer` flags. Let's say you have a few edge nodes (raspberry pis) that
 are running a service internally but you want to be able to balance load across these devices from the outside world.
-By enabling loadbalancing in sish, this happens automatically when a device with the same forwarded TCP port, alias,
+By enabling load balancing in sish, this happens automatically when a device with the same forwarded TCP port, alias,
 or HTTP subdomain connects to sish. Connections will then be evenly distributed to whatever nodes are connected to
 sish that match the forwarded connection.
 
@@ -210,7 +210,7 @@ or on [freenode IRC #sish](https://kiwiirc.com/client/chat.freenode.net:6697/#si
 ## CLI Flags
 
 ```text
-sish is a command line utility that implements an SSH server that can handle HTTP(S)/WS(S)/TCP multiplexing, forwarding and loadbalancing.
+sish is a command line utility that implements an SSH server that can handle HTTP(S)/WS(S)/TCP multiplexing, forwarding and load balancing.
 It can handle multiple vhosting and reverse tunneling endpoints for a large number of clients.
 
 Usage:

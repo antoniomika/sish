@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+// handleHTTPListener handles the creation of the httpHandler
+// (or addition for load balancing) and set's up the underlying listeners.
 func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection) (*utils.HTTPHolder, *url.URL, string, string, error) {
 	scheme := "http"
 	if stringPort == "443" {
@@ -45,17 +47,17 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 		}
 
 		pH = &utils.HTTPHolder{
-			HTTPHost: host,
-			Scheme:   scheme,
-			SSHConns: &sync.Map{},
-			Forward:  fwd,
-			Balancer: lb,
+			HTTPHost:       host,
+			Scheme:         scheme,
+			SSHConnections: &sync.Map{},
+			Forward:        fwd,
+			Balancer:       lb,
 		}
 
 		state.HTTPListeners.Store(host, pH)
 	}
 
-	pH.SSHConns.Store(listenerHolder.Addr().String(), sshConn)
+	pH.SSHConnections.Store(listenerHolder.Addr().String(), sshConn)
 
 	serverURL := &url.URL{
 		Host:   base64.StdEncoding.EncodeToString([]byte(listenerHolder.Addr().String())),

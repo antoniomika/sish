@@ -10,6 +10,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// handleRequests handles incoming requests from an SSH connection.
 func handleRequests(reqs <-chan *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
 	for req := range reqs {
 		if viper.GetBool("debug") {
@@ -19,6 +20,7 @@ func handleRequests(reqs <-chan *ssh.Request, sshConn *utils.SSHConnection, stat
 	}
 }
 
+// handleRequest handles a incoming request from a SSH connection.
 func handleRequest(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
 	switch req := newRequest.Type; req {
 	case "tcpip-forward":
@@ -37,6 +39,7 @@ func handleRequest(newRequest *ssh.Request, sshConn *utils.SSHConnection, state 
 	}
 }
 
+// checkSession will check a session to see that it has a session.
 func checkSession(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
 	if sshConn.CleanupHandler {
 		return
@@ -55,6 +58,7 @@ func checkSession(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *
 	}
 }
 
+// handleChannels handles a SSH connection's channel requests.
 func handleChannels(chans <-chan ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	for newChannel := range chans {
 		if viper.GetBool("debug") {
@@ -64,6 +68,7 @@ func handleChannels(chans <-chan ssh.NewChannel, sshConn *utils.SSHConnection, s
 	}
 }
 
+//  handleChannel handles a SSH connection's channel request.
 func handleChannel(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	switch channel := newChannel.ChannelType(); channel {
 	case "session":

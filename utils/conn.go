@@ -11,7 +11,9 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// SSHConnection handles state for a SSHConnection
+// SSHConnection handles state for a SSHConnection. It wraps an ssh.ServerConn
+// and allows us to pass other state around the application.
+// Listeners is a map[string]net.Listener
 type SSHConnection struct {
 	SSHConn        *ssh.ServerConn
 	Listeners      *sync.Map
@@ -22,7 +24,9 @@ type SSHConnection struct {
 	CleanupHandler bool
 }
 
-// SendMessage sends a console message to the connection
+// SendMessage sends a console message to the connection. If block is true, it
+// will block until the message is sent. If it is false, it will try to send the
+// message 5 times, waiting 100ms each time.
 func (s *SSHConnection) SendMessage(message string, block bool) {
 	if block {
 		s.Messages <- message
@@ -42,15 +46,15 @@ func (s *SSHConnection) SendMessage(message string, block bool) {
 	}
 }
 
-// CleanUp closes all allocated resources and cleans them up
+// CleanUp closes all allocated resources for a SSH session and cleans them up.
 func (s *SSHConnection) CleanUp(state *State) {
 	close(s.Close)
 	s.SSHConn.Close()
-	state.SSHConnections.Delete(s.SSHConn.RemoteAddr())
-	log.Println("Closed SSH connection for:", s.SSHConn.RemoteAddr(), "user:", s.SSHConn.User())
+	state.SSHConnections.Delete(s.SSHConn.RemoteAddr().String())
+	log.Println("Closed SSH connection for:", s.SSHConn.RemoteAddr().String(), "user:", s.SSHConn.User())
 }
 
-// IdleTimeoutConn handles the connection with a context deadline
+// IdleTimeoutConn handles the connection with a context deadline.
 // code adapted from https://qiita.com/kwi/items/b38d6273624ad3f6ae79
 type IdleTimeoutConn struct {
 	Conn net.Conn
@@ -66,7 +70,7 @@ func (i IdleTimeoutConn) Read(buf []byte) (int, error) {
 	return i.Conn.Read(buf)
 }
 
-// Write is needed to implement the writer part
+// Write is needed to implement the writer part.
 func (i IdleTimeoutConn) Write(buf []byte) (int, error) {
 	err := i.Conn.SetWriteDeadline(time.Now().Add(viper.GetDuration("idle-connection-timeout")))
 	if err != nil {
@@ -76,7 +80,7 @@ func (i IdleTimeoutConn) Write(buf []byte) (int, error) {
 	return i.Conn.Write(buf)
 }
 
-// CopyBoth copies betwen a reader and writer
+// CopyBoth copies betwen a reader and writer and will cleanup each.
 func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 	closeBoth := func() {
 		reader.Close()

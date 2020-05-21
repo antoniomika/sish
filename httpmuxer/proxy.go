@@ -18,7 +18,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-// RoundTripper returns the specific handler for unix connections
+// RoundTripper returns the specific handler for unix connections. This
+// will allow us to use our created sockets cleanly.
 func RoundTripper() *http.Transport {
 	dialer := func(network, addr string) (net.Conn, error) {
 		realAddr, err := base64.StdEncoding.DecodeString(strings.Split(addr, ":")[0])
@@ -39,7 +40,9 @@ func RoundTripper() *http.Transport {
 	}
 }
 
-// ResponseModifier implements a response modifier for the specified request
+// ResponseModifier implements a response modifier for the specified request.
+// We don't actually modify any requests, but we do want to record the request
+// so we can send it to the web console.
 func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gin.Context) func(*http.Response) error {
 	return func(response *http.Response) error {
 		if viper.GetBool("admin-console") || viper.GetBool("service-console") {

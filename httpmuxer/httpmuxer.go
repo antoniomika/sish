@@ -1,3 +1,6 @@
+// Package httpmuxer handles all of the HTTP connections made
+// to sish. This implements the http multiplexing necessary for
+// sish's core feature.
 package httpmuxer
 
 import (
@@ -20,7 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Start initializes the HTTP service
+// Start initializes the HTTP service.
 func Start(state *utils.State) {
 	releaseMode := gin.ReleaseMode
 	if viper.GetBool("debug") {
@@ -33,7 +36,10 @@ func Start(state *utils.State) {
 	r := gin.New()
 	r.LoadHTMLGlob("templates/*")
 	r.Use(func(c *gin.Context) {
+		// startTime is used for calculating latencies.
 		c.Set("startTime", time.Now())
+
+		// Here is where we check whether or not an IP is blocked.
 		clientIPAddr, _, err := net.SplitHostPort(c.Request.RemoteAddr)
 		if state.IPFilter.Blocked(c.ClientIP()) || state.IPFilter.Blocked(clientIPAddr) || err != nil {
 			c.AbortWithStatus(http.StatusForbidden)
@@ -41,6 +47,7 @@ func Start(state *utils.State) {
 		}
 		c.Next()
 	}, gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		// Here is the logger we use to format each incoming request.
 		var statusColor, methodColor, resetColor string
 		if param.IsOutputColor() {
 			statusColor = param.StatusCodeColor()
@@ -77,12 +84,12 @@ func Start(state *utils.State) {
 			loc, ok := state.HTTPListeners.Load(hostname)
 			if ok {
 				proxyHolder := loc.(*utils.HTTPHolder)
-				sshConnTmp, ok := proxyHolder.SSHConns.Load(param.Keys["proxySocket"])
+				sshConnTmp, ok := proxyHolder.SSHConnections.Load(param.Keys["proxySocket"])
 				if ok {
 					sshConn := sshConnTmp.(*utils.SSHConnection)
 					sshConn.SendMessage(strings.TrimSpace(logLine), true)
 				} else {
-					proxyHolder.SSHConns.Range(func(key, val interface{}) bool {
+					proxyHolder.SSHConnections.Range(func(key, val interface{}) bool {
 						sshConn := val.(*utils.SSHConnection)
 						sshConn.SendMessage(strings.TrimSpace(logLine), true)
 						return true
@@ -93,6 +100,7 @@ func Start(state *utils.State) {
 
 		return logLine
 	}), gin.Recovery(), func(c *gin.Context) {
+		// Return a 404 for the favicon.
 		if strings.HasPrefix(c.Request.URL.Path, "/favicon.ico") {
 			c.AbortWithStatus(http.StatusNotFound)
 			return
@@ -138,6 +146,9 @@ func Start(state *utils.State) {
 		gin.WrapH(proxyHolder.Balancer)(c)
 	})
 
+	// If HTTPS is enabled, setup certmagic to allow us to provision HTTPS certs on the fly.
+	// You can use sish without a wildcard cert, but you really should. If you get a lot of clients
+	// with many random subdomains, you'll burn through your Let's Encrypt quota. Be careful!
 	if viper.GetBool("https") {
 		certManager := certmagic.NewDefault()
 

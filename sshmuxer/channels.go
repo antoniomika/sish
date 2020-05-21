@@ -14,8 +14,12 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// proxyProtoPrefix is used when deciding what proxy protocol
+// version to use.
 var proxyProtoPrefix = "proxyproto:"
 
+// handleSession handles the channel when a user requests a session.
+// This is how we send console messages.
 func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	connection, requests, err := newChannel.Accept()
 	if err != nil {
@@ -89,6 +93,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 	}()
 }
 
+// handleAlias is used when handling a SSH connection to attach to an alias listener.
 func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	connection, requests, err := newChannel.Accept()
 	if err != nil {
@@ -140,7 +145,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 	log.Println(logLine)
 
 	if viper.GetBool("log-to-client") {
-		aH.SSHConns.Range(func(key, val interface{}) bool {
+		aH.SSHConnections.Range(func(key, val interface{}) bool {
 			sshConn := val.(*utils.SSHConnection)
 
 			sshConn.Listeners.Range(func(key, val interface{}) bool {
@@ -178,6 +183,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 	}
 }
 
+// writeToSession is where we write to the underlying session channel.
 func writeToSession(connection ssh.Channel, c string) {
 	_, err := connection.Write(append([]byte(c), []byte{'\r', '\n'}...))
 	if err != nil && viper.GetBool("debug") {
@@ -185,6 +191,7 @@ func writeToSession(connection ssh.Channel, c string) {
 	}
 }
 
+// getProxyProtoVersion returns the proxy proto version selected by the client.
 func getProxyProtoVersion(proxyProtoUserVersion string) byte {
 	if viper.GetString("proxy-protocol-version") != "userdefined" {
 		proxyProtoUserVersion = viper.GetString("proxy-protocol-version")

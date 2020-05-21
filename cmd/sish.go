@@ -1,3 +1,4 @@
+// Package cmd implements the sish CLI command.
 package cmd
 
 import (
@@ -17,35 +18,29 @@ import (
 )
 
 var (
-	// Version describes the version of the current build
+	// Version describes the version of the current build.
 	Version = "dev"
 
-	// Commit describes the commit of the current build
+	// Commit describes the commit of the current build.
 	Commit = "none"
 
-	// Date describes the date of the current build
+	// Date describes the date of the current build.
 	Date = "unknown"
 
+	// configFile holds the location of the config file from CLI flags.
 	configFile string
 
+	// rootCmd is the root cobra command.
 	rootCmd = &cobra.Command{
 		Use:     "sish",
 		Short:   "The sish command initializes and runs the sish ssh multiplexer",
-		Long:    "sish is a command line utility that implements an SSH server that can handle HTTP(S)/WS(S)/TCP multiplexing, forwarding and loadbalancing.\nIt can handle multiple vhosting and reverse tunneling endpoints for a large number of clients.",
+		Long:    "sish is a command line utility that implements an SSH server that can handle HTTP(S)/WS(S)/TCP multiplexing, forwarding and load balancing.\nIt can handle multiple vhosting and reverse tunneling endpoints for a large number of clients.",
 		Run:     runCommand,
 		Version: Version,
 	}
 )
 
-type logWriter struct {
-	TimeFmt     string
-	MultiWriter io.Writer
-}
-
-func (w logWriter) Write(bytes []byte) (int, error) {
-	return fmt.Fprintf(w.MultiWriter, "%v | %s", time.Now().Format(w.TimeFmt), string(bytes))
-}
-
+// init initializes flags used by the root command.
 func init() {
 	cobra.OnInitialize(initConfig)
 
@@ -118,6 +113,8 @@ func init() {
 	rootCmd.PersistentFlags().DurationP("cleanup-unbound-timeout", "", 5*time.Second, "Duration to wait before cleaning up an unbound (unforwarded) connection")
 }
 
+// initConfig initializes the configuration and loads needed
+// values. It initializes logging and other vars.
 func initConfig() {
 	viper.SetConfigFile(configFile)
 
@@ -156,7 +153,7 @@ func initConfig() {
 		log.Println("Reloaded configuration file.")
 
 		log.SetFlags(0)
-		log.SetOutput(logWriter{
+		log.SetOutput(utils.LogWriter{
 			TimeFmt:     viper.GetString("time-format"),
 			MultiWriter: multiWriter,
 		})
@@ -167,7 +164,7 @@ func initConfig() {
 	})
 
 	log.SetFlags(0)
-	log.SetOutput(logWriter{
+	log.SetOutput(utils.LogWriter{
 		TimeFmt:     viper.GetString("time-format"),
 		MultiWriter: multiWriter,
 	})
@@ -186,6 +183,7 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
+// runCommand is used to start the root muxer.
 func runCommand(cmd *cobra.Command, args []string) {
 	sshmuxer.Start()
 }

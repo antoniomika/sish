@@ -1,3 +1,5 @@
+// Package sshmuxer handles the underlying SSH server
+// and multiplexing forwarding sessions.
 package sshmuxer
 
 import (
@@ -18,11 +20,15 @@ import (
 )
 
 var (
-	httpPort  int
+	// httpPort is used as a string override for the used HTTP port.
+	httpPort int
+
+	// httpsPort is used as a string override for the used HTTPS port.
 	httpsPort int
 )
 
-// Start initializes the ssh muxer service
+// Start initializes the ssh muxer service. It will start necessary components
+// and begin listening for SSH connections.
 func Start() {
 	_, httpPortString, err := net.SplitHostPort(viper.GetString("http-address"))
 	if err != nil {
@@ -174,7 +180,7 @@ func Start() {
 				Session:   make(chan bool),
 			}
 
-			state.SSHConnections.Store(sshConn.RemoteAddr(), holderConn)
+			state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)
 
 			go func() {
 				err := sshConn.Wait()

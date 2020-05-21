@@ -15,11 +15,15 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// channelForwardMsg is the message sent by SSH
+// to init a forwarded connection.
 type channelForwardMsg struct {
 	Addr  string
 	Rport uint32
 }
 
+// forwardedTCPPayload is the payload sent by SSH
+// to init a forwarded connection.
 type forwardedTCPPayload struct {
 	Addr       string
 	Port       uint32
@@ -27,6 +31,8 @@ type forwardedTCPPayload struct {
 	OriginPort uint32
 }
 
+// handleRemoteForward will handle a remote forward request
+// and stand up the relevant listeners.
 func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
 	check := &channelForwardMsg{}
 
@@ -117,7 +123,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 				log.Println("Unable to add server to balancer")
 			}
 
-			pH.SSHConns.Delete(listenerHolder.Addr().String())
+			pH.SSHConnections.Delete(listenerHolder.Addr().String())
 
 			if len(pH.Balancer.Servers()) == 0 {
 				state.HTTPListeners.Delete(host)
@@ -141,7 +147,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 				log.Println("Unable to add server to balancer")
 			}
 
-			aH.SSHConns.Delete(listenerHolder.Addr().String())
+			aH.SSHConnections.Delete(listenerHolder.Addr().String())
 
 			if len(aH.Balancer.Servers()) == 0 {
 				state.AliasListeners.Delete(validAlias)
@@ -163,7 +169,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 				log.Println("Unable to add server to balancer")
 			}
 
-			tH.SSHConns.Delete(listenerHolder.Addr().String())
+			tH.SSHConnections.Delete(listenerHolder.Addr().String())
 
 			if len(tH.Balancer.Servers()) == 0 {
 				tH.Listener.Close()

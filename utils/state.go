@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/antoniomika/oxy/forward"
 	"github.com/antoniomika/oxy/roundrobin"
@@ -14,24 +15,36 @@ import (
 	"github.com/spf13/viper"
 )
 
-// ListenerType represents any listener sish supports
+// ListenerType represents any listener sish supports.
 type ListenerType int
 
 const (
-	// AliasListener represents a tcp alias
+	// AliasListener represents a tcp alias.
 	AliasListener ListenerType = iota
 
-	// HTTPListener represents a HTTP proxy
+	// HTTPListener represents a HTTP proxy.
 	HTTPListener
 
-	// TCPListener represents a generic tcp listener
+	// TCPListener represents a generic tcp listener.
 	TCPListener
 
-	// ProcessListener represents a process specific listener
+	// ProcessListener represents a process specific listener.
 	ProcessListener
 )
 
-// ListenerHolder represents a generic listener
+// LogWriter represents a writer that is used for writing logs in multiple locations.
+type LogWriter struct {
+	TimeFmt     string
+	MultiWriter io.Writer
+}
+
+// Write implements the write function for the LogWriter. It will add a time in a
+// specific format to logs.
+func (w LogWriter) Write(bytes []byte) (int, error) {
+	return fmt.Fprintf(w.MultiWriter, "%v | %s", time.Now().Format(w.TimeFmt), string(bytes))
+}
+
+// ListenerHolder represents a generic listener.
 type ListenerHolder struct {
 	net.Listener
 	ListenAddr string
@@ -39,31 +52,34 @@ type ListenerHolder struct {
 	SSHConn    *SSHConnection
 }
 
-// HTTPHolder holds proxy and connection info
+// HTTPHolder holds proxy and connection info.
+// SSHConnections is a map[string]*SSHConnection.
 type HTTPHolder struct {
-	HTTPHost string
-	Scheme   string
-	SSHConns *sync.Map
-	Forward  *forward.Forwarder
-	Balancer *roundrobin.RoundRobin
+	HTTPHost       string
+	Scheme         string
+	SSHConnections *sync.Map
+	Forward        *forward.Forwarder
+	Balancer       *roundrobin.RoundRobin
 }
 
-// AliasHolder holds alias and connection info
+// AliasHolder holds alias and connection info.
+// SSHConnections is a map[string]*SSHConnection.
 type AliasHolder struct {
-	AliasHost string
-	SSHConns  *sync.Map
-	Balancer  *roundrobin.RoundRobin
+	AliasHost      string
+	SSHConnections *sync.Map
+	Balancer       *roundrobin.RoundRobin
 }
 
-// TCPHolder holds proxy and connection info
+// TCPHolder holds proxy and connection info.
+// SSHConnections is a map[string]*SSHConnection.
 type TCPHolder struct {
-	TCPHost  string
-	Listener net.Listener
-	SSHConns *sync.Map
-	Balancer *roundrobin.RoundRobin
+	TCPHost        string
+	Listener       net.Listener
+	SSHConnections *sync.Map
+	Balancer       *roundrobin.RoundRobin
 }
 
-// Handle will copy connections from one handler to a roundrobin server
+// Handle will copy connections from one handler to a roundrobin server.
 func (tH *TCPHolder) Handle(state *State) {
 	for {
 		cl, err := tH.Listener.Accept()
@@ -98,7 +114,7 @@ func (tH *TCPHolder) Handle(state *State) {
 		log.Println(logLine)
 
 		if viper.GetBool("log-to-client") {
-			tH.SSHConns.Range(func(key, val interface{}) bool {
+			tH.SSHConnections.Range(func(key, val interface{}) bool {
 				sshConn := val.(*SSHConnection)
 
 				sshConn.Listeners.Range(func(key, val interface{}) bool {
@@ -128,7 +144,13 @@ func (tH *TCPHolder) Handle(state *State) {
 	}
 }
 
-// State handles overall state
+// State handles overall state. It retains mutexed maps for various
+// datastructures and shared objects.
+// SSHConnections is a map[string]*SSHConnection.
+// Listeners is a map[string]net.Listener.
+// HTTPListeners is a map[string]HTTPHolder.
+// AliasListeners is a map[string]AliasHolder.
+// TCPListeners is a map[string]TCPHolder.
 type State struct {
 	Console        *WebConsole
 	SSHConnections *sync.Map
@@ -140,7 +162,7 @@ type State struct {
 	LogWriter      io.Writer
 }
 
-// NewState returns a new state struct
+// NewState returns a new State struct.
 func NewState() *State {
 	return &State{
 		SSHConnections: &sync.Map{},

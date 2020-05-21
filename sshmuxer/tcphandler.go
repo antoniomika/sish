@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+// handleTCPListener handles the creation of the tcpHandler
+// (or addition for load balancing) and set's up the underlying listeners.
 func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection) (*utils.TCPHolder, *url.URL, string, string, error) {
 	tcpAddr, _, tH := utils.GetOpenPort(check.Addr, bindPort, state, sshConn)
 
@@ -27,9 +29,9 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		}
 
 		tH = &utils.TCPHolder{
-			TCPHost:  tcpAddr,
-			SSHConns: &sync.Map{},
-			Balancer: lb,
+			TCPHost:        tcpAddr,
+			SSHConnections: &sync.Map{},
+			Balancer:       lb,
 		}
 
 		l, err := net.Listen("tcp", tcpAddr)
@@ -48,7 +50,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		state.TCPListeners.Store(tcpAddr, tH)
 	}
 
-	tH.SSHConns.Store(listenerHolder.Addr().String(), sshConn)
+	tH.SSHConnections.Store(listenerHolder.Addr().String(), sshConn)
 
 	serverURL := &url.URL{
 		Host: base64.StdEncoding.EncodeToString([]byte(listenerHolder.Addr().String())),

@@ -1,3 +1,6 @@
+// Package utils implements utilities used across different
+// areas of the sish application. There are utility functions
+// that help with overall state management and are core to the application.
 package utils
 
 import (
@@ -29,20 +32,29 @@ import (
 )
 
 const (
+	// sishDNSPrefix is the prefix used for DNS TXT records.
 	sishDNSPrefix = "sish="
 )
 
 var (
-	// Filter is the IPFilter used to block connections
+	// Filter is the IPFilter used to block connections.
 	Filter *ipfilter.IPFilter
 
-	certHolder          = make([]ssh.PublicKey, 0)
-	holderLock          = sync.Mutex{}
+	// certHolder is a slice of publickeys for auth.
+	certHolder = make([]ssh.PublicKey, 0)
+
+	// holderLock is the mutex used to update the certHolder slice.
+	holderLock = sync.Mutex{}
+
+	// bannedSubdomainList is a list of subdomains that cannot be bound.
 	bannedSubdomainList = []string{""}
-	multiWriter         io.Writer
+
+	// multiWriter is the writer that can be used for writing to multiple locations.
+	multiWriter io.Writer
 )
 
-// Setup main utils
+// Setup main utils. This initializes, whitelists, blacklists,
+// and log writers.
 func Setup(logWriter io.Writer) {
 	multiWriter = logWriter
 
@@ -78,12 +90,13 @@ func Setup(logWriter io.Writer) {
 	}
 }
 
-// CommaSplitFields is a function used by strings.FieldsFunc to split around commas
+// CommaSplitFields is a function used by strings.FieldsFunc to split around commas.
 func CommaSplitFields(c rune) bool {
 	return c == ','
 }
 
-// GetRandomPortInRange returns a random port in the provided range
+// GetRandomPortInRange returns a random port in the provided range.
+// The port range is a comma separated list of ranges or ports.
 func GetRandomPortInRange(portRange string) uint32 {
 	var bindPort uint32
 
@@ -133,7 +146,9 @@ func GetRandomPortInRange(portRange string) uint32 {
 	return bindPort
 }
 
-// CheckPort verifies if a port exists within the port range
+// CheckPort verifies if a port exists within the port range.
+// It will return 0 and an error if not (0 allows the kernel to select)
+// the port.
 func CheckPort(port uint32, portRanges string) (uint32, error) {
 	ranges := strings.Split(strings.TrimSpace(portRanges), ",")
 	checks := false
@@ -175,7 +190,7 @@ func CheckPort(port uint32, portRanges string) (uint32, error) {
 	return 0, fmt.Errorf("not a safe port")
 }
 
-// WatchCerts watches ssh keys for changes
+// WatchCerts watches ssh keys for changes and will load them.
 func WatchCerts() {
 	loadCerts()
 	watcher, err := fsnotify.NewWatcher()
@@ -214,6 +229,8 @@ func WatchCerts() {
 	}
 }
 
+// loadCerts loads public keys from the keys directory into a slice that is used
+// authenticating a user.
 func loadCerts() {
 	tmpCertHolder := make([]ssh.PublicKey, 0)
 
@@ -252,7 +269,8 @@ func loadCerts() {
 	certHolder = tmpCertHolder
 }
 
-// GetSSHConfig Returns an SSH config for the ssh muxer
+// GetSSHConfig Returns an SSH config for the ssh muxer.
+// It handles auth and storing user connection information.
 func GetSSHConfig() *ssh.ServerConfig {
 	sshConfig := &ssh.ServerConfig{
 		NoClientAuth: !viper.GetBool("authentication"),
@@ -290,6 +308,8 @@ func GetSSHConfig() *ssh.ServerConfig {
 	return sshConfig
 }
 
+// generatePrivateKey creates a new ed25519 private key to be used by the
+// the SSH server as the host key.
 func generatePrivateKey(passphrase string) []byte {
 	_, pk, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -324,7 +344,8 @@ func generatePrivateKey(passphrase string) []byte {
 	return pemData
 }
 
-// ParsePrivateKey pareses the PrivateKey into a ssh.Signer and let's it be used by CASigner
+// ParsePrivateKey parses the PrivateKey into a ssh.Signer and
+// let's it be used by the SSH server.
 func loadPrivateKey(passphrase string) ssh.Signer {
 	var signer ssh.Signer
 
@@ -348,6 +369,8 @@ func loadPrivateKey(passphrase string) ssh.Signer {
 	return signer
 }
 
+// inBannedList is used to scan whether or not something exists
+// in a slice of data.
 func inBannedList(host string, bannedList []string) bool {
 	for _, v := range bannedList {
 		if strings.TrimSpace(v) == host {
@@ -358,6 +381,9 @@ func inBannedList(host string, bannedList []string) bool {
 	return false
 }
 
+// verifyDNS will verify that a specific domain/subdomain combo matches
+// the specific TXT entry that exists for the domain. It will check that the
+// publickey used for auth is at least included in the TXT records for the domain.
 func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
 	if !viper.GetBool("verify-dns") || sshConn.SSHConn.Permissions == nil {
 		return false, "", nil
@@ -383,7 +409,9 @@ func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
 	return false, "", nil
 }
 
-// GetOpenPort returns open ports
+// GetOpenPort returns open ports that can be bound. It verifies the host to
+// bind the port to and attempts to listen to the port to ensure it is open.
+// If load balancing is enabled, it will return the port if used.
 func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection) (string, uint32, *TCPHolder) {
 	getUnusedPort := func() (string, uint32, *TCPHolder) {
 		var tH *TCPHolder
@@ -449,7 +477,8 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 	return getUnusedPort()
 }
 
-// GetOpenHost returns a random open host
+// GetOpenHost returns an open host or a random host if that one is unavailable.
+// If load balancing is enabled, it will return the requested domain.
 func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HTTPHolder) {
 	dnsMatch, _, err := verifyDNS(addr, sshConn)
 	if err != nil && viper.GetBool("debug") {
@@ -510,7 +539,8 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HT
 	return getUnusedHost()
 }
 
-// GetOpenAlias returns open aliases
+// GetOpenAlias returns open aliases or a random one if it is not enabled.
+// If load balancing is enabled, it will return the requested alias.
 func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection) (string, *AliasHolder) {
 	getUnusedAlias := func() (string, *AliasHolder) {
 		var aH *AliasHolder
