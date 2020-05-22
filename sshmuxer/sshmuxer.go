@@ -175,6 +175,7 @@ func Start() {
 			holderConn := &utils.SSHConnection{
 				SSHConn:   sshConn,
 				Listeners: &sync.Map{},
+				Closed:    &sync.Once{},
 				Close:     make(chan bool),
 				Messages:  make(chan string),
 				Session:   make(chan bool),

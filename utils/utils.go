@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -23,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ScaleFT/sshkeys"
 	"github.com/fsnotify/fsnotify"
 	"github.com/jpillora/ipfilter"
 	"github.com/logrusorgru/aurora"
@@ -316,27 +316,32 @@ func generatePrivateKey(passphrase string) []byte {
 		log.Fatal(err)
 	}
 
-	log.Println("Generated RSA Keypair")
+	log.Println("Generated ED25519 Keypair")
 
-	pemBlock := &pem.Block{
-		Type:  "OPENSSH PRIVATE KEY",
-		Bytes: edkey.MarshalED25519PrivateKey(pk),
-	}
-
+	// In an effort to guarantee that keys can still be loaded by OpenSSH
+	// we adopt branching logic here for passphrase encrypted keys.
+	// I wrote a module that handled both, but ultimately decided this
+	// is likely cleaner and less specialized.
 	var pemData []byte
-
 	if passphrase != "" {
-		encBlock, err := x509.EncryptPEMBlock(rand.Reader, pemBlock.Type, pemBlock.Bytes, []byte(passphrase), x509.PEMCipherAES256)
+		pemData, err = sshkeys.Marshal(pk, &sshkeys.MarshalOptions{
+			Passphrase: []byte(passphrase),
+			Format:     sshkeys.FormatOpenSSHv1,
+		})
+
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		pemData = pem.EncodeToMemory(encBlock)
 	} else {
+		pemBlock := &pem.Block{
+			Type:  "OPENSSH PRIVATE KEY",
+			Bytes: edkey.MarshalED25519PrivateKey(pk),
+		}
+
 		pemData = pem.EncodeToMemory(pemBlock)
 	}
 
-	err = ioutil.WriteFile(viper.GetString("private-key-location"), pemData, 0644)
+	err = ioutil.WriteFile(viper.GetString("private-key-location"), pemData, 0600)
 	if err != nil {
 		log.Println("Error writing to file:", err)
 	}
@@ -351,6 +356,7 @@ func loadPrivateKey(passphrase string) ssh.Signer {
 
 	pk, err := ioutil.ReadFile(viper.GetString("private-key-location"))
 	if err != nil {
+		log.Println("Error loading private key, generating a new one:", err)
 		pk = generatePrivateKey(passphrase)
 	}
 

@@ -17,6 +17,7 @@ import (
 type SSHConnection struct {
 	SSHConn        *ssh.ServerConn
 	Listeners      *sync.Map
+	Closed         *sync.Once
 	Close          chan bool
 	Messages       chan string
 	ProxyProto     byte
@@ -48,10 +49,12 @@ func (s *SSHConnection) SendMessage(message string, block bool) {
 
 // CleanUp closes all allocated resources for a SSH session and cleans them up.
 func (s *SSHConnection) CleanUp(state *State) {
-	close(s.Close)
-	s.SSHConn.Close()
-	state.SSHConnections.Delete(s.SSHConn.RemoteAddr().String())
-	log.Println("Closed SSH connection for:", s.SSHConn.RemoteAddr().String(), "user:", s.SSHConn.User())
+	s.Closed.Do(func() {
+		close(s.Close)
+		s.SSHConn.Close()
+		state.SSHConnections.Delete(s.SSHConn.RemoteAddr().String())
+		log.Println("Closed SSH connection for:", s.SSHConn.RemoteAddr().String(), "user:", s.SSHConn.User())
+	})
 }
 
 // IdleTimeoutConn handles the connection with a context deadline.
