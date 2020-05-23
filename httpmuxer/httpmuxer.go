@@ -100,14 +100,14 @@ func Start(state *utils.State) {
 
 		return logLine
 	}), gin.Recovery(), func(c *gin.Context) {
+		hostname := strings.Split(c.Request.Host, ":")[0]
+		hostIsRoot := hostname == viper.GetString("domain")
+
 		// Return a 404 for the favicon.
-		if strings.HasPrefix(c.Request.URL.Path, "/favicon.ico") {
+		if hostIsRoot && strings.HasPrefix(c.Request.URL.Path, "/favicon.ico") {
 			c.AbortWithStatus(http.StatusNotFound)
 			return
 		}
-
-		hostname := strings.Split(c.Request.Host, ":")[0]
-		hostIsRoot := hostname == viper.GetString("domain")
 
 		if (viper.GetBool("admin-console") || viper.GetBool("service-console")) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
 			state.Console.HandleRequest(hostname, hostIsRoot, c)
