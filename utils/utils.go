@@ -375,9 +375,9 @@ func loadPrivateKey(passphrase string) ssh.Signer {
 	return signer
 }
 
-// inBannedList is used to scan whether or not something exists
+// inList is used to scan whether or not something exists
 // in a slice of data.
-func inBannedList(host string, bannedList []string) bool {
+func inList(host string, bannedList []string) bool {
 	for _, v := range bannedList {
 		if strings.TrimSpace(v) == host {
 			return true
@@ -502,7 +502,8 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HT
 		}
 
 		proposedHost := addr + hostExtension + "." + viper.GetString("domain")
-		if dnsMatch {
+		domainParts := strings.Join(strings.Split(addr, ".")[1:], ".")
+		if dnsMatch || viper.GetBool("bind-any-host") || inList(domainParts, strings.FieldsFunc(viper.GetString("bind-hosts"), CommaSplitFields)) {
 			proposedHost = addr
 		}
 
@@ -519,7 +520,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HT
 		}
 
 		checkHost := func(checkHost string) bool {
-			if viper.GetBool("bind-random-subdomains") || !first || inBannedList(host, bannedSubdomainList) {
+			if viper.GetBool("bind-random-subdomains") || !first || inList(host, bannedSubdomainList) {
 				reportUnavailable(true)
 				host = getRandomHost()
 			}
@@ -565,7 +566,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 		}
 
 		checkAlias := func(checkAlias string) bool {
-			if viper.GetBool("bind-random-subdomains") || !first || inBannedList(alias, bannedSubdomainList) {
+			if viper.GetBool("bind-random-subdomains") || !first || inList(alias, bannedSubdomainList) {
 				reportUnavailable(true)
 				alias = getRandomAlias()
 			}

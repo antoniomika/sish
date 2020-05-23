@@ -52,7 +52,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("http-address", "i", "localhost:80", "The address to listen for HTTP connections")
 	rootCmd.PersistentFlags().StringP("https-address", "t", "localhost:443", "The address to listen for HTTPS connections")
 	rootCmd.PersistentFlags().StringP("redirect-root-location", "r", "https://github.com/antoniomika/sish", "The location to redirect requests to the root domain\nto instead of responding with a 404")
-	rootCmd.PersistentFlags().StringP("https-certificate-directory", "s", "deploy/ssl/", "The directory containing HTTPS certificate files (fullchain.pem and privkey.pem)")
+	rootCmd.PersistentFlags().StringP("https-certificate-directory", "s", "deploy/ssl/", "The directory containing HTTPS certificate files (name.crt and name.key). There can be many crt/key pairs")
 	rootCmd.PersistentFlags().StringP("https-ondemand-certificate-email", "", "", "The email to use with Let's Encrypt for cert notifications. Can be left blank")
 	rootCmd.PersistentFlags().StringP("domain", "d", "ssi.sh", "The root domain for HTTP(S) multiplexing that will be appended to subdomains")
 	rootCmd.PersistentFlags().StringP("banned-subdomains", "b", "localhost", "A comma separated list of banned subdomains that users are unable to bind")
@@ -71,6 +71,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("append-user-to-subdomain-separator", "", "-", "The token to use for separating username and subdomain selection in a virtualhost")
 	rootCmd.PersistentFlags().StringP("time-format", "", "2006/01/02 - 15:04:05", "The time format to use for both HTTP and general log messages")
 	rootCmd.PersistentFlags().StringP("log-to-file-path", "", "/tmp/sish.log", "The file to write log output to")
+	rootCmd.PersistentFlags().StringP("bind-hosts", "", "", "A comma separated list of other hosts a user can bind. Requested hosts should be subdomains of a host in this list")
 
 	rootCmd.PersistentFlags().BoolP("bind-random-subdomains", "", true, "Force bound HTTP tunnels to use random subdomains instead of user provided ones")
 	rootCmd.PersistentFlags().BoolP("verify-ssl", "", true, "Verify SSL certificates made on proxied HTTP connections")
@@ -99,6 +100,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("log-to-file-compress", "", false, "Enable compressing log output files")
 	rootCmd.PersistentFlags().BoolP("https-ondemand-certificate", "", false, "Enable retrieving certificates on demand via Let's Encrypt")
 	rootCmd.PersistentFlags().BoolP("https-ondemand-certificate-accept-terms", "", false, "Accept the Let's Encrypt terms")
+	rootCmd.PersistentFlags().BoolP("bind-any-host", "", false, "Bind any host when accepting an HTTP listener")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only")

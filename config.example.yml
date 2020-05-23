@@ -9,6 +9,8 @@ authentication-password: S3Cr3tP4$$W0rD
 banned-countries: ""
 banned-ips: ""
 banned-subdomains: localhost
+bind-any-host: false
+bind-hosts: ""
 bind-random-ports: true
 bind-random-subdomains: true
 bind-random-subdomains-length: 3

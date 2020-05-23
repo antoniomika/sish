@@ -18,12 +18,13 @@ services:
       - ./letsencrypt:/etc/letsencrypt
       - ./pubkeys:/pubkeys
       - ./keys:/keys
+      - ./ssl:/ssl
     command: |
       --ssh-address=:22
       --http-address=:80
       --https-address=:443
       --https=true
-      --https-certificate-directory=/etc/letsencrypt/live/ssi.sh
+      --https-certificate-directory=/ssl
       --authentication-keys-directory=/pubkeys
       --private-key-location=/keys/ssh_key
       --bind-random-ports=false

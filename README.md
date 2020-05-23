@@ -45,7 +45,15 @@ docker-compose -f deploy/docker-compose.yml up -d
 ```
 
 The domain and DNS auth info in `deploy/docker-compose.yml` and `deploy/le-config.yml` should be updated
-to reflect your needs. I use these files in my deployment of `ssi.sh` and have included them here for consistency.
+to reflect your needs. You will also need to create a symlink in the `./ssl` directory that points to the
+Let's Encrypt certificates like:
+
+```bash
+ln -s /etc/letsencrypt/live/ssi.sh/fullchain.pem deploy/ssl/ssi.sh.crt
+ln -s /etc/letsencrypt/live/ssi.sh/privkey.pem deploy/ssl/ssi.sh.key
+```
+
+I use these files in my deployment of `ssi.sh` and have included them here for consistency.
 
 ## How it works
 
@@ -230,6 +238,8 @@ Flags:
   -o, --banned-countries string                     A comma separated list of banned countries. Applies to HTTP, TCP, and SSH connections
   -x, --banned-ips string                           A comma separated list of banned ips that are unable to access the service. Applies to HTTP, TCP, and SSH connections
   -b, --banned-subdomains string                    A comma separated list of banned subdomains that users are unable to bind (default "localhost")
+      --bind-any-host                               Bind any host when accepting an HTTP listener
+      --bind-hosts string                           A comma separated list of other hosts a user can bind. Requested hosts should be subdomains of a host in this list
       --bind-random-ports                           Force TCP tunnels to bind a random port, where the kernel will randomly assign it (default true)
       --bind-random-subdomains                      Force bound HTTP tunnels to use random subdomains instead of user provided ones (default true)
       --bind-random-subdomains-length int           The length of the random subdomain to generate if a subdomain is unavailable or if random subdomains are enforced (default 3)
@@ -245,7 +255,7 @@ Flags:
       --http-port-override int                      The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only
       --https                                       Listen for HTTPS connections. Requires a correct --https-certificate-directory
   -t, --https-address string                        The address to listen for HTTPS connections (default "localhost:443")
-  -s, --https-certificate-directory string          The directory containing HTTPS certificate files (fullchain.pem and privkey.pem) (default "deploy/ssl/")
+  -s, --https-certificate-directory string          The directory containing HTTPS certificate files (name.crt and name.key). There can be many crt/key pairs (default "deploy/ssl/")
       --https-ondemand-certificate                  Enable retrieving certificates on demand via Let's Encrypt
       --https-ondemand-certificate-accept-terms     Accept the Let's Encrypt terms
       --https-ondemand-certificate-email string     The email to use with Let's Encrypt for cert notifications. Can be left blank
