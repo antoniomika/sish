@@ -5,8 +5,10 @@ An open source serveo/ngrok alternative.
 ## Deploy
 
 Builds are made automatically for each commit to the repo and are pushed to Dockerhub. Builds are
-tagged using a commit sha, branch name, tag, latest if released on master. You can find a list [here](https://hub.docker.com/r/antoniomika/sish/tags).
-Each release builds separate `sish` binaries that can be downloaded from [here](https://github.com/antoniomika/sish/releases) for various OS/archs.
+tagged using a commit sha, branch name, tag, latest if released on master.
+You can find a list [here](https://hub.docker.com/r/antoniomika/sish/tags).
+Each release builds separate `sish` binaries that can be downloaded from
+[here](https://github.com/antoniomika/sish/releases) for various OS/archs.
 Feel free to either use the automated binaries or to build your own. If you submit a PR, images are
 not built by default and will require a retag from a maintainer to be built.
 
@@ -36,9 +38,10 @@ not built by default and will require a retag from a maintainer to be built.
 ## Docker Compose
 
 You can also use Docker Compose to setup your sish instance. This includes taking
-care of SSL via Let's Encrypt for you. This uses the [adferrand/dnsrobocert](https://github.com/adferrand/dnsrobocert)
-container to handle issuing wildcard certifications over DNS.
-For more information on how to use this, head to that link above. Generally, you can deploy your service like so:
+care of SSL via Let's Encrypt for you. This uses the
+[adferrand/dnsrobocert](https://github.com/adferrand/dnsrobocert) container to handle issuing wildcard
+certifications over DNS. For more information on how to use this, head to that link above. Generally, you
+can deploy your service like so:
 
 ```bash
 docker-compose -f deploy/docker-compose.yml up -d
@@ -77,20 +80,21 @@ If the selected subdomain is not taken, it will be assigned to your connection.
 ### HTTP forwarding
 
 sish can forward any number of HTTP connections through SSH. It also provides logging the connections
-to the connected client that has forwarded the connection and a web interface to see full request and responses
-made to each forwarded connection. Each webinterface can be unique to the forwarded connection or use a unified
-access token. To make use of HTTP forwarding, ports `[80, 443]` are used to tell sish that a HTTP connection is
-being forwarded and that HTTP virtualhosting should be defined for the service. For example, let's say I'm
-developing a HTTP webservice on my laptop at port `8080` that uses websockets and I want to show one of my coworkers who is not
-near me. I can forward the connection like so:
+to the connected client that has forwarded the connection and a web interface to see full request and
+responses made to each forwarded connection. Each webinterface can be unique to the forwarded connection or
+use a unified access token. To make use of HTTP forwarding, ports `[80, 443]` are used to tell sish that a
+HTTP connection is being forwarded and that HTTP virtualhosting should be defined for the service. For
+example, let's say I'm
+developing a HTTP webservice on my laptop at port `8080` that uses websockets and I want to show one of my
+coworkers who is not near me. I can forward the connection like so:
 
 ```bash
 ssh -R hereiam:80:localhost:8080 ssi.sh
 ```
 
-And then share the link `https://hereiam.ssi.sh` with my coworker. They should be able to access the service seamlessly
-over HTTPS, with full websocket support working fine. Let's say `hereiam.ssi.sh` isn't available, then sish will
-generate a random subdomain and give that to me.
+And then share the link `https://hereiam.ssi.sh` with my coworker. They should be able to access the service
+seamlessly over HTTPS, with full websocket support working fine. Let's say `hereiam.ssi.sh` isn't available,
+then sish will generate a random subdomain and give that to me.
 
 ### TCP forwarding
 
@@ -112,20 +116,21 @@ ssh -p 2222 ssi.sh
 
 ### TCP alias forwarding
 
-Let's say instead I don't want the service to be accessible by the rest of the world, you can then use a TCP alias.
-A TCP alias is a type of forwarded TCP connection that only exists inside of sish. You can gain access
-to the alias by using SSH with the `-W` flag, which will forwarding the SSH process' stdin/stdout to the fowarded
-TCP connection. In combination with authentication, this will guarantee your remote service is safe from the rest of
-the world because you need to login to sish before you can access it. Changing the example above for this would mean running
-the following command on my laptop:
+Let's say instead I don't want the service to be accessible by the rest of the world, you can then use a TCP
+alias. A TCP alias is a type of forwarded TCP connection that only exists inside of sish. You can gain access
+to the alias by using SSH with the `-W` flag, which will forwarding the SSH process' stdin/stdout to the
+fowarded TCP connection. In combination with authentication, this will guarantee your remote service is safe
+from the rest of the world because you need to login to sish before you can access it. Changing the example
+above for this would mean running the following command on my laptop:
 
 ```bash
 ssh -R mylaptop:22:localhost:22 ssi.sh
 ```
 
-sish won't publish port 22 or 2222 to the rest of the world anymore, instead it'll retain a pointer saying that TCP connections
-made from within SSH after a user has authenticated to `mylaptop:22` should be forwarded to the forwarded TCP tunnel.
-Then I can use the forwarded connection access my laptop from anywhere using:
+sish won't publish port 22 or 2222 to the rest of the world anymore, instead it'll retain a pointer saying
+that TCP connections made from within SSH after a user has authenticated to `mylaptop:22` should be
+forwarded to the forwarded TCP tunnel. Then I can use the forwarded connection access my laptop from
+anywhere using:
 
 ```bash
 ssh -o ProxyCommand="ssh -W %h:%p ssi.sh" mylaptop
@@ -141,12 +146,13 @@ ssh -J ssi.sh mylaptop
 
 If you want to use this service privately, it supports both public key and password
 authentication. To enable authentication, set `--authentication=true` as one of your CLI
-options and be sure to configure `--authentication-password` or `--authentication-keys-directory` to your liking.
-The directory provided by `--authentication-keys-directory` is watched for changes and will reload the
-authorized keys automatically. The authorized cert index is regenerated on directory
+options and be sure to configure `--authentication-password` or `--authentication-keys-directory` to your
+liking. The directory provided by `--authentication-keys-directory` is watched for changes and will reload
+the authorized keys automatically. The authorized cert index is regenerated on directory
 modification, so removed public keys will also automatically be removed. Files in this
 directory can either be single key per file, or multiple keys per file separated by newlines,
-similar to `authorized_keys`. Password auth can be disabled by setting `--authentication-password=""` as a CLI option.
+similar to `authorized_keys`. Password auth can be disabled by setting `--authentication-password=""` as a
+CLI option.
 
 One of my favorite ways of using this for authentication is like so:
 
@@ -168,21 +174,35 @@ sish. The TXT record must be be a `key=val` string that looks like:
 sish=SSHKEYFINGERPRINT
 ```
 
-Where `SSHKEYFINGERPRINT` is the fingerprint of the key used for logging into the server. You can set multiple TXT
-records and sish will check all of them to ensure at least one is a match. You can retrieve your key fingerprint by running:
+Where `SSHKEYFINGERPRINT` is the fingerprint of the key used for logging into the server. You can set
+multiple TXT records and sish will check all of them to ensure at least one is a match. You can retrieve
+your key fingerprint by running:
 
 ```bash
 ssh-keygen -lf ~/.ssh/id_rsa | awk '{print $2}'
 ```
 
+If you trust the users connecting to sish and would like to allow any domain to be used with sish
+(bypassing verification), there are a few added flags to aid in this. This is especially useful when
+adding multiple wildcard certificates to sish in order to not need to automatically provision Let's
+Encrypt certs. To disable verfication, set `--bind-any-host=true`, which will allow and subdomain/domain
+combination to be used. To only allow subdomains of a certain subset of domains, you can set `--bind-hosts`
+to a comma separated list of domains that are allowed to be bound.
+
+To add certficates for sish to use, configure the `--https-certificate-directory` flag to point to a dir
+that is accessible by sish. In the directory, sish will look for a combination of files that look like
+`name.crt` and `name.key`. `name` can be arbitrary in either case, it just needs to be unique to the cert
+and key pair to allow them to be loaded into sish.
+
 ## Load balancing
 
-sish can load balance any type of forwarded connection, but this needs to be enabled when starting sish using the `--http-load-balancer`,
-`--tcp-load-balancer`, and `--alias-load-balancer` flags. Let's say you have a few edge nodes (raspberry pis) that
-are running a service internally but you want to be able to balance load across these devices from the outside world.
-By enabling load balancing in sish, this happens automatically when a device with the same forwarded TCP port, alias,
-or HTTP subdomain connects to sish. Connections will then be evenly distributed to whatever nodes are connected to
-sish that match the forwarded connection.
+sish can load balance any type of forwarded connection, but this needs to be enabled when starting sish
+using the `--http-load-balancer`,
+`--tcp-load-balancer`, and `--alias-load-balancer` flags. Let's say you have a few edge nodes
+(raspberry pis) that are running a service internally but you want to be able to balance load across these
+devices from the outside world. By enabling load balancing in sish, this happens automatically when a
+device with the same forwarded TCP port, alias, or HTTP subdomain connects to sish. Connections will then be
+evenly distributed to whatever nodes are connected to sish that match the forwarded connection.
 
 ## Whitelisting IPs
 
@@ -209,11 +229,26 @@ I will enable authentication and then you can reach out to me to get your SSH ke
 
 ## Notes
 
-1. This is by no means production ready in any way. This was hacked together and solves a fairly specific use case.
+1. This is by no means production ready in any way. This was hacked together and solves a fairly specific
+use case.
       - You can help it get production ready by submitting PRs/reviewing code/writing tests/etc
-2. This is a fairly simple implementation, I've intentionally cut corners in some places to make it easier to write.
-3. If you have any questions or comments, feel free to reach out via email [me@antoniomika.me](mailto:me@antoniomika.me)
+2. This is a fairly simple implementation, I've intentionally cut corners in some places to make it easier
+to write.
+3. If you have any questions or comments, feel free to reach out via email
+[me@antoniomika.me](mailto:me@antoniomika.me)
 or on [freenode IRC #sish](https://kiwiirc.com/client/chat.freenode.net:6697/#sish)
+
+## Upgrading to v1.0
+
+There are numerous breaking changes in sish between pre-1.0 and post-1.0 versions. The largest changes are
+found in the mapping of command flags and configuration params. Those have changed drastically, but it should be easy
+to find the new counterpart. The other change is SSH keys that are supported for host key auth. sish
+continues to support most modern keys, but by default if a host key is not found, it will create an OpenSSH
+ED25519 key to use. Previous versions of sish would aes encrypt the pem block of this private key, but we
+have since moved to using the native
+[OpenSSH private key format](https://github.com/openssh/openssh-portable/blob/master/sshkey.c) to allow for
+easy interop between OpenSSH tools. For this reason, you will either have to manually convert an AES
+encrypted key or generate a new one.
 
 ## CLI Flags
 
@@ -262,6 +297,8 @@ Flags:
       --https-port-override int                     The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only
       --idle-connection                             Enable connection idle timeouts for reads and writes (default true)
       --idle-connection-timeout duration            Duration to wait for activity before closing a connection for all reads and writes (default 5s)
+      --load-templates                              Load HTML templates. This is required for admin/service consoles (default true)
+      --load-templates-directory string             The directory and glob parameter for templates that should be loaded (default "templates/*")
       --localhost-as-all                            Enable forcing localhost to mean all interfaces for tcp listeners (default true)
       --log-to-client                               Enable logging HTTP and TCP requests to the client
       --log-to-file                                 Enable writing log output to file, specified by log-to-file-path

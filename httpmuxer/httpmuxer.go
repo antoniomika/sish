@@ -34,7 +34,11 @@ func Start(state *utils.State) {
 	gin.ForceConsoleColor()
 
 	r := gin.New()
-	r.LoadHTMLGlob("templates/*")
+
+	if viper.GetBool("load-templates") {
+		r.LoadHTMLGlob(viper.GetString("load-templates-directory"))
+	}
+
 	r.Use(func(c *gin.Context) {
 		// startTime is used for calculating latencies.
 		c.Set("startTime", time.Now())

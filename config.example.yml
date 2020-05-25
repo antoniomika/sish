@@ -32,6 +32,8 @@ https-ondemand-certificate-email: ""
 https-port-override: 0
 idle-connection: true
 idle-connection-timeout: 5s
+load-templates: true
+load-templates-directory: templates/*
 localhost-as-all: true
 log-to-client: false
 log-to-file: false
