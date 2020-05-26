@@ -98,12 +98,14 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 				log.Println("Error marshaling json for webconsole:", err)
 			}
 
-			hostLocation, err := base64.StdEncoding.DecodeString(response.Request.URL.Host)
-			if err != nil {
-				log.Println("Error loading proxy info from request", err)
-			}
+			if response.Request != nil {
+				hostLocation, err := base64.StdEncoding.DecodeString(response.Request.URL.Host)
+				if err != nil {
+					log.Println("Error loading proxy info from request", err)
+				}
 
-			c.Set("proxySocket", string(hostLocation))
+				c.Set("proxySocket", string(hostLocation))
+			}
 
 			state.Console.BroadcastRoute(hostname, data)
 		}
