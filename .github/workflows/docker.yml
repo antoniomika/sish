@@ -45,5 +45,5 @@ jobs:
           --build-arg DATE=${DATE} \
           -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} \
           -t ${GITHUB_REPOSITORY}:${REF} \
-          -f Dockerfile.buildkit
+          -f Dockerfile.buildkit \
           ${OTHER_TAGS} .
