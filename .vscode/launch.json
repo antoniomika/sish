@@ -12,20 +12,24 @@
       "program": "${workspaceFolder}",
       "env": {},
       "args": [
-        "-sish.auth=false",
-        "-sish.debug=true",
-        "-sish.subdomainlen=3",
-        "-sish.httpsenabled=false",
-        "-sish.http=localhost:8081",
-        "-sish.addr=localhost:2222",
-        "-sish.domain=testing.ssi.sh",
-        "-sish.forcerandomsubdomain=false",
-        "-sish.bindrandom=false",
-        "-sish.tcpalias=true",
-        "-sish.proxyprotoenabled=false",
-        "-sish.logtoclient=true",
-        "-sish.adminenabled=true",
-        "-sish.serviceconsoleenabled=true"
+        "--debug=true",
+        "--bind-random-subdomains-length=3",
+        "--http-address=:8081",
+        "--ssh-address=:2222",
+        "--domain=testing.ssi.sh",
+        "--bind-random-subdomains=false",
+        "--bind-random-ports=false",
+        "--https=false",
+        "--authentication=false",
+        "--tcp-aliases=true",
+        "--proxy-protocol=false",
+        "--log-to-client=true",
+        "--admin-console=true",
+        "--service-console=true",
+        "--verify-ssl=false",
+        "--http-load-balancer=true",
+        "--tcp-load-balancer=true",
+        "--alias-load-balancer=true"
       ]
     }
   ]

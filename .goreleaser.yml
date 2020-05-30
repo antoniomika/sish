@@ -3,8 +3,10 @@ before:
     - go mod tidy
     - go generate ./...
 builds:
-- env:
-  - CGO_ENABLED=0
+- ldflags:
+    - -s -w -X github.com/antoniomika/sish/cmd.Version={{ .Version }} -X github.com/antoniomika/sish/cmd.Commit={{ .Commit }} -X github.com/antoniomika/sish/cmd.Date={{ .Date }}
+  env:
+    - CGO_ENABLED=0
   goos:
     - linux
     - win
@@ -31,5 +33,5 @@ archives:
     files:
       - LICENSE*
       - README*
-      - pubkeys/
+      - deploy/pubkeys/
       - templates/**/*

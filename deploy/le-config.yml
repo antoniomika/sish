@@ -1,0 +1,17 @@
+acme:
+  email_account: AUTH_EMAIL
+certificates:
+- autorestart:
+  - containers:
+    - sish
+  domains:
+  - ssi.sh
+  - '*.ssi.sh'
+  name: ssi.sh
+  profile: cloudflare
+profiles:
+- name: cloudflare
+  provider: cloudflare
+  provider_options:
+    auth_token: AUTH_TOKEN
+    auth_username: AUTH_EMAIL

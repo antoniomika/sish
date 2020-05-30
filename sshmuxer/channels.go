@@ -1,26 +1,33 @@
-package main
+package sshmuxer
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"strings"
 
+	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
+	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
 
+// proxyProtoPrefix is used when deciding what proxy protocol
+// version to use.
 var proxyProtoPrefix = "proxyproto:"
 
-func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State) {
+// handleSession handles the channel when a user requests a session.
+// This is how we send console messages.
+func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	connection, requests, err := newChannel.Accept()
 	if err != nil {
 		sshConn.CleanUp(state)
 		return
 	}
 
-	if *debug {
+	if viper.GetBool("debug") {
 		log.Println("Handling session for connection:", connection)
 	}
 
@@ -71,14 +78,14 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 				}
 			case "exec":
 				payloadString := string(req.Payload[4:])
-				if strings.HasPrefix(payloadString, proxyProtoPrefix) && *proxyProtoEnabled {
+				if strings.HasPrefix(payloadString, proxyProtoPrefix) && viper.GetBool("proxy-protocol") {
 					sshConn.ProxyProto = getProxyProtoVersion(strings.TrimPrefix(payloadString, proxyProtoPrefix))
 					if sshConn.ProxyProto != 0 {
-						sendMessage(sshConn, fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)
+						sshConn.SendMessage(fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)
 					}
 				}
 			default:
-				if *debug {
+				if viper.GetBool("debug") {
 					log.Println("Sub Channel Type", req.Type, req.WantReply, string(req.Payload))
 				}
 			}
@@ -86,7 +93,8 @@ func handleSession(newChannel ssh.NewChannel, sshConn *SSHConnection, state *Sta
 	}()
 }
 
-func handleAlias(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State) {
+// handleAlias is used when handling a SSH connection to attach to an alias listener.
+func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	connection, requests, err := newChannel.Accept()
 	if err != nil {
 		sshConn.CleanUp(state)
@@ -95,7 +103,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State
 
 	go ssh.DiscardRequests(requests)
 
-	if *debug {
+	if viper.GetBool("debug") {
 		log.Println("Handling alias connection for:", connection)
 	}
 
@@ -108,23 +116,64 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State
 	}
 
 	tcpAliasToConnect := fmt.Sprintf("%s:%d", check.Addr, check.Port)
-	loc, ok := state.TCPListeners.Load(tcpAliasToConnect)
+	loc, ok := state.AliasListeners.Load(tcpAliasToConnect)
 	if !ok {
 		log.Println("Unable to load tcp alias:", tcpAliasToConnect)
 		sshConn.CleanUp(state)
 		return
 	}
 
-	conn, err := net.Dial("unix", loc.(string))
+	aH := loc.(*utils.AliasHolder)
+
+	connectionLocation, err := aH.Balancer.NextServer()
+	if err != nil {
+		log.Println("Unable to load connection location:", err)
+		sshConn.CleanUp(state)
+		return
+	}
+
+	host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
+	if err != nil {
+		log.Println("Unable to decode connection location:", err)
+		sshConn.CleanUp(state)
+		return
+	}
+
+	aliasAddr := string(host)
+
+	logLine := fmt.Sprintf("Accepted connection from %s -> %s", sshConn.SSHConn.RemoteAddr().String(), tcpAliasToConnect)
+	log.Println(logLine)
+
+	if viper.GetBool("log-to-client") {
+		aH.SSHConnections.Range(func(key, val interface{}) bool {
+			sshConn := val.(*utils.SSHConnection)
+
+			sshConn.Listeners.Range(func(key, val interface{}) bool {
+				listenerAddr := key.(string)
+
+				if listenerAddr == aliasAddr {
+					sshConn.SendMessage(logLine, true)
+
+					return false
+				}
+
+				return true
+			})
+
+			return true
+		})
+	}
+
+	conn, err := net.Dial("unix", aliasAddr)
 	if err != nil {
 		log.Println("Error connecting to alias:", err)
 		sshConn.CleanUp(state)
 		return
 	}
 
-	sshConn.Listeners.Store(conn.RemoteAddr(), conn)
+	sshConn.Listeners.Store(aliasAddr, conn)
 
-	copyBoth(conn, connection)
+	utils.CopyBoth(conn, connection)
 
 	select {
 	case <-sshConn.Close:
@@ -134,16 +183,18 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *SSHConnection, state *State
 	}
 }
 
+// writeToSession is where we write to the underlying session channel.
 func writeToSession(connection ssh.Channel, c string) {
 	_, err := connection.Write(append([]byte(c), []byte{'\r', '\n'}...))
-	if err != nil && *debug {
+	if err != nil && viper.GetBool("debug") {
 		log.Println("Error trying to write message to socket:", err)
 	}
 }
 
+// getProxyProtoVersion returns the proxy proto version selected by the client.
 func getProxyProtoVersion(proxyProtoUserVersion string) byte {
-	if *proxyProtoVersion != "userdefined" {
-		proxyProtoUserVersion = *proxyProtoVersion
+	if viper.GetString("proxy-protocol-version") != "userdefined" {
+		proxyProtoUserVersion = viper.GetString("proxy-protocol-version")
 	}
 
 	realProtoVersion := 0

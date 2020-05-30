@@ -1,23 +1,39 @@
 module github.com/antoniomika/sish
 
 require (
-	github.com/fsnotify/fsnotify v1.4.7
-	github.com/gin-contrib/sse v0.1.0 // indirect
-	github.com/gin-gonic/gin v1.4.0
-	github.com/golang/protobuf v1.3.2 // indirect
-	github.com/gorilla/websocket v1.4.1
-	github.com/jpillora/ipfilter v1.0.0
-	github.com/json-iterator/go v1.1.8 // indirect
-	github.com/koding/websocketproxy v0.0.0-20181220232114-7ed82d81a28c
-	github.com/logrusorgru/aurora v0.0.0-20191116043053-66b7ad493a23
-	github.com/mattn/go-isatty v0.0.10 // indirect
+	github.com/ScaleFT/sshkeys v0.0.0-20200327173127-6142f742bca5
+	github.com/antoniomika/oxy v1.1.1-0.20200517194743-bedd7c62c77e
+	github.com/caddyserver/certmagic v0.10.13
+	github.com/cenkalti/backoff/v4 v4.0.2 // indirect
+	github.com/fsnotify/fsnotify v1.4.9
+	github.com/gin-gonic/gin v1.6.3
+	github.com/go-playground/validator/v10 v10.3.0 // indirect
+	github.com/golang/protobuf v1.4.2 // indirect
+	github.com/gorilla/websocket v1.4.2
+	github.com/jpillora/ipfilter v1.2.1
+	github.com/klauspost/cpuid v1.2.4 // indirect
+	github.com/logrusorgru/aurora v0.0.0-20200102142835-e9ef32dff381
+	github.com/mailgun/timetools v0.0.0-20170619190023-f3a7b8ffff47 // indirect
+	github.com/miekg/dns v1.1.29 // indirect
 	github.com/mikesmitty/edkey v0.0.0-20170222072505-3356ea4e686a
-	github.com/oschwald/maxminddb-golang v1.5.0 // indirect
-	github.com/pires/go-proxyproto v0.0.0-20190615163442-2c19fd512994
-	github.com/ugorji/go v1.1.7 // indirect
-	golang.org/x/crypto v0.0.0-20191108234033-bd318be0434a
-	golang.org/x/sys v0.0.0-20191105231009-c1f44814a5cd // indirect
-	gopkg.in/yaml.v2 v2.2.5 // indirect
+	github.com/mitchellh/mapstructure v1.3.1 // indirect
+	github.com/pelletier/go-toml v1.8.0 // indirect
+	github.com/phuslu/geoip v1.0.20200411 // indirect
+	github.com/pires/go-proxyproto v0.1.3
+	github.com/sirupsen/logrus v1.6.0
+	github.com/spf13/afero v1.2.2 // indirect
+	github.com/spf13/cast v1.3.1 // indirect
+	github.com/spf13/cobra v1.0.0
+	github.com/spf13/jwalterweatherman v1.1.0 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/viper v1.7.0
+	golang.org/x/crypto v0.0.0-20200510223506-06a226fb4e37
+	golang.org/x/net v0.0.0-20200520182314-0ba52f642ac2 // indirect
+	golang.org/x/sys v0.0.0-20200519105757-fe76b779f299 // indirect
+	gopkg.in/ini.v1 v1.56.0 // indirect
+	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
+	gopkg.in/square/go-jose.v2 v2.5.1 // indirect
 )
 
-go 1.13
+go 1.14

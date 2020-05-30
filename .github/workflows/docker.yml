@@ -9,7 +9,7 @@ jobs:
     - uses: actions/checkout@v1
     - name: Lint the codebase
       run: |
-        docker run --rm -v $(pwd):/app -w /app golangci/golangci-lint:v1.21.0 golangci-lint run -E goimports
+        docker run --rm -v $(pwd):/app -w /app golangci/golangci-lint:v1.27.0 golangci-lint run -E goimports
     - name: Set up Docker Buildx
       uses: crazy-max/ghaction-docker-buildx@v1
       with:
@@ -29,7 +29,10 @@ jobs:
         if [[ ${GITHUB_REF} =~ ^refs\/tags\/v.*$ ]]
         then
           REF="${GITHUB_REF//refs\/tags\/}"
-          OTHER_TAGS="${OTHER_TAGS} -t ${GITHUB_REPOSITORY}:latest"
+          if ! [[ ${GITHUB_REF} =~ ^refs\/tags\/v.*-.*$ ]]
+          then
+            OTHER_TAGS="${OTHER_TAGS} -t ${GITHUB_REPOSITORY}:latest"
+          fi
         fi
 
         docker buildx build \
@@ -42,4 +45,5 @@ jobs:
           --build-arg DATE=${DATE} \
           -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} \
           -t ${GITHUB_REPOSITORY}:${REF} \
+          -f Dockerfile.buildkit \
           ${OTHER_TAGS} .

@@ -1,11 +1,4 @@
-keys/*
-!keys/.gitkeep
-pubkeys/*
-!pubkeys/.gitkeep
-ssl/*
-!ssl/.gitkeep
-sish
-deploy/*
-!deploy/docker-compose.yml
+deploy/
 dist/
+sish
 __debug_bin

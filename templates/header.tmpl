@@ -17,6 +17,10 @@
     <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <!-- Bootstrap End -->
 
+    <!-- Knockout Start -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.5.1/knockout-latest.js"></script>
+    <!-- Knockout End -->
+
     <style>
         #pageContainer {
             padding-top: 60px;
@@ -26,6 +30,8 @@
             max-height: 60px !important
         }
     </style>
+
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
 
     <script type="text/javascript">
         
@@ -41,15 +47,19 @@
     <div class="collapse navbar-collapse" id="navbar">
         <ul class="navbar-nav mr-auto">
             <li class="nav-item">
+                <!--
                 <a class="nav-link" href="/_sish/console">Home</a>
+                -->
             </li>
         </ul>
         <ul class="navbar-nav flex-row ml-md-auto d-none d-md-flex">
             <li class="nav-item">
+                <!--
                 <a class="nav-link" href="/_sish/console"><i class="fa fa-home"></i> Home</a>
+                -->
             </li>
         </ul>
     </div>
 </nav>
-<div id="pageContainer" class="container">
+<div id="pageContainer" class="container-fluid">
 {{ end }}
