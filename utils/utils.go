@@ -503,7 +503,8 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HT
 
 		proposedHost := addr + hostExtension + "." + viper.GetString("domain")
 		domainParts := strings.Join(strings.Split(addr, ".")[1:], ".")
-		if dnsMatch || viper.GetBool("bind-any-host") || inList(domainParts, strings.FieldsFunc(viper.GetString("bind-hosts"), CommaSplitFields)) {
+
+		if dnsMatch || (viper.GetBool("bind-any-host") && strings.Contains(addr, ".")) || inList(domainParts, strings.FieldsFunc(viper.GetString("bind-hosts"), CommaSplitFields)) {
 			proposedHost = addr
 		}
 
