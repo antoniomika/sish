@@ -29,7 +29,7 @@ WORKDIR /app
 
 COPY --from=builder /tmp /tmp
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /app/deploy/pubkeys /app/deploy/pubkeys
+COPY --from=builder /app/deploy/ /app/deploy/
 COPY --from=builder /app/templates /app/templates
 COPY --from=builder /go/bin/sish /app/sish
 

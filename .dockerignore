@@ -5,6 +5,8 @@
 /.github/
 /.gitignore
 /deploy/
+!/deploy/ssl/.gitkeep
+!/deploy/keys/.gitkeep
 !/deploy/pubkeys/.gitkeep
 /dist/
 /sish
