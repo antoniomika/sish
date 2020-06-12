@@ -1,19 +1,15 @@
+# syntax = docker/dockerfile:experimental
 FROM --platform=$BUILDPLATFORM golang:1.14-alpine as builder
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 
-ENV GOCACHE /gocache
-ENV GOTMPDIR /gotmpdir
 ENV CGO_ENABLED 0
 
 WORKDIR /app
 
-RUN mkdir -p /gocache /gotmpdir /emptydir
+RUN mkdir -p /emptydir
 RUN apk add --no-cache git ca-certificates
 
-COPY go.mod .
-COPY go.sum .
-
-RUN go mod download
+COPY go.mod go.sum ./
 
 COPY . .
 
@@ -25,11 +21,18 @@ ARG REPOSITORY=unknown
 ARG TARGETOS
 ARG TARGETARCH
 
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go generate ./...
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go test ./...
+
 ENV GOOS=${TARGETOS} GOARCH=${TARGETARCH}
 
-RUN go generate ./...
-RUN go test ./...
-RUN go build -o /go/bin/sish -ldflags="-s -w -X github.com/${REPOSITORY}/cmd.Version=${VERSION} -X github.com/${REPOSITORY}/cmd.Commit=${COMMIT} -X github.com/${REPOSITORY}/cmd.Date=${DATE}"
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -o /go/bin/sish -ldflags="-s -w -X github.com/${REPOSITORY}/cmd.Version=${VERSION} -X github.com/${REPOSITORY}/cmd.Commit=${COMMIT} -X github.com/${REPOSITORY}/cmd.Date=${DATE}"
 
 FROM scratch as release
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
