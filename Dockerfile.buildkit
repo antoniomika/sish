@@ -9,30 +9,29 @@ WORKDIR /app
 RUN mkdir -p /emptydir
 RUN apk add --no-cache git ca-certificates
 
-COPY go.mod go.sum ./
-
 COPY . .
 
 ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
 ARG REPOSITORY=unknown
+ARG APP_NAME=sish
 
 ARG TARGETOS
 ARG TARGETARCH
 
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
     go generate ./...
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
     go test ./...
 
 ENV GOOS=${TARGETOS} GOARCH=${TARGETARCH}
 
-RUN --mount=type=cache,target=/go/pkg/mod \
-    --mount=type=cache,target=/root/.cache/go-build \
-    go build -o /go/bin/sish -ldflags="-s -w -X github.com/${REPOSITORY}/cmd.Version=${VERSION} -X github.com/${REPOSITORY}/cmd.Commit=${COMMIT} -X github.com/${REPOSITORY}/cmd.Date=${DATE}"
+RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
+    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
+    go build -o /go/bin/${APP_NAME} -ldflags="-s -w -X github.com/${REPOSITORY}/cmd.Version=${VERSION} -X github.com/${REPOSITORY}/cmd.Commit=${COMMIT} -X github.com/${REPOSITORY}/cmd.Date=${DATE}"
 
 FROM scratch as release
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
@@ -44,6 +43,6 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /app/deploy/ /app/deploy/
 COPY --from=builder /app/README* /app/LICENSE* /app/
 COPY --from=builder /app/templates /app/templates
-COPY --from=builder /go/bin/sish /app/sish
+COPY --from=builder /go/bin/ /app/
 
-ENTRYPOINT ["/app/sish"]
+ENTRYPOINT ["/app/${APP_NAME}"]
