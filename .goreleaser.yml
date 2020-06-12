@@ -1,6 +1,7 @@
 before:
   hooks:
     - go mod tidy
+    - go test ./...
     - go generate ./...
 builds:
 - ldflags:

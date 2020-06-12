@@ -11,3 +11,5 @@
 /dist/
 /sish
 /.vscode/
+/__debug_bin
+/.DS_Store
