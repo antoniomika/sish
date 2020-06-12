@@ -1,10 +1,10 @@
 before:
   hooks:
-    - go test ./...
     - go generate ./...
+    - go test ./...
 builds:
 - ldflags:
-    - '{{ $gitURL := replace .GitURL ".git" "" }}{{ $sshRepo := replace $gitURL "git@github.com:" "" }}{{ $httpRepo := replace $sshRepo "https://github.com/" "" }}-s -w -X github.com/{{ $httpRepo }}/cmd.Version={{ .Version }} -X github.com/{{ $httpRepo }}/cmd.Commit={{ .Commit }} -X github.com/{{ $httpRepo }}/cmd.Date={{ .Date }}'
+    - '{{ $gitURL := replace .GitURL ".git" "" }}{{ $sshRepo := replace $gitURL "git@github.com:" "" }}{{ $httpRepo := replace $sshRepo "https://github.com/" "" }}-s -w -X github.com/{{ $httpRepo }}/cmd.Version=v{{ .Version }} -X github.com/{{ $httpRepo }}/cmd.Commit={{ .Commit }} -X github.com/{{ $httpRepo }}/cmd.Date={{ .Date }}'
   env:
     - CGO_ENABLED=0
   goos:
@@ -24,7 +24,7 @@ changelog:
     - Merge pull request
     - Merge branch
 archives:
-  - name_template: '{{ .ProjectName }}-{{ .Version }}.{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
+  - name_template: '{{ .ProjectName }}-v{{ .Version }}.{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}'
     wrap_in_directory: true
     format_overrides:
       - goos: windows

@@ -20,10 +20,11 @@ COPY . .
 ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
+ARG REPOSITORY=unknown
 
 RUN go generate ./...
 RUN go test ./...
-RUN go install -ldflags="-s -w -X github.com/antoniomika/sish/cmd.Version=${VERSION} -X github.com/antoniomika/sish/cmd.Commit=${COMMIT} -X github.com/antoniomika/sish/cmd.Date=${DATE}"
+RUN go install -ldflags="-s -w -X github.com/${REPOSITORY}/cmd.Version=${VERSION} -X github.com/${REPOSITORY}/cmd.Commit=${COMMIT} -X github.com/${REPOSITORY}/cmd.Date=${DATE}"
 
 FROM alpine
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"

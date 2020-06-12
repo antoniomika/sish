@@ -19,4 +19,7 @@ jobs:
           --build-arg VERSION=${GITHUB_SHA} \
           --build-arg COMMIT=${GITHUB_SHA} \
           --build-arg DATE=${DATE} \
+          --build-arg REPOSITORY=${GITHUB_REPOSITORY} \
           -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} .
+
+        docker run -it --rm ${GITHUB_REPOSITORY}:${GITHUB_SHA} -v
