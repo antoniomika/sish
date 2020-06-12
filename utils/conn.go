@@ -13,7 +13,7 @@ import (
 
 // SSHConnection handles state for a SSHConnection. It wraps an ssh.ServerConn
 // and allows us to pass other state around the application.
-// Listeners is a map[string]net.Listener
+// Listeners is a map[string]net.Listener.
 type SSHConnection struct {
 	SSHConn        *ssh.ServerConn
 	Listeners      *sync.Map
@@ -63,7 +63,7 @@ type IdleTimeoutConn struct {
 	Conn net.Conn
 }
 
-// Read is needed to implement the reader part
+// Read is needed to implement the reader part.
 func (i IdleTimeoutConn) Read(buf []byte) (int, error) {
 	err := i.Conn.SetReadDeadline(time.Now().Add(viper.GetDuration("idle-connection-timeout")))
 	if err != nil {

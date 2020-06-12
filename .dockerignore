@@ -4,6 +4,7 @@
 /.git/
 /.github/
 /.gitignore
+/.goreleaser.yml
 /deploy/
 !/deploy/ssl/.gitkeep
 !/deploy/keys/.gitkeep

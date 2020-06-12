@@ -7,13 +7,12 @@ ENV CGO_ENABLED 0
 
 WORKDIR /app
 
-RUN mkdir -p /gocache /gotmpdir
+RUN mkdir -p /gocache /gotmpdir /emptydir
 RUN apk add --no-cache git ca-certificates
 
 COPY go.mod .
 COPY go.sum .
 
-RUN go mod tidy
 RUN go mod download
 
 COPY . .
@@ -26,14 +25,15 @@ RUN go generate ./...
 RUN go test ./...
 RUN go install -ldflags="-s -w -X github.com/antoniomika/sish/cmd.Version=${VERSION} -X github.com/antoniomika/sish/cmd.Commit=${COMMIT} -X github.com/antoniomika/sish/cmd.Date=${DATE}"
 
-FROM scratch
+FROM alpine
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 
 WORKDIR /app
 
-COPY --from=builder /tmp /tmp
+COPY --from=builder /emptydir /tmp
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /app/deploy/ /app/deploy/
+COPY --from=builder /app/README* /app/LICENSE* /app/
 COPY --from=builder /app/templates /app/templates
 COPY --from=builder /go/bin/sish /app/sish
 

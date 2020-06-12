@@ -9,7 +9,7 @@ jobs:
     - uses: actions/checkout@v1
     - name: Lint the codebase
       run: |
-        docker run --rm -v $(pwd):/app -w /app golangci/golangci-lint:v1.27.0 golangci-lint run -E goimports
+        docker run --rm -v $(pwd):/app -w /app golangci/golangci-lint:v1.27.0 golangci-lint run -E goimports -E godot
     - name: Set up Docker Buildx
       uses: crazy-max/ghaction-docker-buildx@v1
       with:

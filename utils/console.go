@@ -98,7 +98,7 @@ func (c *WebConsole) HandleTemplate(hostname string, hostIsRoot bool, userIsAdmi
 	}
 }
 
-// HandleWebSocket handles the websocket route
+// HandleWebSocket handles the websocket route.
 func (c *WebConsole) HandleWebSocket(hostname string, g *gin.Context) {
 	conn, err := upgrader.Upgrade(g.Writer, g.Request, nil)
 	if err != nil {
