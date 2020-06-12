@@ -13,7 +13,7 @@ jobs:
     - name: Set up Docker Buildx
       uses: crazy-max/ghaction-docker-buildx@v1
       with:
-        version: latest
+        buildx-version: latest
     - name: Login to Docker Registry
       env:
         DOCKER_USERNAME: ${{ secrets.GITHUB_DOCKER_USERNAME }}
