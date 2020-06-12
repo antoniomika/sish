@@ -49,6 +49,9 @@ var (
 	// bannedSubdomainList is a list of subdomains that cannot be bound.
 	bannedSubdomainList = []string{""}
 
+	// bannedAliasList is a list of aliases that cannot be bound.
+	bannedAliasList = []string{""}
+
 	// multiWriter is the writer that can be used for writing to multiple locations.
 	multiWriter io.Writer
 )
@@ -87,6 +90,11 @@ func Setup(logWriter io.Writer) {
 	bannedSubdomainList = append(bannedSubdomainList, strings.FieldsFunc(viper.GetString("banned-subdomains"), CommaSplitFields)...)
 	for k, v := range bannedSubdomainList {
 		bannedSubdomainList[k] = strings.ToLower(strings.TrimSpace(v) + "." + viper.GetString("domain"))
+	}
+
+	bannedAliasList = append(bannedAliasList, strings.FieldsFunc(viper.GetString("banned-aliases"), CommaSplitFields)...)
+	for k, v := range bannedAliasList {
+		bannedAliasList[k] = strings.ToLower(strings.TrimSpace(v))
 	}
 }
 
@@ -433,7 +441,12 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
-				sshConn.SendMessage(aurora.Sprintf("The TCP port %s is unavaible. Assigning a random port.", aurora.Red(listenAddr)), true)
+				extra := " Assigning a random port."
+				if viper.GetBool("force-requested-ports") {
+					extra = ""
+				}
+
+				sshConn.SendMessage(aurora.Sprintf("The TCP port %s is unavailable.%s", aurora.Red(listenAddr), extra), true)
 			}
 		}
 
@@ -516,7 +529,12 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HT
 
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
-				sshConn.SendMessage(aurora.Sprintf("The subdomain %s is unavailable. Assigning a random subdomain.", aurora.Red(host)), true)
+				extra := " Assigning a random subdomain."
+				if viper.GetBool("force-requested-subdomains") {
+					extra = ""
+				}
+
+				sshConn.SendMessage(aurora.Sprintf("The subdomain %s is unavailable.%s", aurora.Red(host), extra), true)
 			}
 		}
 
@@ -557,17 +575,22 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 		alias := fmt.Sprintf("%s:%s", strings.ToLower(addr), port)
 
 		getRandomAlias := func() string {
-			return fmt.Sprintf("%s:%s", strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("bind-random-subdomains-length"))), port)
+			return fmt.Sprintf("%s:%s", strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("bind-random-aliases-length"))), port)
 		}
 
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
-				sshConn.SendMessage(aurora.Sprintf("The alias %s is unavaible. Assigning a random alias.", aurora.Red(alias)), true)
+				extra := " Assigning a random alias."
+				if viper.GetBool("force-requested-aliases") {
+					extra = ""
+				}
+
+				sshConn.SendMessage(aurora.Sprintf("The alias %s is unavailable.%s", aurora.Red(alias), extra), true)
 			}
 		}
 
 		checkAlias := func(checkAlias string) bool {
-			if viper.GetBool("bind-random-subdomains") || !first || inList(alias, bannedSubdomainList) {
+			if viper.GetBool("bind-random-aliases") || !first || inList(alias, bannedAliasList) {
 				reportUnavailable(true)
 				alias = getRandomAlias()
 			}

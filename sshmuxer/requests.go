@@ -112,6 +112,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	case utils.HTTPListener:
 		pH, serverURL, host, requestMessages, err := handleHTTPListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn)
 		if err != nil {
+			err = newRequest.Reply(false, nil)
+			if err != nil {
+				log.Println("Error replying to socket request:", err)
+			}
 			return
 		}
 
@@ -136,6 +140,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	case utils.AliasListener:
 		aH, serverURL, validAlias, requestMessages, err := handleAliasListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn)
 		if err != nil {
+			err = newRequest.Reply(false, nil)
+			if err != nil {
+				log.Println("Error replying to socket request:", err)
+			}
 			return
 		}
 
@@ -156,6 +164,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	case utils.TCPListener:
 		tH, serverURL, tcpAddr, requestMessages, err := handleTCPListener(check, bindPort, mainRequestMessages, listenerHolder, state, sshConn)
 		if err != nil {
+			err = newRequest.Reply(false, nil)
+			if err != nil {
+				log.Println("Error replying to socket request:", err)
+			}
 			return
 		}
 

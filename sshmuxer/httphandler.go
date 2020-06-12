@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/antoniomika/oxy/forward"
@@ -24,6 +25,10 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 	}
 
 	host, pH := utils.GetOpenHost(check.Addr, state, sshConn)
+
+	if !strings.HasPrefix(host, check.Addr) && viper.GetBool("force-requested-subdomains") {
+		return nil, nil, "", "", fmt.Errorf("Error assigning requested subdomain to tunnel")
+	}
 
 	if pH == nil {
 		rT := httpmuxer.RoundTripper()

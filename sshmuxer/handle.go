@@ -49,6 +49,17 @@ func checkSession(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *
 	case <-sshConn.Session:
 		return
 	case <-time.After(2 * time.Second):
+		go func() {
+			for {
+				select {
+				case <-sshConn.Messages:
+					break
+				case <-sshConn.Close:
+					return
+				}
+			}
+		}()
+
 		err := sshConn.SSHConn.Wait()
 		if err != nil {
 			log.Println("Waited for ssh conn without session:", err)

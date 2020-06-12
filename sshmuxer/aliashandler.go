@@ -5,17 +5,23 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/antoniomika/oxy/roundrobin"
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
+	"github.com/spf13/viper"
 )
 
 // handleAliasListener handles the creation of the aliasHandler
 // (or addition for load balancing) and set's up the underlying listeners.
 func handleAliasListener(check *channelForwardMsg, stringPort string, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection) (*utils.AliasHolder, *url.URL, string, string, error) {
 	validAlias, aH := utils.GetOpenAlias(check.Addr, stringPort, state, sshConn)
+
+	if !strings.HasPrefix(validAlias, check.Addr) && viper.GetBool("force-requested-aliases") {
+		return nil, nil, "", "", fmt.Errorf("Error assigning requested alias to tunnel")
+	}
 
 	if aH == nil {
 		lb, err := roundrobin.New(nil)

@@ -13,12 +13,12 @@
       "env": {},
       "args": [
         "--debug=true",
-        "--bind-random-subdomains-length=3",
         "--http-address=:8081",
         "--ssh-address=:2222",
         "--domain=testing.ssi.sh",
         "--bind-random-subdomains=false",
         "--bind-random-ports=false",
+        "--bind-random-aliases=false",
         "--https=false",
         "--authentication=false",
         "--tcp-aliases=true",

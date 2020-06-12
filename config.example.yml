@@ -6,11 +6,14 @@ append-user-to-subdomain-separator: '-'
 authentication: false
 authentication-keys-directory: deploy/pubkeys/
 authentication-password: S3Cr3tP4$$W0rD
+banned-aliases: ""
 banned-countries: ""
 banned-ips: ""
 banned-subdomains: localhost
 bind-any-host: false
 bind-hosts: ""
+bind-random-aliases: true
+bind-random-aliases-length: 3
 bind-random-ports: true
 bind-random-subdomains: true
 bind-random-subdomains-length: 3
@@ -19,6 +22,9 @@ cleanup-unbound-timeout: 5s
 config: config.yml
 debug: false
 domain: ssi.sh
+force-requested-aliases: false
+force-requested-ports: false
+force-requested-subdomains: false
 geodb: false
 http-address: localhost:80
 http-load-balancer: false

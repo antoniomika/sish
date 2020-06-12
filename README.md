@@ -270,11 +270,14 @@ Flags:
                                                     sish will watch this directory and automatically load new keys and remove keys
                                                     from the authentication list (default "deploy/pubkeys/")
   -u, --authentication-password string              Password to use for ssh server password authentication (default "S3Cr3tP4$$W0rD")
+      --banned-aliases string                       A comma separated list of banned aliases that users are unable to bind
   -o, --banned-countries string                     A comma separated list of banned countries. Applies to HTTP, TCP, and SSH connections
   -x, --banned-ips string                           A comma separated list of banned ips that are unable to access the service. Applies to HTTP, TCP, and SSH connections
   -b, --banned-subdomains string                    A comma separated list of banned subdomains that users are unable to bind (default "localhost")
       --bind-any-host                               Bind any host when accepting an HTTP listener
       --bind-hosts string                           A comma separated list of other hosts a user can bind. Requested hosts should be subdomains of a host in this list
+      --bind-random-aliases                         Force bound alias tunnels to use random aliases instead of user provided ones (default true)
+      --bind-random-aliases-length int              The length of the random alias to generate if a alias is unavailable or if random aliases are enforced (default 3)
       --bind-random-ports                           Force TCP tunnels to bind a random port, where the kernel will randomly assign it (default true)
       --bind-random-subdomains                      Force bound HTTP tunnels to use random subdomains instead of user provided ones (default true)
       --bind-random-subdomains-length int           The length of the random subdomain to generate if a subdomain is unavailable or if random subdomains are enforced (default 3)
@@ -283,6 +286,9 @@ Flags:
   -c, --config string                               Config file (default "config.yml")
       --debug                                       Enable debugging information
   -d, --domain string                               The root domain for HTTP(S) multiplexing that will be appended to subdomains (default "ssi.sh")
+      --force-requested-aliases                     Force the aliases used to be the one that is requested. Will fail the bind if it exists already
+      --force-requested-ports                       Force the ports used to be the one that is requested. Will fail the bind if it exists already
+      --force-requested-subdomains                  Force the subdomains used to be the one that is requested. Will fail the bind if it exists already
       --geodb                                       Use a geodb to verify country IP address association for IP filtering
   -h, --help                                        help for sish
   -i, --http-address string                         The address to listen for HTTP connections (default "localhost:80")

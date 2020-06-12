@@ -18,7 +18,11 @@ import (
 // handleTCPListener handles the creation of the tcpHandler
 // (or addition for load balancing) and set's up the underlying listeners.
 func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection) (*utils.TCPHolder, *url.URL, string, string, error) {
-	tcpAddr, _, tH := utils.GetOpenPort(check.Addr, bindPort, state, sshConn)
+	tcpAddr, tcpPort, tH := utils.GetOpenPort(check.Addr, bindPort, state, sshConn)
+
+	if tcpPort != bindPort && viper.GetBool("force-requested-ports") {
+		return nil, nil, "", "", fmt.Errorf("Error assigning requested port to tunnel")
+	}
 
 	if tH == nil {
 		lb, err := roundrobin.New(nil)
