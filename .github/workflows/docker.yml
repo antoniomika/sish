@@ -28,7 +28,8 @@ jobs:
 
         if [[ ${GITHUB_REF} =~ ^refs\/tags\/v.*$ ]]
         then
-          REF="${GITHUB_REF//refs\/tags\/}"
+          REF="${GITHUB_REF//refs\/tags\/v}"
+          OTHER_TAGS="${OTHER_TAGS} -t ${GITHUB_REPOSITORY}:${GITHUB_REF//refs\/tags\/}"
           if ! [[ ${GITHUB_REF} =~ ^refs\/tags\/v.*-.*$ ]]
           then
             OTHER_TAGS="${OTHER_TAGS} -t ${GITHUB_REPOSITORY}:latest"
