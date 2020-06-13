@@ -48,6 +48,6 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /app/deploy/ /app/deploy/
 COPY --from=builder /app/README* /app/LICENSE* /app/
 COPY --from=builder /app/templates /app/templates
-COPY --from=builder /go/bin/ /app/
+COPY --from=builder /go/bin/sish /app/sish
 
 ENTRYPOINT ["/app/sish"]
