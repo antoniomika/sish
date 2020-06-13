@@ -25,7 +25,7 @@ ARG APP_NAME=sish
 
 RUN go generate ./...
 RUN go test ./...
-RUN go install -ldflags="-s -w -X github.com/${REPOSITORY}/cmd.Version=${VERSION} -X github.com/${REPOSITORY}/cmd.Commit=${COMMIT} -X github.com/${REPOSITORY}/cmd.Date=${DATE}"
+RUN go build -o /go/bin/${APP_NAME} -ldflags="-s -w -X github.com/${REPOSITORY}/cmd.Version=${VERSION} -X github.com/${REPOSITORY}/cmd.Commit=${COMMIT} -X github.com/${REPOSITORY}/cmd.Date=${DATE}"
 
 FROM alpine
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"

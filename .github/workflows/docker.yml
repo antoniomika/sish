@@ -19,8 +19,8 @@ jobs:
         qemu-version: latest
     - name: Login to Docker Registry
       env:
-        DOCKER_USERNAME: ${{ secrets.GITHUB_DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.GITHUB_DOCKER_PASSWORD }}
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       run: echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin
     - name: Build and push the Docker images
       run: |
