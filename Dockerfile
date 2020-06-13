@@ -21,6 +21,7 @@ ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
 ARG REPOSITORY=unknown
+ARG APP_NAME=sish
 
 RUN go generate ./...
 RUN go test ./...
@@ -36,6 +37,6 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /app/deploy/ /app/deploy/
 COPY --from=builder /app/README* /app/LICENSE* /app/
 COPY --from=builder /app/templates /app/templates
-COPY --from=builder /go/bin/sish /app/sish
+COPY --from=builder /go/bin/ /app/
 
-ENTRYPOINT ["/app/sish"]
+ENTRYPOINT ["/app/${APP_NAME}"]

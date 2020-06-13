@@ -9,6 +9,10 @@ WORKDIR /app
 RUN mkdir -p /emptydir
 RUN apk add --no-cache git ca-certificates
 
+RUN --mount=type=bind,target=/cache,from=antoniomika/sish-build-cache \
+    mkdir -p /go/pkg/ && cp -R /cache/mod/ /go/pkg/ && \
+    mkdir -p /root/.cache/ && cp -R /cache/go-build/ /root/.cache/
+
 COPY . .
 
 ARG VERSION=dev
@@ -17,21 +21,23 @@ ARG DATE=unknown
 ARG REPOSITORY=unknown
 ARG APP_NAME=sish
 
+RUN go generate ./...
+RUN go test ./...
+
+FROM scratch as build-cache
+LABEL maintainer="Antonio Mika <me@antoniomika.me>"
+
+COPY --from=builder /go/pkg/mod /mod
+COPY --from=builder /root/.cache/go-build /go-build
+
+FROM builder
+
 ARG TARGETOS
 ARG TARGETARCH
 
-RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
-    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
-    go generate ./...
-RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
-    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
-    go test ./...
-
 ENV GOOS=${TARGETOS} GOARCH=${TARGETARCH}
 
-RUN --mount=type=cache,target=/go/pkg/mod,sharing=locked \
-    --mount=type=cache,target=/root/.cache/go-build,sharing=locked \
-    go build -o /go/bin/${APP_NAME} -ldflags="-s -w -X github.com/${REPOSITORY}/cmd.Version=${VERSION} -X github.com/${REPOSITORY}/cmd.Commit=${COMMIT} -X github.com/${REPOSITORY}/cmd.Date=${DATE}"
+RUN go build -o /go/bin/${APP_NAME} -ldflags="-s -w -X github.com/${REPOSITORY}/cmd.Version=${VERSION} -X github.com/${REPOSITORY}/cmd.Commit=${COMMIT} -X github.com/${REPOSITORY}/cmd.Date=${DATE}"
 
 FROM scratch as release
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
