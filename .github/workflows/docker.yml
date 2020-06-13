@@ -6,14 +6,17 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Lint the codebase
-      run: |
-        docker run --rm -v $(pwd):/app -w /app golangci/golangci-lint:v1.27.0 golangci-lint run -E goimports -E godot
-    - name: Set up Docker Buildx
-      uses: crazy-max/ghaction-docker-buildx@v1
+      uses: golangci/golangci-lint-action@v1
+      with:
+        version: v1.27
+        args: -E goimports -E godot
+    - name: Setup Docker Buildx
+      uses: crazy-max/ghaction-docker-buildx@v3
       with:
         buildx-version: latest
+        qemu-version: latest
     - name: Login to Docker Registry
       env:
         DOCKER_USERNAME: ${{ secrets.GITHUB_DOCKER_USERNAME }}
@@ -34,6 +37,12 @@ jobs:
           then
             OTHER_TAGS="${OTHER_TAGS} -t ${GITHUB_REPOSITORY}:latest"
           fi
+        fi
+
+        if ! docker buildx imagetools inspect ${GITHUB_REPOSITORY}-build-cache:latest > /dev/null 2>&1; then
+          docker pull alpine:latest
+          docker tag alpine:latest ${GITHUB_REPOSITORY}-build-cache:latest
+          docker push ${GITHUB_REPOSITORY}-build-cache:latest
         fi
 
         docker buildx build \

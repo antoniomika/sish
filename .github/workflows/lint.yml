@@ -3,14 +3,16 @@ name: Lint
 on: [pull_request]
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: Lint the codebase
-      run: |
-        docker run --rm -v $(pwd):/app -w /app golangci/golangci-lint:v1.27.0 golangci-lint run -E goimports -E godot
-    - name: Build and the Docker images
+      uses: golangci/golangci-lint-action@v1
+      with:
+        version: v1.27
+        args: -E goimports -E godot
+    - name: Build the Docker image
       run: |
         DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
