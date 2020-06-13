@@ -21,7 +21,6 @@ ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
 ARG REPOSITORY=unknown
-ARG APP_NAME=sish
 
 RUN go generate ./...
 RUN go test ./...
@@ -39,4 +38,4 @@ COPY --from=builder /app/README* /app/LICENSE* /app/
 COPY --from=builder /app/templates /app/templates
 COPY --from=builder /go/bin/ /app/
 
-ENTRYPOINT ["/app/${APP_NAME}"]
+ENTRYPOINT ["/app/sish"]
