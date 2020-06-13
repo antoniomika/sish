@@ -58,5 +58,5 @@ jobs:
           --build-arg COMMIT=${GITHUB_SHA} \
           --build-arg DATE=${DATE} \
           --build-arg REPOSITORY=${GITHUB_REPOSITORY} \
-          -t ${REPOSITORY}-build-cache:latest \
+          -t ${GITHUB_REPOSITORY}-build-cache:latest \
           -f Dockerfile.buildkit .
