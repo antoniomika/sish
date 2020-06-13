@@ -10,8 +10,8 @@ RUN mkdir -p /emptydir
 RUN apk add --no-cache git ca-certificates
 
 RUN --mount=type=bind,target=/cache,from=antoniomika/sish-build-cache \
-    mkdir -p /go/pkg/ && cp -R /cache/mod/ /go/pkg/ && \
-    mkdir -p /root/.cache/ && cp -R /cache/go-build/ /root/.cache/
+    mkdir -p /go/pkg/ && cp -R /cache/mod/ /go/pkg/ || true && \
+    mkdir -p /root/.cache/ && cp -R /cache/go-build/ /root/.cache/ || true
 
 COPY . .
 
