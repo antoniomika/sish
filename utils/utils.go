@@ -104,7 +104,7 @@ func CommaSplitFields(c rune) bool {
 	return c == ','
 }
 
-// LoadProxyProtoConfig will load the timeouts and policies for the proxy protocol
+// LoadProxyProtoConfig will load the timeouts and policies for the proxy protocol.
 func LoadProxyProtoConfig(l *proxyproto.Listener) {
 	if viper.GetBool("proxy-protocol-use-timeout") {
 		l.UseTimeout = true
