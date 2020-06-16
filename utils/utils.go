@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ScaleFT/sshkeys"
+	"github.com/antoniomika/go-proxyproto"
 	"github.com/fsnotify/fsnotify"
 	"github.com/jpillora/ipfilter"
 	"github.com/logrusorgru/aurora"
@@ -101,6 +102,27 @@ func Setup(logWriter io.Writer) {
 // CommaSplitFields is a function used by strings.FieldsFunc to split around commas.
 func CommaSplitFields(c rune) bool {
 	return c == ','
+}
+
+// LoadProxyProtoConfig will load the timeouts and policies for the proxy protocol
+func LoadProxyProtoConfig(l *proxyproto.Listener) {
+	if viper.GetBool("proxy-protocol-use-timeout") {
+		l.UseTimeout = true
+		l.Timeout = viper.GetDuration("proxy-protocol-timeout")
+
+		l.Policy = func(upstream net.Addr) (proxyproto.Policy, error) {
+			switch viper.GetString("proxy-protocol-policy") {
+			case "ignore":
+				return proxyproto.IGNORE, nil
+			case "reject":
+				return proxyproto.REJECT, nil
+			case "require":
+				return proxyproto.REQUIRE, nil
+			}
+
+			return proxyproto.USE, nil
+		}
+	}
 }
 
 // GetRandomPortInRange returns a random port in the provided range.

@@ -8,9 +8,9 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/antoniomika/go-proxyproto"
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
-	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )

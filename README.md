@@ -323,6 +323,10 @@ Flags:
                                                     it doesn't exist using the --private-key-passphrase to encrypt it if supplied (default "deploy/keys/ssh_key")
   -p, --private-key-passphrase string               Passphrase to use to encrypt the server private key (default "S3Cr3tP4$$phrAsE")
       --proxy-protocol                              Use the proxy-protocol while proxying connections in order to pass-on IP address and port information
+      --proxy-protocol-listener                     Use the proxy-protocol to resolve ip addresses from user connections
+      --proxy-protocol-policy string                What to do with the proxy protocol header. Can be use, ignore, reject, or require (default "use")
+      --proxy-protocol-timeout duration             The duration to wait for the proxy proto header (default 200ms)
+      --proxy-protocol-use-timeout                  Use a timeout for the proxy-protocol read
   -q, --proxy-protocol-version string               What version of the proxy protocol to use. Can either be 1, 2, or userdefined.
                                                     If userdefined, the user needs to add a command to SSH called proxyproto:version (ie proxyproto:1) (default "1")
       --redirect-root                               Redirect the root domain to the location defined in --redirect-root-location (default true)

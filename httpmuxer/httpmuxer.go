@@ -14,10 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antoniomika/go-proxyproto"
 	"github.com/antoniomika/oxy/forward"
 	"github.com/antoniomika/sish/utils"
 	"github.com/caddyserver/certmagic"
-	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
 
 	"github.com/gin-gonic/gin"
@@ -202,13 +202,22 @@ func Start(state *utils.State) {
 		}
 
 		go func() {
+			var httpsListener net.Listener
+
 			l, err := net.Listen("tcp", httpsServer.Addr)
 			if err != nil {
 				log.Fatalf("couldn't listen to %q: %q\n", httpsServer.Addr, err.Error())
 			}
 
-			httpsListener := &proxyproto.Listener{
-				Listener: l,
+			if viper.GetBool("proxy-protocol-listener") {
+				hListener := &proxyproto.Listener{
+					Listener: l,
+				}
+
+				utils.LoadProxyProtoConfig(hListener)
+				httpsListener = hListener
+			} else {
+				httpsListener = l
 			}
 
 			defer httpsListener.Close()
@@ -222,16 +231,25 @@ func Start(state *utils.State) {
 		Handler: r,
 	}
 
+	var httpListener net.Listener
+
 	l, err := net.Listen("tcp", httpServer.Addr)
 	if err != nil {
 		log.Fatalf("couldn't listen to %q: %q\n", httpServer.Addr, err.Error())
 	}
 
-	httpsListener := &proxyproto.Listener{
-		Listener: l,
+	if viper.GetBool("proxy-protocol-listener") {
+		hListener := &proxyproto.Listener{
+			Listener: l,
+		}
+
+		utils.LoadProxyProtoConfig(hListener)
+		httpListener = hListener
+	} else {
+		httpListener = l
 	}
 
-	defer httpsListener.Close()
+	defer httpListener.Close()
 
-	log.Fatal(httpServer.Serve(httpsListener))
+	log.Fatal(httpServer.Serve(httpListener))
 }

@@ -56,6 +56,10 @@ port-bind-range: 0,1024-65535
 private-key-location: deploy/keys/ssh_key
 private-key-passphrase: S3Cr3tP4$$phrAsE
 proxy-protocol: false
+proxy-protocol-listener: false
+proxy-protocol-policy: use
+proxy-protocol-timeout: 200ms
+proxy-protocol-use-timeout: false
 proxy-protocol-version: "1"
 redirect-root: true
 redirect-root-location: https://github.com/antoniomika/sish

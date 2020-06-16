@@ -8,10 +8,10 @@ import (
 	"net/url"
 	"sync"
 
+	"github.com/antoniomika/go-proxyproto"
 	"github.com/antoniomika/oxy/roundrobin"
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
-	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
 )
 
@@ -38,19 +38,28 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 			Balancer:       lb,
 		}
 
-		l, err := net.Listen("tcp", tcpAddr)
+		var l net.Listener
+
+		lis, err := net.Listen("tcp", tcpAddr)
 		if err != nil {
 			log.Println("Error listening on addr:", err)
 			return nil, nil, "", "", err
 		}
 
-		ln := &proxyproto.Listener{
-			Listener: l,
+		if viper.GetBool("proxy-protocol-listener") {
+			ln := &proxyproto.Listener{
+				Listener: lis,
+			}
+
+			utils.LoadProxyProtoConfig(ln)
+			l = ln
+		} else {
+			l = lis
 		}
 
-		tH.Listener = ln
+		tH.Listener = l
 
-		state.Listeners.Store(tcpAddr, ln)
+		state.Listeners.Store(tcpAddr, l)
 		state.TCPListeners.Store(tcpAddr, tH)
 	}
 
