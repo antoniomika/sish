@@ -48,12 +48,12 @@ docker-compose -f deploy/docker-compose.yml up -d
 ```
 
 The domain and DNS auth info in `deploy/docker-compose.yml` and `deploy/le-config.yml` should be updated
-to reflect your needs. You will also need to create a symlink in the `./ssl` directory that points to the
+to reflect your needs. You will also need to create a symlink that points to your domain's
 Let's Encrypt certificates like:
 
 ```bash
-ln -s /etc/letsencrypt/live/ssi.sh/fullchain.pem deploy/ssl/ssi.sh.crt
-ln -s /etc/letsencrypt/live/ssi.sh/privkey.pem deploy/ssl/ssi.sh.key
+ln -s /etc/letsencrypt/live/<your domain>/fullchain.pem deploy/ssl/<your domain>.crt
+ln -s /etc/letsencrypt/live/<your domain>/privkey.pem deploy/ssl/<your domain>.key
 ```
 
 I use these files in my deployment of `ssi.sh` and have included them here for consistency.
