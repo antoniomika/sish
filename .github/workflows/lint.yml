@@ -16,12 +16,15 @@ jobs:
       run: |
         DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-        docker build \
+        docker buildx build \
+          --load \
+          --target release \
           --cache-from ${GITHUB_REPOSITORY}-cache \
           --build-arg VERSION=${GITHUB_SHA} \
           --build-arg COMMIT=${GITHUB_SHA} \
           --build-arg DATE=${DATE} \
           --build-arg REPOSITORY=${GITHUB_REPOSITORY} \
-          -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} .
+          -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} \
+          -f Dockerfile.buildkit .
 
         docker run -it --rm ${GITHUB_REPOSITORY}:${GITHUB_SHA} -v
