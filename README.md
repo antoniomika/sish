@@ -4,8 +4,8 @@ An open source serveo/ngrok alternative.
 
 ## Preparation
 
-To use sish you need to update your A DNS record for using sish.
-Add **A** DNS record with * value to your IP address for using sish.
+To use sish you need to update your DNS  settings to wildcard DNS record.
+Add **A** DNS record with * value to IP address of your server.
 
 ## Deploy
 
