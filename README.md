@@ -2,6 +2,11 @@
 
 An open source serveo/ngrok alternative.
 
+## Preparation
+
+To use sish you need to update your A DNS record for using sish.
+Add **A** DNS record with * value to your IP address for using sish.
+
 ## Deploy
 
 Builds are made automatically for each commit to the repo and are pushed to Dockerhub. Builds are
