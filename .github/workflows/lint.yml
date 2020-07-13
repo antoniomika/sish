@@ -27,4 +27,4 @@ jobs:
           -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} \
           -f Dockerfile.buildkit .
 
-        docker run -it --rm ${GITHUB_REPOSITORY}:${GITHUB_SHA} -v
+        docker run --rm ${GITHUB_REPOSITORY}:${GITHUB_SHA} -v
