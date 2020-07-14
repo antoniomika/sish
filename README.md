@@ -2,11 +2,6 @@
 
 An open source serveo/ngrok alternative.
 
-## Preparation
-
-To use sish you need to update your DNS  settings to wildcard DNS record.
-Add **A** DNS record with * value to IP address of your server.
-
 ## Deploy
 
 Builds are made automatically for each commit to the repo and are pushed to Dockerhub. Builds are
@@ -219,6 +214,12 @@ IP, use the `/32` range.
 To whitelist countries, use `--whitelisted-countries` with a comma-separated
 string of countries in ISO format (for example, "pt" for Portugal). You'll also
 need to set `--geodb` to `true`.
+
+## DNS Setup
+
+To use sish, you need to add a wildcard DNS record that is used for multiplexed subdomains.
+Adding an `A` record with `*` as the subdomain to the IP address of your server is the simplest way to achieve this configuration.
+
 
 ## Demo - At this time, the demo instance has been set to require auth due to abuse
 
