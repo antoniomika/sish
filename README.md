@@ -215,6 +215,12 @@ To whitelist countries, use `--whitelisted-countries` with a comma-separated
 string of countries in ISO format (for example, "pt" for Portugal). You'll also
 need to set `--geodb` to `true`.
 
+## DNS Setup
+
+To use sish, you need to add a wildcard DNS record that is used for multiplexed subdomains.
+Adding an `A` record with `*` as the subdomain to the IP address of your server is the simplest way to achieve this configuration.
+
+
 ## Demo - At this time, the demo instance has been set to require auth due to abuse
 
 There is a demo service (and my private instance) currently running on `ssi.sh` that
