@@ -22,6 +22,12 @@ type channelForwardMsg struct {
 	Rport uint32
 }
 
+// forwardedTCPReplyPayload defines the reply to inform the client what port was actually assigned
+// https://tools.ietf.org/html/rfc4254#section-7.1
+type channelForwardReply struct {
+	Rport uint32
+}
+
 // forwardedTCPPayload is the payload sent by SSH
 // to init a forwarded connection.
 type forwardedTCPPayload struct {
@@ -170,6 +176,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			}
 			return
 		}
+
+		//Reply that the session is successfully set up with the port that was assigned (which may be different than what was requested)
+		channelForwardReplyPayload := ssh.Marshal(channelForwardReply{bindPort})
+		newRequest.Reply(true, channelForwardReplyPayload)
 
 		mainRequestMessages = requestMessages
 
