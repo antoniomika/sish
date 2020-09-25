@@ -21,7 +21,10 @@ not built by default and will require a retag from a maintainer to be built.
         -v ~/sish/ssl:/ssl \
         -v ~/sish/keys:/keys \
         -v ~/sish/pubkeys:/pubkeys \
-        --net=host antoniomika/sish:latest \
+        --publish 22:22 \
+        --publish 80:80 \
+        --publish 443:443 \
+        antoniomika/sish:latest \
         --ssh-address=:22 \
         --http-address=:80 \
         --https-address=:443 \
