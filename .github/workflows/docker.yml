@@ -18,8 +18,12 @@ jobs:
     - name: Lint the codebase
       uses: golangci/golangci-lint-action@v1
       with:
-        version: v1.27
+        version: v1.31
         args: -E goimports -E godot
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v1
+      with:
+        platforms: all
     - name: Set up Docker Buildx
       id: buildx
       uses: docker/setup-buildx-action@v1
