@@ -8,9 +8,11 @@ ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
 ARG REPOSITORY=unknown
-ARG APP_NAME=unknown
 
 WORKDIR /app
+
+RUN mkdir -p /emptydir
+RUN apk add --no-cache git ca-certificates
 
 RUN --mount=type=bind,target=/cache,from=antoniomika/sish-build-cache \
     mkdir -p /go/pkg/ && cp -R /cache/mod/ /go/pkg/ || true && \
