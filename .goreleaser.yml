@@ -36,7 +36,5 @@ archives:
     files:
       - LICENSE*
       - README*
-      - deploy/ssl/
-      - deploy/keys/
-      - deploy/pubkeys/
+      - deploy/**/*
       - templates/**/*
