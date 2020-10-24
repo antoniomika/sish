@@ -159,14 +159,20 @@ func Start() {
 			continue
 		}
 
+		clientLoggedInMutex := &sync.Mutex{}
+
+		clientLoggedInMutex.Lock()
 		clientLoggedIn := false
+		clientLoggedInMutex.Unlock()
 
 		if viper.GetBool("cleanup-unbound") {
 			go func() {
 				<-time.After(viper.GetDuration("cleanup-unbound-timeout"))
+				clientLoggedInMutex.Lock()
 				if !clientLoggedIn {
 					conn.Close()
 				}
+				clientLoggedInMutex.Unlock()
 			}()
 		}
 
@@ -174,7 +180,9 @@ func Start() {
 
 		go func() {
 			sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
+			clientLoggedInMutex.Lock()
 			clientLoggedIn = true
+			clientLoggedInMutex.Unlock()
 			if err != nil {
 				conn.Close()
 				log.Println(err)
@@ -188,6 +196,7 @@ func Start() {
 				Close:     make(chan bool),
 				Messages:  make(chan string),
 				Session:   make(chan bool),
+				SetupLock: &sync.Mutex{},
 			}
 
 			state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)

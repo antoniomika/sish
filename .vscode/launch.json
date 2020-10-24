@@ -11,6 +11,7 @@
       "mode": "auto",
       "program": "${workspaceFolder}",
       "env": {},
+      "buildFlags": "-race",
       "args": [
         "--debug=true",
         "--http-address=:8081",

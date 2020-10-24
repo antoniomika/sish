@@ -32,6 +32,16 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 			return nil, nil, "", "", err
 		}
 
+		lis, err := net.Listen("tcp", tcpAddr)
+		if err != nil {
+			log.Println("Error listening on addr:", err)
+			return nil, nil, "", "", err
+		}
+
+		realAddr := lis.Addr().(*net.TCPAddr)
+
+		tcpAddr = realAddr.String()
+
 		tH = &utils.TCPHolder{
 			TCPHost:        tcpAddr,
 			SSHConnections: &sync.Map{},
@@ -39,12 +49,6 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		}
 
 		var l net.Listener
-
-		lis, err := net.Listen("tcp", tcpAddr)
-		if err != nil {
-			log.Println("Error listening on addr:", err)
-			return nil, nil, "", "", err
-		}
 
 		if viper.GetBool("proxy-protocol-listener") {
 			ln := &proxyproto.Listener{
