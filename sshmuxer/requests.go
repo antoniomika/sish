@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/antoniomika/go-proxyproto"
 	"github.com/antoniomika/sish/utils"
@@ -40,6 +41,11 @@ type forwardedTCPPayload struct {
 // handleRemoteForward will handle a remote forward request
 // and stand up the relevant listeners.
 func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
+	cleanedUp := sync.Once{}
+
+	sshConn.SetupLock.Lock()
+	defer cleanedUp.Do(sshConn.SetupLock.Unlock)
+
 	check := &channelForwardMsg{}
 
 	err := ssh.Unmarshal(newRequest.Payload, check)
@@ -112,6 +118,8 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		connType = "https"
 	}
 
+	portChannelForwardReplyPayload := channelForwardReply{bindPort}
+
 	mainRequestMessages := fmt.Sprintf("Starting SSH Forwarding service for %s. Forwarded connections can be accessed via the following methods:\r\n", aurora.Sprintf(aurora.Green("%s:%s"), connType, stringPort))
 
 	switch listenerType {
@@ -177,14 +185,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			return
 		}
 
-		// reply that the session is successfully set up with the port that was
-		// assigned (which may be different than what was requested)
-		channelForwardReplyPayload := ssh.Marshal(channelForwardReply{bindPort})
-		err = newRequest.Reply(true, channelForwardReplyPayload)
-		if err != nil {
-			log.Println("Error replying to port forwarding request:", err)
-			return
-		}
+		portChannelForwardReplyPayload = channelForwardReply{uint32(tH.Listener.Addr().(*net.TCPAddr).Port)}
 
 		mainRequestMessages = requestMessages
 
@@ -206,7 +207,15 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		}()
 	}
 
+	err = newRequest.Reply(true, ssh.Marshal(portChannelForwardReplyPayload))
+	if err != nil {
+		log.Println("Error replying to port forwarding request:", err)
+		return
+	}
+
 	sshConn.SendMessage(mainRequestMessages, false)
+
+	cleanedUp.Do(sshConn.SetupLock.Unlock)
 
 	for {
 		cl, err := listenerHolder.Accept()
@@ -216,9 +225,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 		resp := &forwardedTCPPayload{
 			Addr:       check.Addr,
-			Port:       check.Rport,
+			Port:       portChannelForwardReplyPayload.Rport,
 			OriginAddr: check.Addr,
-			OriginPort: check.Rport,
+			OriginPort: portChannelForwardReplyPayload.Rport,
 		}
 
 		newChan, newReqs, err := sshConn.SSHConn.OpenChannel("forwarded-tcpip", ssh.Marshal(resp))
