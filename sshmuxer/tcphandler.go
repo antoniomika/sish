@@ -41,7 +41,6 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		realAddr := lis.Addr().(*net.TCPAddr)
 
 		tcpAddr = realAddr.String()
-		tcpPort = uint32(realAddr.Port)
 
 		tH = &utils.TCPHolder{
 			TCPHost:        tcpAddr,
