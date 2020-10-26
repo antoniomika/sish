@@ -16,7 +16,7 @@ func handleRequests(reqs <-chan *ssh.Request, sshConn *utils.SSHConnection, stat
 		if viper.GetBool("debug") {
 			log.Println("Main Request Info", req.Type, req.WantReply, string(req.Payload))
 		}
-		go handleRequest(req, sshConn, state)
+		handleRequest(req, sshConn, state)
 	}
 }
 
