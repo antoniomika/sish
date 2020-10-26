@@ -207,11 +207,15 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		}()
 	}
 
-	if check.Rport != 0 {
+	var replyMessage []byte
+
+	if check.Rport == 0 {
+		replyMessage = ssh.Marshal(portChannelForwardReplyPayload)
+	} else {
 		portChannelForwardReplyPayload.Rport = check.Rport
 	}
 
-	err = newRequest.Reply(true, ssh.Marshal(portChannelForwardReplyPayload))
+	err = newRequest.Reply(true, replyMessage)
 	if err != nil {
 		log.Println("Error replying to port forwarding request:", err)
 		return
