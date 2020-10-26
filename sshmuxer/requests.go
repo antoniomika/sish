@@ -185,7 +185,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			return
 		}
 
-		portChannelForwardReplyPayload = channelForwardReply{uint32(tH.Listener.Addr().(*net.TCPAddr).Port)}
+		portChannelForwardReplyPayload.Rport = uint32(tH.Listener.Addr().(*net.TCPAddr).Port)
 
 		mainRequestMessages = requestMessages
 
@@ -205,6 +205,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 				state.TCPListeners.Delete(tcpAddr)
 			}
 		}()
+	}
+
+	if check.Rport != 0 {
+		portChannelForwardReplyPayload.Rport = check.Rport
 	}
 
 	err = newRequest.Reply(true, ssh.Marshal(portChannelForwardReplyPayload))

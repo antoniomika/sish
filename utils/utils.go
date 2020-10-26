@@ -475,7 +475,9 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 		checkPort := func(checkerAddr string, checkerPort uint32) bool {
 			listenAddr = fmt.Sprintf("%s:%d", bindAddr, bindPort)
 			checkedPort, err := CheckPort(checkerPort, viper.GetString("port-bind-range"))
-			if err == nil && !viper.GetBool("tcp-load-balancer") {
+			_, ok := state.TCPListeners.Load(listenAddr)
+
+			if err == nil && (!viper.GetBool("tcp-load-balancer") || (viper.GetBool("tcp-load-balancer") && !ok)) {
 				ln, listenErr := net.Listen("tcp", fmt.Sprintf(":%d", port))
 				if listenErr != nil {
 					err = listenErr

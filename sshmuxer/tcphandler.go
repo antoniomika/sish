@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/antoniomika/go-proxyproto"
@@ -40,7 +41,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 
 		realAddr := lis.Addr().(*net.TCPAddr)
 
-		tcpAddr = realAddr.String()
+		tcpAddr = strings.ReplaceAll(realAddr.String(), "[::]", "")
 
 		tH = &utils.TCPHolder{
 			TCPHost:        tcpAddr,
