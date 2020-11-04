@@ -56,6 +56,10 @@ ln -s /etc/letsencrypt/live/<your domain>/fullchain.pem deploy/ssl/<your domain>
 ln -s /etc/letsencrypt/live/<your domain>/privkey.pem deploy/ssl/<your domain>.key
 ```
 
+Careful: the symlinks need to point to `/etc/letsencrypt`, not a relative path. The symlinks will
+not resolve on the host filesystem, but they will resolve inside of the sish container because it mounts
+the letsencrypt files in /etc/letsencrypt, _not_ ./letsencrypt.
+
 I use these files in my deployment of `ssi.sh` and have included them here for consistency.
 
 ## How it works
