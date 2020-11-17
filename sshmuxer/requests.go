@@ -179,6 +179,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			if err != nil {
 				log.Println("Error replying to socket request:", err)
 			}
+
 			return
 		}
 

@@ -167,6 +167,23 @@ sish@sish0:~/sish/pubkeys# curl https://github.com/antoniomika.keys > antoniomik
 This will load my public keys from GitHub, place them in the directory that sish is watching,
 and then load the pubkey. As soon as this command is run, I can SSH normally and it will authorize me.
 
+### Port pre-assignment
+
+If you use authentication keys, you can also pre-assign the port that a particular host can bind
+with this option:
+
+```--use-ports-from-keys```
+
+It is slightly abusing the auth_keys specifications (sshd(8)) according to which you can specify
+SSH options within the keys. Your line in pubkeys directory might look like this:
+
+```permitlisten="12345" ssh-rsa THE_PUBKEY_IS_HERE comment@HOSTNAME```
+
+Sish will allow the host to use only this particular port for TCP forwarding.
+This might be useful for managing multiple computers to which 3rd party might have an access.
+If you do this for every machine, none of them can block the pre-designated port dedicated for the other
+even if somebody tried to mangle the settings.
+
 ## Custom domains
 
 sish supports allowing users to bring custom domains to the service, but SSH key auth is required to be
@@ -297,6 +314,7 @@ Flags:
       --debug                                       Enable debugging information
   -d, --domain string                               The root domain for HTTP(S) multiplexing that will be appended to subdomains (default "ssi.sh")
       --force-requested-aliases                     Force the aliases used to be the one that is requested. Will fail the bind if it exists already
+      --use-ports-from-keys                         Ignore requested port and use the one specified as "sishport" option with the user's pubkey, if exists.
       --force-requested-ports                       Force the ports used to be the one that is requested. Will fail the bind if it exists already
       --force-requested-subdomains                  Force the subdomains used to be the one that is requested. Will fail the bind if it exists already
       --geodb                                       Use a geodb to verify country IP address association for IP filtering
