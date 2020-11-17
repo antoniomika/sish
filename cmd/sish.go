@@ -77,6 +77,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("load-templates-directory", "", "templates/*", "The directory and glob parameter for templates that should be loaded")
 
 	rootCmd.PersistentFlags().BoolP("force-requested-ports", "", false, "Force the ports used to be the one that is requested. Will fail the bind if it exists already")
+	rootCmd.PersistentFlags().BoolP("use-ports-from-keys", "", false, "Ignore requested port and use the one specified as \"sishport\" option with the user's pubkey, if exists.")
 	rootCmd.PersistentFlags().BoolP("force-requested-aliases", "", false, "Force the aliases used to be the one that is requested. Will fail the bind if it exists already")
 	rootCmd.PersistentFlags().BoolP("force-requested-subdomains", "", false, "Force the subdomains used to be the one that is requested. Will fail the bind if it exists already")
 	rootCmd.PersistentFlags().BoolP("bind-random-subdomains", "", true, "Force bound HTTP tunnels to use random subdomains instead of user provided ones")

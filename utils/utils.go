@@ -37,12 +37,17 @@ const (
 	sishDNSPrefix = "sish="
 )
 
+type PublicKeysAndOptions struct {
+	options []string
+	key     ssh.PublicKey
+}
+
 var (
 	// Filter is the IPFilter used to block connections.
 	Filter *ipfilter.IPFilter
 
 	// certHolder is a slice of publickeys for auth.
-	certHolder = make([]ssh.PublicKey, 0)
+	certHolder = make([]PublicKeysAndOptions, 0)
 
 	// holderLock is the mutex used to update the certHolder slice.
 	holderLock = sync.Mutex{}
@@ -262,7 +267,7 @@ func WatchCerts() {
 // loadCerts loads public keys from the keys directory into a slice that is used
 // authenticating a user.
 func loadCerts() {
-	tmpCertHolder := make([]ssh.PublicKey, 0)
+	tmpCertHolder := make([]PublicKeysAndOptions, 0)
 
 	files, err := ioutil.ReadDir(viper.GetString("authentication-keys-directory"))
 	if err != nil {
@@ -271,13 +276,13 @@ func loadCerts() {
 
 	parseKey := func(keyBytes []byte, fileInfo os.FileInfo) {
 		keyHandle := func(keyBytes []byte, fileInfo os.FileInfo) []byte {
-			key, _, _, rest, e := ssh.ParseAuthorizedKey(keyBytes)
+			key, _, options, rest, e := ssh.ParseAuthorizedKey(keyBytes)
 			if e != nil {
 				log.Printf("Can't load file %s as public key: %s\n", fileInfo.Name(), e)
 			}
 
 			if key != nil {
-				tmpCertHolder = append(tmpCertHolder, key)
+				tmpCertHolder = append(tmpCertHolder, PublicKeysAndOptions{options: options, key: key})
 			}
 			return rest
 		}
@@ -319,7 +324,7 @@ func GetSSHConfig() *ssh.ServerConfig {
 			holderLock.Lock()
 			defer holderLock.Unlock()
 			for _, i := range certHolder {
-				if bytes.Equal(key.Marshal(), i.Marshal()) {
+				if bytes.Equal(key.Marshal(), i.key.Marshal()) {
 					permssionsData := &ssh.Permissions{
 						Extensions: map[string]string{
 							"pubKey":            string(key.Marshal()),
@@ -461,6 +466,38 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 			bindAddr = ""
 		}
 
+		getPortFromAuthSettings := func() uint32 {
+			holderLock.Lock()
+			defer holderLock.Unlock()
+			for _, i := range certHolder {
+				if bytes.Equal([]byte(sshConn.SSHConn.Permissions.Extensions["pubKey"]), i.key.Marshal()) {
+					for _, o := range i.options {
+						if !strings.HasPrefix(o, "sishport") {
+							return 0
+						}
+						optionSplit := strings.Split(o, "=")
+						if len(optionSplit) != 2 {
+							return 0
+						}
+						portStr := optionSplit[1]
+						if len(portStr) > 0 && portStr[0] == '"' {
+							portStr = portStr[1:]
+						}
+						if len(portStr) > 0 && portStr[len(portStr)-1] == '"' {
+							portStr = portStr[:len(portStr)-1]
+						}
+						authPortNum, err := strconv.ParseUint(portStr, 10, 32)
+						if err != nil {
+							log.Println("Invalid value in sishport option in authorized keys:", portStr)
+							return 0
+						}
+						return uint32(authPortNum)
+					}
+				}
+			}
+			return 0
+		}
+
 		reportUnavailable := func(unavailable bool) {
 			if first && unavailable {
 				extra := " Assigning a random port."
@@ -473,8 +510,21 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 		}
 
 		checkPort := func(checkerAddr string, checkerPort uint32) bool {
+
+			if viper.GetBool("use-ports-from-keys") {
+				authPort := getPortFromAuthSettings()
+				if authPort > 0 {
+					log.Println("The host has pre-assigned port in auth keys:", authPort)
+					bindPort = authPort
+					checkerPort = authPort
+					port = authPort
+					//We want to ensure that user does not get any other port
+				}
+			}
+
 			listenAddr = fmt.Sprintf("%s:%d", bindAddr, bindPort)
 			checkedPort, err := CheckPort(checkerPort, viper.GetString("port-bind-range"))
+
 			_, ok := state.TCPListeners.Load(listenAddr)
 
 			if err == nil && (!viper.GetBool("tcp-load-balancer") || (viper.GetBool("tcp-load-balancer") && !ok)) {
@@ -489,7 +539,9 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 			if viper.GetBool("bind-random-ports") || !first || err != nil {
 				reportUnavailable(true)
 
-				if viper.GetString("port-bind-range") != "" {
+				if viper.GetBool("use-ports-from-keys") {
+					bindPort = 0
+				} else if viper.GetString("port-bind-range") != "" {
 					bindPort = GetRandomPortInRange(viper.GetString("port-bind-range"))
 				} else {
 					bindPort = 0
@@ -512,6 +564,9 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 		}
 
 		for checkPort(bindAddr, bindPort) {
+			if bindPort == 0 {
+				break
+			}
 		}
 
 		return listenAddr, bindPort, tH
