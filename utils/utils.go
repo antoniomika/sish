@@ -297,7 +297,7 @@ func WatchCerts() {
 
 // parseSSHOptions parses options from ssh.ParseAuthorizedKey format to our map format for SSHAuthKey.
 func parseSSHOptions(options []string) map[string][]string {
-	ret := make(map[string][]string, 0)
+	ret := make(map[string][]string)
 	for _, o := range options {
 		values := make([]string, 0)
 		optionSplit := strings.Split(o, "=")
