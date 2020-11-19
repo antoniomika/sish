@@ -36,12 +36,18 @@ const (
 	sishDNSPrefix = "sish="
 )
 
+type SSHAuthKey struct {
+	Key     ssh.PublicKey
+	Options map[string][]string
+	Comment string
+}
+
 var (
 	// Filter is the IPFilter used to block connections.
 	Filter *ipfilter.IPFilter
 
-	// certHolder is a slice of publickeys for auth.
-	certHolder = make(map[string][]string)
+	// certHolder is a map of SSHAuthKey objects, the key is string(Key.key.Marshal()).
+	certHolder = make(map[string]SSHAuthKey)
 
 	// holderLock is the mutex used to update the certHolder slice.
 	holderLock = sync.Mutex{}
@@ -289,10 +295,42 @@ func WatchCerts() {
 	}
 }
 
+// parseSSHOptions parses options from ssh.ParseAuthorizedKey format to our map format for SSHAuthKey.
+func parseSSHOptions(options []string) map[string][]string {
+	ret := make(map[string][]string, 0)
+	for _, o := range options {
+		values := make([]string, 0)
+		optionSplit := strings.Split(o, "=")
+
+		if len(optionSplit) == 1 {
+			ret[optionSplit[0]] = values
+		}
+		if len(optionSplit) == 2 {
+			v, ok := ret[optionSplit[0]]
+			if ok {
+				values = v
+			}
+
+			optionVal := optionSplit[1]
+			if len(optionVal) > 0 && optionVal[0] == '"' {
+				optionVal = optionVal[1:]
+			}
+			if len(optionVal) > 0 && optionVal[len(optionVal)-1] == '"' {
+				optionVal = optionVal[:len(optionVal)-1]
+			}
+
+			values = append(values, optionVal)
+			ret[optionSplit[0]] = values
+		}
+
+	}
+	return ret
+}
+
 // loadCerts loads public keys from the keys directory into a slice that is used
 // authenticating a user.
 func loadCerts() {
-	tmpCertHolder := make(map[string][]string)
+	tmpCertHolder := make(map[string]SSHAuthKey)
 
 	files, err := ioutil.ReadDir(viper.GetString("authentication-keys-directory"))
 	if err != nil {
@@ -301,13 +339,16 @@ func loadCerts() {
 
 	parseKey := func(keyBytes []byte, fileInfo os.FileInfo) {
 		keyHandle := func(keyBytes []byte, fileInfo os.FileInfo) []byte {
-			key, _, options, rest, e := ssh.ParseAuthorizedKey(keyBytes)
+			key, comment, options, rest, e := ssh.ParseAuthorizedKey(keyBytes)
 			if e != nil {
 				log.Printf("Can't load file %s as public key: %s\n", fileInfo.Name(), e)
 			}
 
 			if key != nil {
-				tmpCertHolder[string(key.Marshal())] = options
+
+				tmpCertHolder[string(key.Marshal())] = SSHAuthKey{
+					key, parseSSHOptions(options), comment,
+				}
 			}
 			return rest
 		}
@@ -491,7 +532,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 			bindAddr = ""
 		}
 
-		getPortFromAuthSettings := func() []uint32 {
+		getPortsFromAuthSettings := func() []uint32 {
 			ret := make([]uint32, 0)
 			holderLock.Lock()
 			defer holderLock.Unlock()
@@ -502,25 +543,16 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 			if !ok {
 				return ret
 			}
-			for _, o := range i {
-				if !strings.HasPrefix(o, "permitlisten") {
-					continue
-				}
-				optionSplit := strings.Split(o, "=")
-				if len(optionSplit) != 2 {
-					continue
-				}
-				portStr := optionSplit[1]
-				if len(portStr) > 0 && portStr[0] == '"' {
-					portStr = portStr[1:]
-				}
-				if len(portStr) > 0 && portStr[len(portStr)-1] == '"' {
-					portStr = portStr[:len(portStr)-1]
-				}
-				authPortNum, err := strconv.ParseUint(portStr, 10, 32)
+			ports, ok := i.Options["permitlisten"]
+			if !ok {
+				return ret
+			}
+
+			for _, p := range ports {
+				authPortNum, err := strconv.ParseUint(p, 10, 32)
 				if err != nil {
-					log.Println("Invalid value in permitlisten option in authorized keys:", portStr)
-					return ret
+					log.Println("Invalid value in permitlisten option in authorized keys:", p)
+					continue
 				}
 				ret = append(ret, uint32(authPortNum))
 			}
@@ -541,7 +573,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 		checkPort := func(checkerAddr string, checkerPort uint32) bool {
 
 			if viper.GetBool("use-ports-from-keys") {
-				authPorts = getPortFromAuthSettings()
+				authPorts = getPortsFromAuthSettings()
 				if len(authPorts) > 0 {
 					if viper.GetBool("debug") {
 						log.Println("The host has pre-assigned ports in auth keys:", authPorts)

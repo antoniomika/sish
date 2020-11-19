@@ -179,8 +179,8 @@ SSH options within the keys. Your line in pubkeys directory might look like this
 
 ```permitlisten="12345" ssh-rsa THE_PUBKEY_IS_HERE comment@HOSTNAME```
 
-Sish will allow the host to use only this particular port for TCP forwarding.
-This might be useful for managing multiple computers to which 3rd party might have an access.
+sish will allow the host to use only this particular port for TCP forwarding.
+This might be useful for managing multiple computers to which 3rd party might have access.
 If you do this for every machine, none of them can block the pre-designated port dedicated for the other
 even if somebody tried to mangle the settings.
 
@@ -314,7 +314,7 @@ Flags:
       --debug                                       Enable debugging information
   -d, --domain string                               The root domain for HTTP(S) multiplexing that will be appended to subdomains (default "ssi.sh")
       --force-requested-aliases                     Force the aliases used to be the one that is requested. Will fail the bind if it exists already
-      --use-ports-from-keys                         Ignore requested port and use the one specified as "sishport" option with the user's pubkey, if exists.
+      --use-ports-from-keys                         Ignore requested port and use the one specified as "permitlisten" option with the user's pubkey, if exists
       --force-requested-ports                       Force the ports used to be the one that is requested. Will fail the bind if it exists already
       --force-requested-subdomains                  Force the subdomains used to be the one that is requested. Will fail the bind if it exists already
       --geodb                                       Use a geodb to verify country IP address association for IP filtering
