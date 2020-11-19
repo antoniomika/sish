@@ -25,10 +25,6 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		return nil, nil, "", "", fmt.Errorf("Error assigning requested port to tunnel")
 	}
 
-	if tcpPort == 0 {
-		return nil, nil, "", "", fmt.Errorf("Error! There is no port to be binded for this particular user")
-	}
-
 	if tH == nil {
 		lb, err := roundrobin.New(nil)
 
