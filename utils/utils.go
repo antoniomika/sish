@@ -751,7 +751,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 }
 
 // RandStringBytesMaskImprSrc creates a random string of length n
-// https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-golang
+// https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-golang.
 func RandStringBytesMaskImprSrc(n int) string {
 	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	const (

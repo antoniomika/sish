@@ -24,7 +24,7 @@ type channelForwardMsg struct {
 }
 
 // channelForwardReply defines the reply to inform the client what port was
-// actually assigned https://tools.ietf.org/html/rfc4254#section-7.1
+// actually assigned https://tools.ietf.org/html/rfc4254#section-7.1.
 type channelForwardReply struct {
 	Rport uint32
 }
