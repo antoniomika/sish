@@ -36,6 +36,7 @@ const (
 	sishDNSPrefix = "sish="
 )
 
+// SSHAuthKey is a structure that holds SSH Authorization info including PublicKey, options and comment.
 type SSHAuthKey struct {
 	Key     ssh.PublicKey
 	Options map[string][]string
@@ -197,7 +198,7 @@ func GetRandomPortInRange(portRange string, authPorts []uint32) uint32 {
 	return bindPort
 }
 
-//Check if port is in provided slice.
+// IsPortInSlice checks if the port is in the provided slice.
 func IsPortInSlice(p uint32, s []uint32) bool {
 
 	for _, a := range s {
@@ -551,7 +552,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 			for _, p := range ports {
 				authPortNum, err := strconv.ParseUint(p, 10, 32)
 				if err != nil {
-					log.Println("Invalid value in permitlisten option in authorized keys:", p)
+					log.Println("Invalid value in permitlisten option in authorized keys:", p, "error:", err)
 					continue
 				}
 				ret = append(ret, uint32(authPortNum))
