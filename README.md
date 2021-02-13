@@ -5,7 +5,7 @@ An open source serveo/ngrok alternative.
 ## Deploy
 
 Builds are made automatically for each commit to the repo and are pushed to Dockerhub. Builds are
-tagged using a commit sha, branch name, tag, latest if released on master.
+tagged using a commit sha, branch name, tag, latest if released on main.
 You can find a list [here](https://hub.docker.com/r/antoniomika/sish/tags).
 Each release builds separate `sish` binaries that can be downloaded from
 [here](https://github.com/antoniomika/sish/releases) for various OS/archs.
@@ -223,7 +223,6 @@ need to set `--geodb` to `true`.
 
 To use sish, you need to add a wildcard DNS record that is used for multiplexed subdomains.
 Adding an `A` record with `*` as the subdomain to the IP address of your server is the simplest way to achieve this configuration.
-
 
 ## Demo - At this time, the demo instance has been set to require auth due to abuse
 
