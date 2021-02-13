@@ -62,6 +62,14 @@ the letsencrypt files in /etc/letsencrypt, _not_ ./letsencrypt.
 
 I use these files in my deployment of `ssi.sh` and have included them here for consistency.
 
+## Google Cloud Platform
+
+There is a tutorial for creating an instance in Google Cloud Platform
+with sish fully setup that can be found [here](https://github.com/antoniomika/sish/blob/main/deploy/gcloud.md).
+It can be accessed through [Google Cloud Shell](https://cloud.google.com/shell).
+
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/editor?shellonly=true&cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fantoniomika%2Fsish&cloudshell_git_branch=main&cloudshell_tutorial=deploy%2Fgcloud.md)
+
 ## How it works
 
 SSH can normally forward local and remote ports. This service implements

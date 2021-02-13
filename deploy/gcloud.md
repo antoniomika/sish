@@ -8,7 +8,6 @@ an SSH server that can handle multiplexing of HTTP(S), TCP, and TCP Aliasing
 This tutorial will teach you how to:
 
 * Setup an instance in Google Cloud using the [free tier](https://cloud.google.com/free)
-* Change the default SSH port
 * Add and modify authentication for users
 * Access sish from a remote computer
 
