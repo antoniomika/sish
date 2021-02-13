@@ -5,10 +5,10 @@ on:
     tags:
     - v*
     branches:
-    - master
+    - main
   pull_request:
     branches:
-    - master
+    - main
 
 jobs:
   build:
@@ -48,7 +48,7 @@ jobs:
         fi
 
         DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        REF="${BRANCH_NAME:-master}"
+        REF="${BRANCH_NAME:-main}"
         OTHER_ARGS=""
         OTHER_PUSH_ARGS=""
 

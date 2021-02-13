@@ -5,7 +5,7 @@ An open source serveo/ngrok alternative.
 ## Deploy
 
 Builds are made automatically for each commit to the repo and are pushed to Dockerhub. Builds are
-tagged using a commit sha, branch name, tag, latest if released on master.
+tagged using a commit sha, branch name, tag, latest if released on main.
 You can find a list [here](https://hub.docker.com/r/antoniomika/sish/tags).
 Each release builds separate `sish` binaries that can be downloaded from
 [here](https://github.com/antoniomika/sish/releases) for various OS/archs.
@@ -61,6 +61,14 @@ not resolve on the host filesystem, but they will resolve inside of the sish con
 the letsencrypt files in /etc/letsencrypt, _not_ ./letsencrypt.
 
 I use these files in my deployment of `ssi.sh` and have included them here for consistency.
+
+## Google Cloud Platform
+
+There is a tutorial for creating an instance in Google Cloud Platform
+with sish fully setup that can be found [here](https://github.com/antoniomika/sish/blob/main/deploy/gcloud.md).
+It can be accessed through [Google Cloud Shell](https://cloud.google.com/shell).
+
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/editor?shellonly=true&cloudshell_git_repo=https%3A%2F%2Fgithub.com%2Fantoniomika%2Fsish&cloudshell_git_branch=main&cloudshell_tutorial=deploy%2Fgcloud.md)
 
 ## How it works
 
@@ -223,7 +231,6 @@ need to set `--geodb` to `true`.
 
 To use sish, you need to add a wildcard DNS record that is used for multiplexed subdomains.
 Adding an `A` record with `*` as the subdomain to the IP address of your server is the simplest way to achieve this configuration.
-
 
 ## Demo - At this time, the demo instance has been set to require auth due to abuse
 
