@@ -8,10 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/antoniomika/oxy/roundrobin"
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/viper"
+	"github.com/vulcand/oxy/roundrobin"
 )
 
 // handleAliasListener handles the creation of the aliasHandler

@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/antoniomika/go-proxyproto"
-	"github.com/antoniomika/oxy/forward"
 	"github.com/antoniomika/sish/utils"
 	"github.com/caddyserver/certmagic"
+	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
+	"github.com/vulcand/oxy/forward"
 
 	"github.com/gin-gonic/gin"
 )
@@ -154,6 +154,10 @@ func Start(state *utils.State) {
 	// You can use sish without a wildcard cert, but you really should. If you get a lot of clients
 	// with many random subdomains, you'll burn through your Let's Encrypt quota. Be careful!
 	if viper.GetBool("https") {
+		certmagic.Default.Storage = &certmagic.FileStorage{
+			Path: filepath.Join(viper.GetString("https-certificate-directory"), "certmagic"),
+		}
+
 		certManager := certmagic.NewDefault()
 
 		acmeManager := certmagic.NewACMEManager(certManager, certmagic.DefaultACME)
@@ -162,10 +166,6 @@ func Start(state *utils.State) {
 		acmeManager.Email = viper.GetString("https-ondemand-certificate-email")
 
 		certManager.Issuer = acmeManager
-
-		certManager.Storage = &certmagic.FileStorage{
-			Path: filepath.Join(viper.GetString("https-certificate-directory"), "certmagic"),
-		}
 
 		certManager.OnDemand = &certmagic.OnDemandConfig{
 			DecisionFunc: func(name string) error {

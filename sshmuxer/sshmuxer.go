@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/antoniomika/go-proxyproto"
 	"github.com/antoniomika/sish/httpmuxer"
 	"github.com/antoniomika/sish/utils"
+	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
