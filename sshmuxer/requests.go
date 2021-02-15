@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/antoniomika/go-proxyproto"
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
+	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
@@ -250,13 +250,11 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 				}
 
 				proxyProtoHeader := proxyproto.Header{
-					Version:            sshConn.ProxyProto,
-					Command:            proxyproto.ProtocolVersionAndCommand(proxyproto.PROXY),
-					TransportProtocol:  proxyproto.AddressFamilyAndProtocol(proxyproto.TCPv4),
-					SourceAddress:      sourceInfo.IP,
-					DestinationAddress: destInfo.IP,
-					SourcePort:         uint16(sourceInfo.Port),
-					DestinationPort:    uint16(destInfo.Port),
+					Version:           sshConn.ProxyProto,
+					Command:           proxyproto.ProtocolVersionAndCommand(proxyproto.PROXY),
+					TransportProtocol: proxyproto.AddressFamilyAndProtocol(proxyproto.TCPv4),
+					SourceAddr:        sourceInfo,
+					DestinationAddr:   destInfo,
 				}
 
 				_, err := proxyProtoHeader.WriteTo(newChan)

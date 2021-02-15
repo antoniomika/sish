@@ -23,11 +23,11 @@ import (
 	"time"
 
 	"github.com/ScaleFT/sshkeys"
-	"github.com/antoniomika/go-proxyproto"
 	"github.com/fsnotify/fsnotify"
 	"github.com/jpillora/ipfilter"
 	"github.com/logrusorgru/aurora"
 	"github.com/mikesmitty/edkey"
+	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )

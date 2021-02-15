@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/antoniomika/oxy/forward"
-	"github.com/antoniomika/oxy/roundrobin"
 	"github.com/jpillora/ipfilter"
 	"github.com/spf13/viper"
+	"github.com/vulcand/oxy/forward"
+	"github.com/vulcand/oxy/roundrobin"
 )
 
 // ListenerType represents any listener sish supports.

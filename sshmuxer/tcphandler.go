@@ -9,11 +9,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/antoniomika/go-proxyproto"
-	"github.com/antoniomika/oxy/roundrobin"
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
+	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
+	"github.com/vulcand/oxy/roundrobin"
 )
 
 // handleTCPListener handles the creation of the tcpHandler
