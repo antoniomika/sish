@@ -85,11 +85,11 @@
             requests.response.removeAll();
 
             if ("Content-Type" in requestData.requestHeaders && requestData.requestHeaders["Content-Type"][0] == "application/json") {
-                requestData.requestBody = btoa(JSON.stringify(JSON.parse(atob(requestData.requestBody)), null, 4));
+                requestData.requestBody = btoa(JSON.stringify(JSON.parse(atob(requestData.requestBody)), null, 4).toString('utf-8'));
             }
 
             if ("Content-Type" in requestData.responseHeaders && requestData.responseHeaders["Content-Type"][0] == "application/json") {
-                requestData.responseBody = btoa(JSON.stringify(JSON.parse(atob(requestData.responseBody)), null, 4));
+                requestData.responseBody = btoa(JSON.stringify(JSON.parse(atob(requestData.responseBody)), null, 4).toString('utf-8'));
             }
 
             requests.request.push({
