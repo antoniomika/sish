@@ -286,7 +286,7 @@ Flags:
   -k, --authentication-keys-directory string        Directory where public keys for public key authentication are stored.
                                                     sish will watch this directory and automatically load new keys and remove keys
                                                     from the authentication list (default "deploy/pubkeys/")
-  -u, --authentication-password string              Password to use for ssh server password authentication (default "S3Cr3tP4$$W0rD")
+  -u, --authentication-password string              Password to use for ssh server password authentication
       --banned-aliases string                       A comma separated list of banned aliases that users are unable to bind
   -o, --banned-countries string                     A comma separated list of banned countries. Applies to HTTP, TCP, and SSH connections
   -x, --banned-ips string                           A comma separated list of banned ips that are unable to access the service. Applies to HTTP, TCP, and SSH connections
