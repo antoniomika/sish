@@ -232,18 +232,6 @@ need to set `--geodb` to `true`.
 To use sish, you need to add a wildcard DNS record that is used for multiplexed subdomains.
 Adding an `A` record with `*` as the subdomain to the IP address of your server is the simplest way to achieve this configuration.
 
-## Demo - At this time, the demo instance has been set to require auth due to abuse
-
-There is a demo service (and my private instance) currently running on `ssi.sh` that
-doesn't require any authentication. This service provides default logging
-(errors, connection IP/username, and pubkey fingerprint). I do not log any of the password
-authentication data or the data sent within the service/tunnels. My deploy uses the exact
-deploy steps that are listed above. This instance is for testing and educational purposes only.
-You can deploy this extremely easily on any host (Google Cloud Platform provides an always-free
-instance that this should run perfectly on). If the service begins to accrue a lot of traffic,
-I will enable authentication and then you can reach out to me to get your SSH key whitelisted
-(make sure it's on GitHub and you provide me with your GitHub username).
-
 ## Notes
 
 1. This is by no means production ready in any way. This was hacked together and solves a fairly specific
