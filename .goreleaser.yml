@@ -38,3 +38,4 @@ archives:
       - README*
       - deploy/**/*
       - templates/*
+      - templates/**/*
