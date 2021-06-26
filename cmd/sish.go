@@ -63,7 +63,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("whitelisted-countries", "y", "", "A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections")
 	rootCmd.PersistentFlags().StringP("private-key-passphrase", "p", "S3Cr3tP4$$phrAsE", "Passphrase to use to encrypt the server private key")
 	rootCmd.PersistentFlags().StringP("private-key-location", "l", "deploy/keys/ssh_key", "The location of the SSH server private key. sish will create a private key here if\nit doesn't exist using the --private-key-passphrase to encrypt it if supplied")
-	rootCmd.PersistentFlags().StringP("authentication-password", "u", "S3Cr3tP4$$W0rD", "Password to use for ssh server password authentication")
+	rootCmd.PersistentFlags().StringP("authentication-password", "u", "", "Password to use for ssh server password authentication")
 	rootCmd.PersistentFlags().StringP("authentication-keys-directory", "k", "deploy/pubkeys/", "Directory where public keys for public key authentication are stored.\nsish will watch this directory and automatically load new keys and remove keys\nfrom the authentication list")
 	rootCmd.PersistentFlags().StringP("port-bind-range", "n", "0,1024-65535", "Ports or port ranges that sish will allow to be bound when a user attempts to use TCP forwarding")
 	rootCmd.PersistentFlags().StringP("proxy-protocol-version", "q", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined.\nIf userdefined, the user needs to add a command to SSH called proxyproto:version (ie proxyproto:1)")
