@@ -37,4 +37,4 @@ archives:
       - LICENSE*
       - README*
       - deploy/**/*
-      - templates/**/*
+      - templates/*
