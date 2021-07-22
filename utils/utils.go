@@ -576,6 +576,9 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HT
 
 			reportUnavailable(ok)
 
+			if viper.GetBool("force-requested-subdomains") && first && ok {
+				sshConn.CleanUp(state)
+			}
 			first = false
 			return ok
 		}
