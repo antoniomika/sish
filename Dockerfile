@@ -1,5 +1,5 @@
 # syntax = docker/dockerfile:experimental
-FROM --platform=$BUILDPLATFORM golang:1.15-alpine as builder
+FROM --platform=$BUILDPLATFORM golang:1.16-alpine as builder
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 
 ENV CGO_ENABLED 0

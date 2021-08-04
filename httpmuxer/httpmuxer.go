@@ -165,7 +165,7 @@ func Start(state *utils.State) {
 		acmeManager.Agreed = viper.GetBool("https-ondemand-certificate-accept-terms")
 		acmeManager.Email = viper.GetString("https-ondemand-certificate-email")
 
-		certManager.Issuer = acmeManager
+		certManager.Issuers = []certmagic.Issuer{acmeManager}
 
 		certManager.OnDemand = &certmagic.OnDemandConfig{
 			DecisionFunc: func(name string) error {
