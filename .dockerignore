@@ -1,6 +1,5 @@
 /.dockerignore
 /Dockerfile
-/Dockerfile.buildkit
 /.git/
 /.github/
 /.gitignore
