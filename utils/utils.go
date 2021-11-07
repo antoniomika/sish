@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ScaleFT/sshkeys"
+	"github.com/caddyserver/certmagic"
 	"github.com/jpillora/ipfilter"
 	"github.com/logrusorgru/aurora"
 	"github.com/mikesmitty/edkey"
@@ -220,9 +221,68 @@ func CheckPort(port uint32, portRanges string) (uint32, error) {
 	return 0, fmt.Errorf("not a safe port")
 }
 
-// WatchCerts watches ssh keys for changes and will load them.
-func WatchCerts() {
-	loadCerts()
+func loadCerts(certManager *certmagic.Config) {
+	certFiles, err := filepath.Glob(filepath.Join(viper.GetString("https-certificate-directory"), "*.crt"))
+	if err != nil {
+		log.Println("Error loading unmanaged certificates:", err)
+	}
+
+	for _, v := range certFiles {
+		err := certManager.CacheUnmanagedCertificatePEMFile(v, fmt.Sprintf("%s.key", strings.TrimSuffix(v, ".crt")), []string{})
+		if err != nil {
+			log.Println("Error loading unmanaged certificate:", err)
+		}
+	}
+}
+
+// WatchCerts watches https certs for changes and will load them.
+func WatchCerts(certManager *certmagic.Config) {
+	loadCerts(certManager)
+
+	w := watcher.New()
+	w.SetMaxEvents(1)
+
+	if err := w.AddRecursive(viper.GetString("https-certificate-directory")); err != nil {
+		log.Fatalln(err)
+	}
+
+	go func() {
+		w.Wait()
+
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		go func() {
+			for range c {
+				w.Close()
+				os.Exit(0)
+			}
+		}()
+
+		for {
+			select {
+			case _, ok := <-w.Event:
+				if !ok {
+					return
+				}
+				loadCerts(certManager)
+			case _, ok := <-w.Error:
+				if !ok {
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
+		if err := w.Start(viper.GetDuration("https-certificate-directory-watch-interval")); err != nil {
+			log.Fatalln(err)
+		}
+	}()
+}
+
+// WatchKeys watches ssh keys for changes and will load them.
+func WatchKeys() {
+	loadKeys()
 
 	w := watcher.New()
 	w.SetMaxEvents(1)
@@ -249,7 +309,7 @@ func WatchCerts() {
 				if !ok {
 					return
 				}
-				loadCerts()
+				loadKeys()
 			case _, ok := <-w.Error:
 				if !ok {
 					return
@@ -265,9 +325,9 @@ func WatchCerts() {
 	}()
 }
 
-// loadCerts loads public keys from the keys directory into a slice that is used
+// loadKeys loads public keys from the keys directory into a slice that is used
 // authenticating a user.
-func loadCerts() {
+func loadKeys() {
 	tmpCertHolder := make([]ssh.PublicKey, 0)
 
 	parseKey := func(keyBytes []byte, d fs.DirEntry) {

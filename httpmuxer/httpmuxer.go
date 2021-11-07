@@ -183,17 +183,7 @@ func Start(state *utils.State) {
 			},
 		}
 
-		certFiles, err := filepath.Glob(filepath.Join(viper.GetString("https-certificate-directory"), "*.crt"))
-		if err != nil {
-			log.Println("Error loading unmanaged certificates:", err)
-		}
-
-		for _, v := range certFiles {
-			err := certManager.CacheUnmanagedCertificatePEMFile(v, fmt.Sprintf("%s.key", strings.TrimSuffix(v, ".crt")), []string{})
-			if err != nil {
-				log.Println("Error loading unmanaged certificate:", err)
-			}
-		}
+		utils.WatchCerts(certManager)
 
 		httpsServer := &http.Server{
 			Addr:      viper.GetString("https-address"),

@@ -33,7 +33,7 @@ var (
 	// rootCmd is the root cobra command.
 	rootCmd = &cobra.Command{
 		Use:     "sish",
-		Short:   "The sish command initializes and runs the sish ssh multiplexer",
+		Short:   "The sish command initializes and runs the sish SSH multiplexer",
 		Long:    "sish is a command line utility that implements an SSH server that can handle HTTP(S)/WS(S)/TCP multiplexing, forwarding and load balancing.\nIt can handle multiple vhosting and reverse tunneling endpoints for a large number of clients.",
 		Run:     runCommand,
 		Version: Version,
@@ -64,7 +64,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("whitelisted-countries", "y", "", "A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections")
 	rootCmd.PersistentFlags().StringP("private-key-passphrase", "p", "S3Cr3tP4$$phrAsE", "Passphrase to use to encrypt the server private key")
 	rootCmd.PersistentFlags().StringP("private-key-location", "l", "deploy/keys/ssh_key", "The location of the SSH server private key. sish will create a private key here if\nit doesn't exist using the --private-key-passphrase to encrypt it if supplied")
-	rootCmd.PersistentFlags().StringP("authentication-password", "u", "", "Password to use for ssh server password authentication")
+	rootCmd.PersistentFlags().StringP("authentication-password", "u", "", "Password to use for SSH server password authentication")
 	rootCmd.PersistentFlags().StringP("authentication-keys-directory", "k", "deploy/pubkeys/", "Directory where public keys for public key authentication are stored.\nsish will watch this directory and automatically load new keys and remove keys\nfrom the authentication list")
 	rootCmd.PersistentFlags().StringP("port-bind-range", "n", "0,1024-65535", "Ports or port ranges that sish will allow to be bound when a user attempts to use TCP forwarding")
 	rootCmd.PersistentFlags().StringP("proxy-protocol-version", "q", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined.\nIf userdefined, the user needs to add a command to SSH called proxyproto:version (ie proxyproto:1)")
@@ -115,7 +115,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("load-templates", "", true, "Load HTML templates. This is required for admin/service consoles")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only")
-	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only")
+	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for HTTPS command output. This does not effect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("bind-random-subdomains-length", "", 3, "The length of the random subdomain to generate if a subdomain is unavailable or if random subdomains are enforced")
 	rootCmd.PersistentFlags().IntP("bind-random-aliases-length", "", 3, "The length of the random alias to generate if a alias is unavailable or if random aliases are enforced")
 	rootCmd.PersistentFlags().IntP("log-to-file-max-size", "", 500, "The maximum size of outputed log files in megabytes")
@@ -127,7 +127,8 @@ func init() {
 	rootCmd.PersistentFlags().DurationP("ping-client-timeout", "", 5*time.Second, "Duration to wait for activity before closing a connection after sending a ping to a client")
 	rootCmd.PersistentFlags().DurationP("cleanup-unbound-timeout", "", 5*time.Second, "Duration to wait before cleaning up an unbound (unforwarded) connection")
 	rootCmd.PersistentFlags().DurationP("proxy-protocol-timeout", "", 200*time.Millisecond, "The duration to wait for the proxy proto header")
-	rootCmd.PersistentFlags().DurationP("authentication-keys-directory-watch-interval", "", 200*time.Millisecond, "The duration to poll for filesystem changes for the watch interval")
+	rootCmd.PersistentFlags().DurationP("authentication-keys-directory-watch-interval", "", 200*time.Millisecond, "The interval to poll for filesystem changes for SSH keys")
+	rootCmd.PersistentFlags().DurationP("https-certificate-directory-watch-interval", "", 200*time.Millisecond, "The interval to poll for filesystem changes for HTTPS certificates")
 }
 
 // initConfig initializes the configuration and loads needed
