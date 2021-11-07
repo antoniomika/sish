@@ -127,6 +127,7 @@ func init() {
 	rootCmd.PersistentFlags().DurationP("ping-client-timeout", "", 5*time.Second, "Duration to wait for activity before closing a connection after sending a ping to a client")
 	rootCmd.PersistentFlags().DurationP("cleanup-unbound-timeout", "", 5*time.Second, "Duration to wait before cleaning up an unbound (unforwarded) connection")
 	rootCmd.PersistentFlags().DurationP("proxy-protocol-timeout", "", 200*time.Millisecond, "The duration to wait for the proxy proto header")
+	rootCmd.PersistentFlags().DurationP("authentication-keys-directory-watch-interval", "", 200*time.Millisecond, "The duration to poll for filesystem changes for the watch interval")
 }
 
 // initConfig initializes the configuration and loads needed

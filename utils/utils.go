@@ -10,6 +10,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	mathrand "math/rand"
@@ -23,11 +24,11 @@ import (
 	"time"
 
 	"github.com/ScaleFT/sshkeys"
-	"github.com/fsnotify/fsnotify"
 	"github.com/jpillora/ipfilter"
 	"github.com/logrusorgru/aurora"
 	"github.com/mikesmitty/edkey"
 	"github.com/pires/go-proxyproto"
+	"github.com/radovskyb/watcher"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
@@ -222,29 +223,34 @@ func CheckPort(port uint32, portRanges string) (uint32, error) {
 // WatchCerts watches ssh keys for changes and will load them.
 func WatchCerts() {
 	loadCerts()
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
+
+	w := watcher.New()
+	w.SetMaxEvents(1)
+
+	if err := w.AddRecursive(viper.GetString("authentication-keys-directory")); err != nil {
+		log.Fatalln(err)
 	}
 
 	go func() {
+		w.Wait()
+
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
 		go func() {
 			for range c {
-				watcher.Close()
+				w.Close()
 				os.Exit(0)
 			}
 		}()
 
 		for {
 			select {
-			case _, ok := <-watcher.Events:
+			case _, ok := <-w.Event:
 				if !ok {
 					return
 				}
 				loadCerts()
-			case _, ok := <-watcher.Errors:
+			case _, ok := <-w.Error:
 				if !ok {
 					return
 				}
@@ -252,10 +258,11 @@ func WatchCerts() {
 		}
 	}()
 
-	err = watcher.Add(viper.GetString("authentication-keys-directory"))
-	if err != nil {
-		log.Fatal(err)
-	}
+	go func() {
+		if err := w.Start(viper.GetDuration("authentication-keys-directory-watch-interval")); err != nil {
+			log.Fatalln(err)
+		}
+	}()
 }
 
 // loadCerts loads public keys from the keys directory into a slice that is used
@@ -263,16 +270,11 @@ func WatchCerts() {
 func loadCerts() {
 	tmpCertHolder := make([]ssh.PublicKey, 0)
 
-	files, err := ioutil.ReadDir(viper.GetString("authentication-keys-directory"))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	parseKey := func(keyBytes []byte, fileInfo os.FileInfo) {
-		keyHandle := func(keyBytes []byte, fileInfo os.FileInfo) []byte {
+	parseKey := func(keyBytes []byte, d fs.DirEntry) {
+		keyHandle := func(keyBytes []byte, d fs.DirEntry) []byte {
 			key, _, _, rest, e := ssh.ParseAuthorizedKey(keyBytes)
 			if e != nil {
-				log.Printf("Can't load file %s as public key: %s\n", fileInfo.Name(), e)
+				log.Printf("Can't load file %s as public key: %s\n", d.Name(), e)
 			}
 
 			if key != nil {
@@ -282,15 +284,36 @@ func loadCerts() {
 		}
 
 		for ok := true; ok; ok = len(keyBytes) > 0 {
-			keyBytes = keyHandle(keyBytes, fileInfo)
+			keyBytes = keyHandle(keyBytes, d)
 		}
 	}
 
-	for _, f := range files {
-		i, e := ioutil.ReadFile(filepath.Join(viper.GetString("authentication-keys-directory"), f.Name()))
-		if e == nil && len(i) > 0 {
-			parseKey(i, f)
+	err := filepath.WalkDir(viper.GetString("authentication-keys-directory"), func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
 		}
+
+		if err != nil {
+			log.Printf("Error walking file %s for public key: %s\n", d.Name(), err)
+			return nil
+		}
+
+		i, e := ioutil.ReadFile(path)
+		if e != nil {
+			log.Printf("Can't read file %s as public key: %s\n", d.Name(), err)
+			return nil
+		}
+
+		if len(i) > 0 {
+			parseKey(i, d)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("Unable to walk authentication-keys-directory %s: %s\n", viper.GetString("authentication-keys-directory"), err)
+		return
 	}
 
 	holderLock.Lock()
