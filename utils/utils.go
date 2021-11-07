@@ -620,11 +620,19 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HT
 			hostExtension = viper.GetString("append-user-to-subdomain-separator") + sshConn.SSHConn.User()
 		}
 
-		proposedHost := addr + hostExtension + "." + viper.GetString("domain")
+		proposedHost := fmt.Sprintf("%s%s.%s", addr, hostExtension, viper.GetString("domain"))
 		domainParts := strings.Join(strings.Split(addr, ".")[1:], ".")
 
 		if dnsMatch || (viper.GetBool("bind-any-host") && strings.Contains(addr, ".")) || inList(domainParts, strings.FieldsFunc(viper.GetString("bind-hosts"), CommaSplitFields)) {
 			proposedHost = addr
+
+			if proposedHost == fmt.Sprintf(".%s", viper.GetString("domain")) {
+				proposedHost = viper.GetString("domain")
+			}
+		}
+
+		if viper.GetBool("bind-root-domain") && proposedHost == fmt.Sprintf(".%s", viper.GetString("domain")) {
+			proposedHost = viper.GetString("domain")
 		}
 
 		host := strings.ToLower(proposedHost)

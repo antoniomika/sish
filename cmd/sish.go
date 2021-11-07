@@ -111,7 +111,8 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("log-to-file-compress", "", false, "Enable compressing log output files")
 	rootCmd.PersistentFlags().BoolP("https-ondemand-certificate", "", false, "Enable retrieving certificates on demand via Let's Encrypt")
 	rootCmd.PersistentFlags().BoolP("https-ondemand-certificate-accept-terms", "", false, "Accept the Let's Encrypt terms")
-	rootCmd.PersistentFlags().BoolP("bind-any-host", "", false, "Bind any host when accepting an HTTP listener")
+	rootCmd.PersistentFlags().BoolP("bind-any-host", "", false, "Allow binding any host when accepting an HTTP listener")
+	rootCmd.PersistentFlags().BoolP("bind-root-domain", "", false, "Allow binding the root domain when accepting an HTTP listener")
 	rootCmd.PersistentFlags().BoolP("load-templates", "", true, "Load HTML templates. This is required for admin/service consoles")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only")
