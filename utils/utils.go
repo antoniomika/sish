@@ -456,8 +456,8 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 		bindAddr := addr
 		listenAddr := ""
 
-		if bindAddr == "localhost" && viper.GetBool("localhost-as-all") {
-			bindAddr = ""
+		if (bindAddr == "localhost" && viper.GetBool("localhost-as-all")) || viper.GetBool("force-tcp-address") {
+			bindAddr = viper.GetString("tcp-address")
 		}
 
 		reportUnavailable := func(unavailable bool) {
