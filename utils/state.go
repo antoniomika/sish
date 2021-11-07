@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/url"
 	"sync"
 	"time"
 
@@ -55,8 +56,7 @@ type ListenerHolder struct {
 // HTTPHolder holds proxy and connection info.
 // SSHConnections is a map[string]*SSHConnection.
 type HTTPHolder struct {
-	HTTPHost       string
-	Scheme         string
+	HTTPUrl        *url.URL
 	SSHConnections *sync.Map
 	Forward        *forward.Forwarder
 	Balancer       *roundrobin.RoundRobin

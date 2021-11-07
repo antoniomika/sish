@@ -18,16 +18,16 @@ import (
 
 // handleHTTPListener handles the creation of the httpHandler
 // (or addition for load balancing) and set's up the underlying listeners.
-func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection) (*utils.HTTPHolder, *url.URL, string, string, error) {
+func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection) (*utils.HTTPHolder, *url.URL, string, error) {
 	scheme := "http"
 	if stringPort == "443" {
 		scheme = "https"
 	}
 
-	host, pH := utils.GetOpenHost(check.Addr, state, sshConn)
+	hostUrl, pH := utils.GetOpenHost(check.Addr, state, sshConn)
 
-	if !strings.HasPrefix(host, check.Addr) && viper.GetBool("force-requested-subdomains") {
-		return nil, nil, "", "", fmt.Errorf("Error assigning requested subdomain to tunnel")
+	if !strings.HasPrefix(hostUrl.Host, check.Addr) && viper.GetBool("force-requested-subdomains") {
+		return nil, nil, "", fmt.Errorf("error assigning requested subdomain to tunnel")
 	}
 
 	if pH == nil {
@@ -41,32 +41,33 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 
 		if err != nil {
 			log.Println("Error initializing HTTP forwarder:", err)
-			return nil, nil, "", "", err
+			return nil, nil, "", err
 		}
 
 		lb, err := roundrobin.New(fwd)
 
 		if err != nil {
 			log.Println("Error initializing HTTP balancer:", err)
-			return nil, nil, "", "", err
+			return nil, nil, "", err
 		}
 
+		hostUrl.Scheme = scheme
+
 		pH = &utils.HTTPHolder{
-			HTTPHost:       host,
-			Scheme:         scheme,
+			HTTPUrl:        hostUrl,
 			SSHConnections: &sync.Map{},
 			Forward:        fwd,
 			Balancer:       lb,
 		}
 
-		state.HTTPListeners.Store(host, pH)
+		state.HTTPListeners.Store(pH.HTTPUrl.String(), pH)
 	}
 
 	pH.SSHConnections.Store(listenerHolder.Addr().String(), sshConn)
 
 	serverURL := &url.URL{
 		Host:   base64.StdEncoding.EncodeToString([]byte(listenerHolder.Addr().String())),
-		Scheme: pH.Scheme,
+		Scheme: pH.HTTPUrl.Scheme,
 	}
 
 	err := pH.Balancer.UpsertServer(serverURL)
@@ -77,20 +78,20 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 	if viper.GetBool("admin-console") || viper.GetBool("service-console") {
 		routeToken := viper.GetString("service-console-token")
 		sendToken := false
-		routeExists := state.Console.RouteExists(host)
+		routeExists := state.Console.RouteExists(pH.HTTPUrl.String())
 
 		if routeToken == "" {
 			sendToken = true
 
 			if routeExists {
-				routeToken, _ = state.Console.RouteToken(host)
+				routeToken, _ = state.Console.RouteToken(pH.HTTPUrl.String())
 			} else {
 				routeToken = utils.RandStringBytesMaskImprSrc(20)
 			}
 		}
 
 		if !routeExists {
-			state.Console.AddRoute(host, routeToken)
+			state.Console.AddRoute(pH.HTTPUrl.String(), routeToken)
 		}
 
 		if viper.GetBool("service-console") && sendToken {
@@ -107,7 +108,7 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 				}
 			}
 
-			consoleURL := fmt.Sprintf("%s://%s%s", scheme, host, portString)
+			consoleURL := fmt.Sprintf("%s://%s%s", scheme, pH.HTTPUrl.Host, portString)
 
 			requestMessages += fmt.Sprintf("Service console can be accessed here: %s/_sish/console?x-authorization=%s\r\n", consoleURL, routeToken)
 		}
@@ -118,8 +119,15 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 		httpPortString = fmt.Sprintf(":%d", httpPort)
 	}
 
-	requestMessages += fmt.Sprintf("%s: http://%s%s\r\n", aurora.BgBlue("HTTP"), host, httpPortString)
-	log.Printf("%s forwarding started: http://%s%s -> %s for client: %s\n", aurora.BgBlue("HTTP"), host, httpPortString, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
+	var userPass string
+	password, _ := pH.HTTPUrl.User.Password()
+	if pH.HTTPUrl.User.Username() != "" || password != "" {
+		userPass = fmt.Sprintf("%s:%s@", pH.HTTPUrl.User.Username(), password)
+	}
+
+	requestMessages += fmt.Sprintf("%s: http://%s%s%s%s\r\n", aurora.BgBlue("HTTP"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path)
+
+	log.Printf("%s forwarding started: http://%s%s%s%s -> %s for client: %s\n", aurora.BgBlue("HTTP"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 
 	if viper.GetBool("https") {
 		httpsPortString := ""
@@ -127,9 +135,9 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 			httpsPortString = fmt.Sprintf(":%d", httpsPort)
 		}
 
-		requestMessages += fmt.Sprintf("%s: https://%s%s\r\n", aurora.BgBlue("HTTPS"), host, httpsPortString)
-		log.Printf("%s forwarding started: https://%s%s -> %s for client: %s\n", aurora.BgBlue("HTTPS"), host, httpPortString, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
+		requestMessages += fmt.Sprintf("%s: https://%s%s%s%s\r\n", aurora.BgBlue("HTTPS"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path)
+		log.Printf("%s forwarding started: https://%s%s%s%s -> %s for client: %s\n", aurora.BgBlue("HTTPS"), userPass, pH.HTTPUrl.Host, httpsPortString, pH.HTTPUrl.Path, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 	}
 
-	return pH, serverURL, host, requestMessages, nil
+	return pH, serverURL, requestMessages, nil
 }

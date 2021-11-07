@@ -121,7 +121,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	switch listenerType {
 	case utils.HTTPListener:
-		pH, serverURL, host, requestMessages, err := handleHTTPListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn)
+		pH, serverURL, requestMessages, err := handleHTTPListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn)
 		if err != nil {
 			err = newRequest.Reply(false, nil)
 			if err != nil {
@@ -141,10 +141,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			pH.SSHConnections.Delete(listenerHolder.Addr().String())
 
 			if len(pH.Balancer.Servers()) == 0 {
-				state.HTTPListeners.Delete(host)
+				state.HTTPListeners.Delete(pH.HTTPUrl.String())
 
 				if viper.GetBool("admin-console") || viper.GetBool("service-console") {
-					state.Console.RemoveRoute(host)
+					state.Console.RemoveRoute(pH.HTTPUrl.String())
 				}
 			}
 		}

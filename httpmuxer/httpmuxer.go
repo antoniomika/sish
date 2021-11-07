@@ -107,29 +107,61 @@ func Start(state *utils.State) {
 		hostname := strings.Split(c.Request.Host, ":")[0]
 		hostIsRoot := hostname == viper.GetString("domain")
 
-		// Return a 404 for the favicon.
-		if hostIsRoot && strings.HasPrefix(c.Request.URL.Path, "/favicon.ico") {
-			c.AbortWithStatus(http.StatusNotFound)
-			return
-		}
-
 		if (viper.GetBool("admin-console") || viper.GetBool("service-console")) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
 			state.Console.HandleRequest(hostname, hostIsRoot, c)
 			return
 		}
 
-		if hostIsRoot && viper.GetBool("redirect-root") {
-			c.Redirect(http.StatusFound, viper.GetString("redirect-root-location"))
+		var currentListener *utils.HTTPHolder
+
+		state.HTTPListeners.Range(func(key, value interface{}) bool {
+			locationListener := value.(*utils.HTTPHolder)
+
+			requestUsername, requestPassword, _ := c.Request.BasicAuth()
+			parsedPassword, _ := locationListener.HTTPUrl.User.Password()
+
+			if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
+				if requestUsername == locationListener.HTTPUrl.User.Username() && requestPassword == parsedPassword {
+					currentListener = locationListener
+					return false
+				}
+
+				if (locationListener.HTTPUrl.User.Username() != "" && requestUsername == "") || (parsedPassword != "" && requestPassword == "") {
+					c.Header("WWW-Authenticate", "Basic realm=\"sish\"")
+					c.AbortWithStatus(http.StatusUnauthorized)
+					return false
+				}
+			}
+
+			return true
+		})
+
+		if c.IsAborted() {
 			return
 		}
 
-		loc, ok := state.HTTPListeners.Load(hostname)
-		if !ok {
+		if currentListener == nil && hostIsRoot {
+			if viper.GetBool("redirect-root") && !strings.HasPrefix(c.Request.URL.Path, "/favicon.ico") {
+				c.Redirect(http.StatusFound, viper.GetString("redirect-root-location"))
+				return
+			}
+
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+
+		if currentListener == nil {
 			err := c.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", hostname))
 			if err != nil {
 				log.Println("Aborting with error", err)
 			}
 			return
+		}
+
+		if viper.GetBool("strip-http-path") {
+			c.Request.RequestURI = strings.TrimPrefix(c.Request.RequestURI, currentListener.HTTPUrl.Path)
+			c.Request.URL.Path = strings.TrimPrefix(c.Request.URL.Path, currentListener.HTTPUrl.Path)
+			c.Request.URL.RawPath = strings.TrimPrefix(c.Request.URL.RawPath, currentListener.HTTPUrl.Path)
 		}
 
 		reqBody, err := ioutil.ReadAll(c.Request.Body)
@@ -140,14 +172,12 @@ func Start(state *utils.State) {
 
 		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(reqBody))
 
-		proxyHolder := loc.(*utils.HTTPHolder)
-
-		err = forward.ResponseModifier(ResponseModifier(state, hostname, reqBody, c))(proxyHolder.Forward)
+		err = forward.ResponseModifier(ResponseModifier(state, hostname, reqBody, c))(currentListener.Forward)
 		if err != nil {
 			log.Println("Unable to set response modifier:", err)
 		}
 
-		gin.WrapH(proxyHolder.Balancer)(c)
+		gin.WrapH(currentListener.Balancer)(c)
 	})
 
 	// If HTTPS is enabled, setup certmagic to allow us to provision HTTPS certs on the fly.

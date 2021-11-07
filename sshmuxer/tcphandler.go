@@ -22,7 +22,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 	tcpAddr, tcpPort, tH := utils.GetOpenPort(check.Addr, bindPort, state, sshConn)
 
 	if tcpPort != bindPort && viper.GetBool("force-requested-ports") {
-		return nil, nil, "", "", fmt.Errorf("Error assigning requested port to tunnel")
+		return nil, nil, "", "", fmt.Errorf("error assigning requested port to tunnel")
 	}
 
 	if tH == nil {

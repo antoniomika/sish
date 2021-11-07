@@ -15,6 +15,7 @@ import (
 	"log"
 	mathrand "math/rand"
 	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -604,13 +605,8 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 
 // GetOpenHost returns an open host or a random host if that one is unavailable.
 // If load balancing is enabled, it will return the requested domain.
-func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HTTPHolder) {
-	dnsMatch, _, err := verifyDNS(addr, sshConn)
-	if err != nil && viper.GetBool("debug") {
-		log.Println("Error looking up txt records for domain:", addr)
-	}
-
-	getUnusedHost := func() (string, *HTTPHolder) {
+func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *HTTPHolder) {
+	getUnusedHost := func() (*url.URL, *HTTPHolder) {
 		var pH *HTTPHolder
 
 		first := true
@@ -618,6 +614,44 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HT
 
 		if viper.GetBool("append-user-to-subdomain") {
 			hostExtension = viper.GetString("append-user-to-subdomain-separator") + sshConn.SSHConn.User()
+		}
+
+		rest := addr
+		var username string
+		var password string
+		var path string
+
+		if strings.Contains(rest, "@") {
+			hostParts := strings.SplitN(rest, "@", 2)
+
+			rest = hostParts[1]
+
+			if viper.GetBool("bind-http-auth") && len(hostParts[0]) > 0 {
+				authParts := strings.Split(hostParts[0], ":")
+
+				if len(authParts) > 0 {
+					username = authParts[0]
+				}
+
+				if len(authParts) > 1 {
+					password = authParts[1]
+				}
+			}
+		}
+
+		if strings.Contains(rest, "/") {
+			pathParts := strings.SplitN(rest, "/", 2)
+
+			if viper.GetBool("bind-http-path") && len(pathParts[1]) > 0 {
+				path = fmt.Sprintf("/%s", pathParts[1])
+			}
+
+			addr = pathParts[0]
+		}
+
+		dnsMatch, _, err := verifyDNS(addr, sshConn)
+		if err != nil && viper.GetBool("debug") {
+			log.Println("Error looking up txt records for domain:", addr)
 		}
 
 		proposedHost := fmt.Sprintf("%s%s.%s", addr, hostExtension, viper.GetString("domain"))
@@ -673,7 +707,13 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HT
 		for checkHost(host) {
 		}
 
-		return host, pH
+		hostUrl := &url.URL{
+			User: url.UserPassword(username, password),
+			Host: host,
+			Path: path,
+		}
+
+		return hostUrl, pH
 	}
 
 	return getUnusedHost()

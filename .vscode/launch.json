@@ -15,7 +15,7 @@
       "args": [
         "--debug=true",
         "--http-address=:8081",
-        "--ssh-address=:2222",
+        "--ssh-address=:22222",
         "--domain=testing.ssi.sh",
         "--bind-random-subdomains=false",
         "--bind-random-ports=false",
