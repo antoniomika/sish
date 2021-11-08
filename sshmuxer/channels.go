@@ -14,9 +14,15 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// commandSplitter is the character that terminates a prefix.
+var commandSplitter = "="
+
 // proxyProtoPrefix is used when deciding what proxy protocol
 // version to use.
-var proxyProtoPrefix = "proxyproto:"
+var proxyProtoPrefix = "proxyproto"
+
+// hostHeaderPrefix is the host-header for a specific session.
+var hostHeaderPrefix = "host-header"
 
 // handleSession handles the channel when a user requests a session.
 // This is how we send console messages.
@@ -78,10 +84,26 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 				}
 			case "exec":
 				payloadString := string(req.Payload[4:])
-				if strings.HasPrefix(payloadString, proxyProtoPrefix) && viper.GetBool("proxy-protocol") {
-					sshConn.ProxyProto = getProxyProtoVersion(strings.TrimPrefix(payloadString, proxyProtoPrefix))
-					if sshConn.ProxyProto != 0 {
-						sshConn.SendMessage(fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)
+				commandFlags := strings.Fields(payloadString)
+
+				for _, commandFlag := range commandFlags {
+					commandFlagParts := strings.Split(commandFlag, commandSplitter)
+
+					command, param := commandFlagParts[0], commandFlagParts[1]
+
+					switch command {
+					case proxyProtoPrefix:
+						if viper.GetBool("proxy-protocol") {
+							sshConn.ProxyProto = getProxyProtoVersion(param)
+							if sshConn.ProxyProto != 0 {
+								sshConn.SendMessage(fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)
+							}
+						}
+					case hostHeaderPrefix:
+						if viper.GetBool("rewrite-host-header") {
+							sshConn.HostHeader = param
+							sshConn.SendMessage(fmt.Sprintf("Using host header %s for HTTP handlers", sshConn.HostHeader), true)
+						}
 					}
 				}
 			default:

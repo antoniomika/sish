@@ -67,7 +67,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("authentication-password", "u", "", "Password to use for SSH server password authentication")
 	rootCmd.PersistentFlags().StringP("authentication-keys-directory", "k", "deploy/pubkeys/", "Directory where public keys for public key authentication are stored.\nsish will watch this directory and automatically load new keys and remove keys\nfrom the authentication list")
 	rootCmd.PersistentFlags().StringP("port-bind-range", "n", "0,1024-65535", "Ports or port ranges that sish will allow to be bound when a user attempts to use TCP forwarding")
-	rootCmd.PersistentFlags().StringP("proxy-protocol-version", "q", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined.\nIf userdefined, the user needs to add a command to SSH called proxyproto:version (ie proxyproto:1)")
+	rootCmd.PersistentFlags().StringP("proxy-protocol-version", "q", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined.\nIf userdefined, the user needs to add a command to SSH called proxyproto=version (ie proxyproto=1)")
 	rootCmd.PersistentFlags().StringP("proxy-protocol-policy", "", "use", "What to do with the proxy protocol header. Can be use, ignore, reject, or require")
 	rootCmd.PersistentFlags().StringP("admin-console-token", "j", "S3Cr3tP4$$W0rD", "The token to use for admin console access if it's enabled")
 	rootCmd.PersistentFlags().StringP("service-console-token", "m", "", "The token to use for service console access. Auto generated if empty for each connected tunnel")
@@ -117,6 +117,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("bind-any-host", "", false, "Allow binding any host when accepting an HTTP listener")
 	rootCmd.PersistentFlags().BoolP("bind-root-domain", "", false, "Allow binding the root domain when accepting an HTTP listener")
 	rootCmd.PersistentFlags().BoolP("load-templates", "", true, "Load HTML templates. This is required for admin/service consoles")
+	rootCmd.PersistentFlags().BoolP("rewrite-host-header", "", true, "Force rewrite the host header if the user provides host-header=host.com")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for HTTPS command output. This does not effect ports used for connecting, it's for cosmetic use only")

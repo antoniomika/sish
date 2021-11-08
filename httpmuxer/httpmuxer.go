@@ -84,16 +84,32 @@ func Start(state *utils.State) {
 		)
 
 		if viper.GetBool("log-to-client") {
+			var currentListener *utils.HTTPHolder
 			hostname := strings.Split(param.Request.Host, ":")[0]
-			loc, ok := state.HTTPListeners.Load(hostname)
-			if ok {
-				proxyHolder := loc.(*utils.HTTPHolder)
-				sshConnTmp, ok := proxyHolder.SSHConnections.Load(param.Keys["proxySocket"])
+
+			state.HTTPListeners.Range(func(key, value interface{}) bool {
+				locationListener := value.(*utils.HTTPHolder)
+
+				requestUsername, requestPassword, _ := param.Request.BasicAuth()
+				parsedPassword, _ := locationListener.HTTPUrl.User.Password()
+
+				if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(param.Request.URL.Path, locationListener.HTTPUrl.Path) {
+					if requestUsername == locationListener.HTTPUrl.User.Username() && requestPassword == parsedPassword {
+						currentListener = locationListener
+						return false
+					}
+				}
+
+				return true
+			})
+
+			if currentListener != nil {
+				sshConnTmp, ok := currentListener.SSHConnections.Load(param.Keys["proxySocket"])
 				if ok {
 					sshConn := sshConnTmp.(*utils.SSHConnection)
 					sshConn.SendMessage(strings.TrimSpace(logLine), true)
 				} else {
-					proxyHolder.SSHConnections.Range(func(key, val interface{}) bool {
+					currentListener.SSHConnections.Range(func(key, val interface{}) bool {
 						sshConn := val.(*utils.SSHConnection)
 						sshConn.SendMessage(strings.TrimSpace(logLine), true)
 						return true
@@ -104,7 +120,8 @@ func Start(state *utils.State) {
 
 		return logLine
 	}), gin.Recovery(), func(c *gin.Context) {
-		hostname := strings.Split(c.Request.Host, ":")[0]
+		hostSplit := strings.Split(c.Request.Host, ":")
+		hostname := hostSplit[0]
 		hostIsRoot := hostname == viper.GetString("domain")
 
 		if (viper.GetBool("admin-console") || viper.GetBool("service-console")) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
@@ -162,6 +179,24 @@ func Start(state *utils.State) {
 			c.Request.RequestURI = strings.TrimPrefix(c.Request.RequestURI, currentListener.HTTPUrl.Path)
 			c.Request.URL.Path = strings.TrimPrefix(c.Request.URL.Path, currentListener.HTTPUrl.Path)
 			c.Request.URL.RawPath = strings.TrimPrefix(c.Request.URL.RawPath, currentListener.HTTPUrl.Path)
+		}
+
+		if viper.GetBool("rewrite-host-header") {
+			currentListener.SSHConnections.Range(func(key, val interface{}) bool {
+				sshConn := val.(*utils.SSHConnection)
+				newHost := sshConn.HostHeader
+
+				if newHost == "" {
+					return true
+				}
+
+				if len(hostSplit) > 1 {
+					newHost = fmt.Sprintf("%s:%s", newHost, hostSplit[1])
+				}
+
+				c.Request.Host = newHost
+				return false
+			})
 		}
 
 		reqBody, err := ioutil.ReadAll(c.Request.Body)
