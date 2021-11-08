@@ -85,6 +85,7 @@ func Start(state *utils.State) {
 
 		if viper.GetBool("log-to-client") {
 			var currentListener *utils.HTTPHolder
+			var secondOption *utils.HTTPHolder
 			hostname := strings.Split(param.Request.Host, ":")[0]
 
 			state.HTTPListeners.Range(func(key, value interface{}) bool {
@@ -94,6 +95,7 @@ func Start(state *utils.State) {
 				parsedPassword, _ := locationListener.HTTPUrl.User.Password()
 
 				if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(param.Request.URL.Path, locationListener.HTTPUrl.Path) {
+					secondOption = locationListener
 					if requestUsername == locationListener.HTTPUrl.User.Username() && requestPassword == parsedPassword {
 						currentListener = locationListener
 						return false
@@ -102,6 +104,10 @@ func Start(state *utils.State) {
 
 				return true
 			})
+
+			if currentListener == nil && secondOption != nil {
+				currentListener = secondOption
+			}
 
 			if currentListener != nil {
 				sshConnTmp, ok := currentListener.SSHConnections.Load(param.Keys["proxySocket"])
@@ -130,6 +136,7 @@ func Start(state *utils.State) {
 		}
 
 		var currentListener *utils.HTTPHolder
+		var secondOption *utils.HTTPHolder
 
 		state.HTTPListeners.Range(func(key, value interface{}) bool {
 			locationListener := value.(*utils.HTTPHolder)
@@ -138,6 +145,7 @@ func Start(state *utils.State) {
 			parsedPassword, _ := locationListener.HTTPUrl.User.Password()
 
 			if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
+				secondOption = locationListener
 				if requestUsername == locationListener.HTTPUrl.User.Username() && requestPassword == parsedPassword {
 					currentListener = locationListener
 					return false
@@ -155,6 +163,10 @@ func Start(state *utils.State) {
 
 		if c.IsAborted() {
 			return
+		}
+
+		if currentListener == nil && secondOption != nil {
+			currentListener = secondOption
 		}
 
 		if currentListener == nil && hostIsRoot {

@@ -5,18 +5,22 @@ append-user-to-subdomain: false
 append-user-to-subdomain-separator: '-'
 authentication: false
 authentication-keys-directory: deploy/pubkeys/
-authentication-password: S3Cr3tP4$$W0rD
+authentication-keys-directory-watch-interval: 200ms
+authentication-password: ""
 banned-aliases: ""
 banned-countries: ""
 banned-ips: ""
 banned-subdomains: localhost
 bind-any-host: false
 bind-hosts: ""
+bind-http-auth: true
+bind-http-path: true
 bind-random-aliases: true
 bind-random-aliases-length: 3
 bind-random-ports: true
 bind-random-subdomains: true
 bind-random-subdomains-length: 3
+bind-root-domain: false
 cleanup-unbound: true
 cleanup-unbound-timeout: 5s
 config: config.yml
@@ -25,6 +29,7 @@ domain: ssi.sh
 force-requested-aliases: false
 force-requested-ports: false
 force-requested-subdomains: false
+force-tcp-address: false
 geodb: false
 http-address: localhost:80
 http-load-balancer: false
@@ -32,6 +37,7 @@ http-port-override: 0
 https: false
 https-address: localhost:443
 https-certificate-directory: deploy/ssl/
+https-certificate-directory-watch-interval: 200ms
 https-ondemand-certificate: false
 https-ondemand-certificate-accept-terms: false
 https-ondemand-certificate-email: ""
@@ -63,9 +69,12 @@ proxy-protocol-use-timeout: false
 proxy-protocol-version: "1"
 redirect-root: true
 redirect-root-location: https://github.com/antoniomika/sish
+rewrite-host-header: true
 service-console: false
 service-console-token: ""
 ssh-address: localhost:2222
+strip-http-path: true
+tcp-address: ""
 tcp-aliases: false
 tcp-load-balancer: false
 time-format: 2006/01/02 - 15:04:05
