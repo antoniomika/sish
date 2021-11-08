@@ -64,12 +64,14 @@ func Start(state *utils.State) {
 			param.Latency = param.Latency - param.Latency%time.Second
 		}
 
-		if viper.GetString("admin-console-token") != "" && strings.Contains(param.Path, viper.GetString("admin-console-token")) {
-			param.Path = strings.Replace(param.Path, viper.GetString("admin-console-token"), "[REDACTED]", 1)
+		originalURI := param.Keys["originalURI"].(string)
+
+		if viper.GetString("admin-console-token") != "" && strings.Contains(originalURI, viper.GetString("admin-console-token")) {
+			originalURI = strings.Replace(originalURI, viper.GetString("admin-console-token"), "[REDACTED]", 1)
 		}
 
-		if viper.GetString("service-console-token") != "" && strings.Contains(param.Path, viper.GetString("service-console-token")) {
-			param.Path = strings.Replace(param.Path, viper.GetString("service-console-token"), "[REDACTED]", 1)
+		if viper.GetString("service-console-token") != "" && strings.Contains(originalURI, viper.GetString("service-console-token")) {
+			originalURI = strings.Replace(originalURI, viper.GetString("service-console-token"), "[REDACTED]", 1)
 		}
 
 		logLine := fmt.Sprintf("%v | %s |%s %3d %s| %13v | %15s |%s %-7s %s %s\n%s",
@@ -79,35 +81,12 @@ func Start(state *utils.State) {
 			param.Latency,
 			param.ClientIP,
 			methodColor, param.Method, resetColor,
-			param.Path,
+			originalURI,
 			param.ErrorMessage,
 		)
 
-		if viper.GetBool("log-to-client") {
-			var currentListener *utils.HTTPHolder
-			var secondOption *utils.HTTPHolder
-			hostname := strings.Split(param.Request.Host, ":")[0]
-
-			state.HTTPListeners.Range(func(key, value interface{}) bool {
-				locationListener := value.(*utils.HTTPHolder)
-
-				requestUsername, requestPassword, _ := param.Request.BasicAuth()
-				parsedPassword, _ := locationListener.HTTPUrl.User.Password()
-
-				if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(param.Request.URL.Path, locationListener.HTTPUrl.Path) {
-					secondOption = locationListener
-					if requestUsername == locationListener.HTTPUrl.User.Username() && requestPassword == parsedPassword {
-						currentListener = locationListener
-						return false
-					}
-				}
-
-				return true
-			})
-
-			if currentListener == nil && secondOption != nil {
-				currentListener = secondOption
-			}
+		if viper.GetBool("log-to-client") && param.Keys["httpHolder"] != nil {
+			currentListener := param.Keys["httpHolder"].(*utils.HTTPHolder)
 
 			if currentListener != nil {
 				sshConnTmp, ok := currentListener.SSHConnections.Load(param.Keys["proxySocket"])
@@ -126,48 +105,42 @@ func Start(state *utils.State) {
 
 		return logLine
 	}), gin.Recovery(), func(c *gin.Context) {
+		c.Set("originalURI", c.Request.RequestURI)
+		c.Set("originalPath", c.Request.URL.Path)
+		c.Set("originalRawPath", c.Request.URL.RawPath)
+
 		hostSplit := strings.Split(c.Request.Host, ":")
 		hostname := hostSplit[0]
 		hostIsRoot := hostname == viper.GetString("domain")
 
-		if (viper.GetBool("admin-console") || viper.GetBool("service-console")) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
-			state.Console.HandleRequest(hostname, hostIsRoot, c)
+		if viper.GetBool("admin-console") && hostIsRoot && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
+			state.Console.HandleRequest("", hostIsRoot, c)
 			return
 		}
 
 		var currentListener *utils.HTTPHolder
-		var secondOption *utils.HTTPHolder
+
+		requestUsername, requestPassword, _ := c.Request.BasicAuth()
+		exactMatch := false
+		authNeeded := true
 
 		state.HTTPListeners.Range(func(key, value interface{}) bool {
 			locationListener := value.(*utils.HTTPHolder)
 
-			requestUsername, requestPassword, _ := c.Request.BasicAuth()
 			parsedPassword, _ := locationListener.HTTPUrl.User.Password()
 
 			if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
-				secondOption = locationListener
-				if requestUsername == locationListener.HTTPUrl.User.Username() && requestPassword == parsedPassword {
-					currentListener = locationListener
-					return false
-				}
+				currentListener = locationListener
 
-				if (locationListener.HTTPUrl.User.Username() != "" && requestUsername == "") || (parsedPassword != "" && requestPassword == "") {
-					c.Header("WWW-Authenticate", "Basic realm=\"sish\"")
-					c.AbortWithStatus(http.StatusUnauthorized)
+				if requestUsername == locationListener.HTTPUrl.User.Username() && requestPassword == parsedPassword {
+					exactMatch = true
+					authNeeded = false
 					return false
 				}
 			}
 
 			return true
 		})
-
-		if c.IsAborted() {
-			return
-		}
-
-		if currentListener == nil && secondOption != nil {
-			currentListener = secondOption
-		}
 
 		if currentListener == nil && hostIsRoot {
 			if viper.GetBool("redirect-root") && !strings.HasPrefix(c.Request.URL.Path, "/favicon.ico") {
@@ -187,7 +160,37 @@ func Start(state *utils.State) {
 			return
 		}
 
-		if viper.GetBool("strip-http-path") {
+		c.Set("httpHolder", currentListener)
+
+		if !exactMatch || authNeeded {
+			c.Header("WWW-Authenticate", "Basic realm=\"sish\"")
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+
+		stripPath := viper.GetBool("strip-http-path")
+
+		currentListener.SSHConnections.Range(func(key, val interface{}) bool {
+			sshConn := val.(*utils.SSHConnection)
+			newHost := sshConn.HostHeader
+
+			if sshConn.StripPath != viper.GetBool("strip-http-path") {
+				stripPath = sshConn.StripPath
+			}
+
+			if newHost == "" {
+				return true
+			}
+
+			if len(hostSplit) > 1 {
+				newHost = fmt.Sprintf("%s:%s", newHost, hostSplit[1])
+			}
+
+			c.Request.Host = newHost
+			return false
+		})
+
+		if viper.GetBool("strip-http-path") && stripPath {
 			c.Request.RequestURI = strings.TrimPrefix(c.Request.RequestURI, currentListener.HTTPUrl.Path)
 			c.Request.URL.Path = strings.TrimPrefix(c.Request.URL.Path, currentListener.HTTPUrl.Path)
 			c.Request.URL.RawPath = strings.TrimPrefix(c.Request.URL.RawPath, currentListener.HTTPUrl.Path)
@@ -211,6 +214,11 @@ func Start(state *utils.State) {
 			})
 		}
 
+		if exactMatch && (viper.GetBool("admin-console") || viper.GetBool("service-console")) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
+			state.Console.HandleRequest(currentListener.HTTPUrl.String(), hostIsRoot, c)
+			return
+		}
+
 		reqBody, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
 			log.Println("Error reading request body:", err)
@@ -219,7 +227,7 @@ func Start(state *utils.State) {
 
 		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(reqBody))
 
-		err = forward.ResponseModifier(ResponseModifier(state, hostname, reqBody, c))(currentListener.Forward)
+		err = forward.ResponseModifier(ResponseModifier(state, hostname, reqBody, c, currentListener))(currentListener.Forward)
 		if err != nil {
 			log.Println("Unable to set response modifier:", err)
 		}

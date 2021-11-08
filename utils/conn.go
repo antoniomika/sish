@@ -22,6 +22,7 @@ type SSHConnection struct {
 	Messages       chan string
 	ProxyProto     byte
 	HostHeader     string
+	StripPath      bool
 	Session        chan bool
 	CleanupHandler bool
 	SetupLock      *sync.Mutex

@@ -43,7 +43,7 @@ func RoundTripper() *http.Transport {
 // ResponseModifier implements a response modifier for the specified request.
 // We don't actually modify any requests, but we do want to record the request
 // so we can send it to the web console.
-func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gin.Context) func(*http.Response) error {
+func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gin.Context, currentListener *utils.HTTPHolder) func(*http.Response) error {
 	return func(response *http.Response) error {
 		if viper.GetBool("admin-console") || viper.GetBool("service-console") {
 			resBody, err := ioutil.ReadAll(response.Body)
@@ -79,19 +79,20 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 			requestHeaders.Add("Host", hostname)
 
 			data, err := json.Marshal(map[string]interface{}{
-				"startTime":       startTime,
-				"startTimePretty": startTime.Format(viper.GetString("time-format")),
-				"currentTime":     currentTime,
-				"requestIP":       c.ClientIP(),
-				"requestTime":     diffTime.Round(roundTime).String(),
-				"requestMethod":   c.Request.Method,
-				"requestUrl":      c.Request.URL,
-				"requestHeaders":  requestHeaders,
-				"requestBody":     base64.StdEncoding.EncodeToString(reqBody),
-				"responseHeaders": response.Header,
-				"responseCode":    response.StatusCode,
-				"responseStatus":  response.Status,
-				"responseBody":    base64.StdEncoding.EncodeToString(resBody),
+				"startTime":          startTime,
+				"startTimePretty":    startTime.Format(viper.GetString("time-format")),
+				"currentTime":        currentTime,
+				"requestIP":          c.ClientIP(),
+				"requestTime":        diffTime.Round(roundTime).String(),
+				"requestMethod":      c.Request.Method,
+				"requestUrl":         c.Request.URL,
+				"originalRequestURI": c.GetString("originalURI"),
+				"requestHeaders":     requestHeaders,
+				"requestBody":        base64.StdEncoding.EncodeToString(reqBody),
+				"responseHeaders":    response.Header,
+				"responseCode":       response.StatusCode,
+				"responseStatus":     response.Status,
+				"responseBody":       base64.StdEncoding.EncodeToString(resBody),
 			})
 
 			if err != nil {
@@ -107,7 +108,7 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 				c.Set("proxySocket", string(hostLocation))
 			}
 
-			state.Console.BroadcastRoute(hostname, data)
+			state.Console.BroadcastRoute(currentListener.HTTPUrl.String(), data)
 		}
 
 		return nil

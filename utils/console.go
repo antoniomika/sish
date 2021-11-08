@@ -46,7 +46,7 @@ func NewWebConsole() *WebConsole {
 }
 
 // HandleRequest handles an incoming web request, handles auth, and then routes it.
-func (c *WebConsole) HandleRequest(hostname string, hostIsRoot bool, g *gin.Context) {
+func (c *WebConsole) HandleRequest(proxyUrl string, hostIsRoot bool, g *gin.Context) {
 	userAuthed := false
 	userIsAdmin := false
 	if (viper.GetBool("admin-console") && viper.GetString("admin-console-token") != "") && (g.Request.URL.Query().Get("x-authorization") == viper.GetString("admin-console-token") || g.Request.Header.Get("x-authorization") == viper.GetString("admin-console-token")) {
@@ -54,7 +54,7 @@ func (c *WebConsole) HandleRequest(hostname string, hostIsRoot bool, g *gin.Cont
 		userAuthed = true
 	}
 
-	tokenInterface, ok := c.RouteTokens.Load(hostname)
+	tokenInterface, ok := c.RouteTokens.Load(proxyUrl)
 	if ok {
 		routeToken, ok := tokenInterface.(string)
 		if viper.GetBool("service-console") && ok && (g.Request.URL.Query().Get("x-authorization") == routeToken || g.Request.Header.Get("x-authorization") == routeToken) {
@@ -63,43 +63,43 @@ func (c *WebConsole) HandleRequest(hostname string, hostIsRoot bool, g *gin.Cont
 	}
 
 	if strings.HasPrefix(g.Request.URL.Path, "/_sish/console/ws") && userAuthed {
-		c.HandleWebSocket(hostname, g)
+		c.HandleWebSocket(proxyUrl, g)
 		return
 	} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/console") && userAuthed {
-		c.HandleTemplate(hostname, hostIsRoot, userIsAdmin, g)
+		c.HandleTemplate(proxyUrl, hostIsRoot, userIsAdmin, g)
 		return
 	} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/disconnectclient/") && userIsAdmin {
-		c.HandleDisconnectClient(hostname, g)
+		c.HandleDisconnectClient(proxyUrl, g)
 		return
 	} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/disconnectroute/") && userIsAdmin {
-		c.HandleDisconnectRoute(hostname, g)
+		c.HandleDisconnectRoute(proxyUrl, g)
 		return
 	} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/clients") && hostIsRoot && userIsAdmin {
-		c.HandleClients(hostname, g)
+		c.HandleClients(proxyUrl, g)
 		return
 	}
 }
 
 // HandleTemplate handles rendering the console templates.
-func (c *WebConsole) HandleTemplate(hostname string, hostIsRoot bool, userIsAdmin bool, g *gin.Context) {
+func (c *WebConsole) HandleTemplate(proxyUrl string, hostIsRoot bool, userIsAdmin bool, g *gin.Context) {
 	if hostIsRoot && userIsAdmin {
 		g.HTML(http.StatusOK, "routes", nil)
 		return
 	}
 
-	if c.RouteExists(hostname) {
+	if c.RouteExists(proxyUrl) {
 		g.HTML(http.StatusOK, "console", nil)
 		return
 	}
 
-	err := g.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", hostname))
+	err := g.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", proxyUrl))
 	if err != nil {
 		log.Println("Aborting with error", err)
 	}
 }
 
 // HandleWebSocket handles the websocket route.
-func (c *WebConsole) HandleWebSocket(hostname string, g *gin.Context) {
+func (c *WebConsole) HandleWebSocket(proxyUrl string, g *gin.Context) {
 	conn, err := upgrader.Upgrade(g.Writer, g.Request, nil)
 	if err != nil {
 		log.Println(err)
@@ -110,16 +110,16 @@ func (c *WebConsole) HandleWebSocket(hostname string, g *gin.Context) {
 		Conn:    conn,
 		Console: c,
 		Send:    make(chan []byte),
-		Route:   hostname,
+		Route:   proxyUrl,
 	}
 
-	c.AddClient(hostname, client)
+	c.AddClient(proxyUrl, client)
 
 	go client.Handle()
 }
 
 // HandleDisconnectClient handles the disconnection request for a SSH client.
-func (c *WebConsole) HandleDisconnectClient(hostname string, g *gin.Context) {
+func (c *WebConsole) HandleDisconnectClient(proxyUrl string, g *gin.Context) {
 	client := strings.TrimPrefix(g.Request.URL.Path, "/_sish/api/disconnectclient/")
 
 	c.State.SSHConnections.Range(func(key interface{}, val interface{}) bool {
@@ -143,7 +143,7 @@ func (c *WebConsole) HandleDisconnectClient(hostname string, g *gin.Context) {
 }
 
 // HandleDisconnectRoute handles the disconnection request for a forwarded route.
-func (c *WebConsole) HandleDisconnectRoute(hostname string, g *gin.Context) {
+func (c *WebConsole) HandleDisconnectRoute(proxyUrl string, g *gin.Context) {
 	route := strings.Split(strings.TrimPrefix(g.Request.URL.Path, "/_sish/api/disconnectroute/"), "/")
 	encRouteName := route[1]
 
@@ -179,7 +179,7 @@ func (c *WebConsole) HandleDisconnectRoute(hostname string, g *gin.Context) {
 // HandleClients handles returning all connected SSH clients. This will
 // also go through all of the forwarded connections for the SSH client and
 // return them.
-func (c *WebConsole) HandleClients(hostname string, g *gin.Context) {
+func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 	data := map[string]interface{}{
 		"status": true,
 	}
@@ -252,23 +252,28 @@ func (c *WebConsole) HandleClients(hostname string, g *gin.Context) {
 
 		httpListeners := map[string]interface{}{}
 		c.State.HTTPListeners.Range(func(key interface{}, val interface{}) bool {
-			httpListener := key.(string)
-			aliasAddress := val.(*HTTPHolder)
+			httpHolder := val.(*HTTPHolder)
 
 			listenerHandlers := []string{}
-			aliasAddress.SSHConnections.Range(func(key interface{}, val interface{}) bool {
-				aliasAddr := key.(string)
+			httpHolder.SSHConnections.Range(func(key interface{}, val interface{}) bool {
+				httpAddr := key.(string)
 
 				for _, v := range listeners {
-					if v == aliasAddr {
-						listenerHandlers = append(listenerHandlers, aliasAddr)
+					if v == httpAddr {
+						listenerHandlers = append(listenerHandlers, httpAddr)
 					}
 				}
 				return true
 			})
 
 			if len(listenerHandlers) > 0 {
-				httpListeners[httpListener] = listenerHandlers
+				var userPass string
+				password, _ := httpHolder.HTTPUrl.User.Password()
+				if httpHolder.HTTPUrl.User.Username() != "" || password != "" {
+					userPass = fmt.Sprintf("%s:%s@", httpHolder.HTTPUrl.User.Username(), password)
+				}
+
+				httpListeners[fmt.Sprintf("%s%s%s", userPass, httpHolder.HTTPUrl.Hostname(), httpHolder.HTTPUrl.Path)] = listenerHandlers
 			}
 
 			return true

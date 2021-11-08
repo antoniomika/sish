@@ -75,6 +75,12 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 		log.Println("Unable to add server to balancer")
 	}
 
+	var userPass string
+	password, _ := pH.HTTPUrl.User.Password()
+	if pH.HTTPUrl.User.Username() != "" || password != "" {
+		userPass = fmt.Sprintf("%s:%s@", pH.HTTPUrl.User.Username(), password)
+	}
+
 	if viper.GetBool("admin-console") || viper.GetBool("service-console") {
 		routeToken := viper.GetString("service-console-token")
 		sendToken := false
@@ -108,7 +114,12 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 				}
 			}
 
-			consoleURL := fmt.Sprintf("%s://%s%s", scheme, pH.HTTPUrl.Host, portString)
+			pathParam := ""
+			if pH.HTTPUrl.Path != "/" {
+				pathParam = pH.HTTPUrl.Path
+			}
+
+			consoleURL := fmt.Sprintf("%s://%s%s%s%s", scheme, userPass, pH.HTTPUrl.Host, portString, pathParam)
 
 			requestMessages += fmt.Sprintf("Service console can be accessed here: %s/_sish/console?x-authorization=%s\r\n", consoleURL, routeToken)
 		}
@@ -117,12 +128,6 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 	httpPortString := ""
 	if httpPort != 80 {
 		httpPortString = fmt.Sprintf(":%d", httpPort)
-	}
-
-	var userPass string
-	password, _ := pH.HTTPUrl.User.Password()
-	if pH.HTTPUrl.User.Username() != "" || password != "" {
-		userPass = fmt.Sprintf("%s:%s@", pH.HTTPUrl.User.Username(), password)
 	}
 
 	requestMessages += fmt.Sprintf("%s: http://%s%s%s%s\r\n", aurora.BgBlue("HTTP"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path)

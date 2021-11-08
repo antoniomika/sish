@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 
 	"github.com/antoniomika/sish/utils"
@@ -15,14 +16,17 @@ import (
 )
 
 // commandSplitter is the character that terminates a prefix.
-var commandSplitter = "="
+const commandSplitter = "="
 
 // proxyProtoPrefix is used when deciding what proxy protocol
 // version to use.
-var proxyProtoPrefix = "proxyproto"
+const proxyProtoPrefix = "proxyproto"
 
 // hostHeaderPrefix is the host-header for a specific session.
-var hostHeaderPrefix = "host-header"
+const hostHeaderPrefix = "host-header"
+
+// stripPathPrefix defines whether or not to strip the path (if enabled globally).
+const stripPathPrefix = "strip-path"
 
 // handleSession handles the channel when a user requests a session.
 // This is how we send console messages.
@@ -75,6 +79,8 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 	}()
 
 	go func() {
+		sshConn.StripPath = viper.GetBool("strip-http-path")
+
 		for req := range requests {
 			switch req.Type {
 			case "shell":
@@ -88,6 +94,10 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 
 				for _, commandFlag := range commandFlags {
 					commandFlagParts := strings.Split(commandFlag, commandSplitter)
+
+					if len(commandFlagParts) < 2 {
+						continue
+					}
 
 					command, param := commandFlagParts[0], commandFlagParts[1]
 
@@ -103,6 +113,18 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						if viper.GetBool("rewrite-host-header") {
 							sshConn.HostHeader = param
 							sshConn.SendMessage(fmt.Sprintf("Using host header %s for HTTP handlers", sshConn.HostHeader), true)
+						}
+					case stripPathPrefix:
+						if sshConn.StripPath {
+							stripPath, err := strconv.ParseBool(param)
+
+							if err != nil {
+								log.Printf("Unable to detect strip path. Using configuration: %s", err)
+							} else {
+								sshConn.StripPath = stripPath
+							}
+
+							sshConn.SendMessage(fmt.Sprintf("Strip path for HTTP handlers set to: %t", sshConn.StripPath), true)
 						}
 					}
 				}

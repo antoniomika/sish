@@ -69,6 +69,13 @@
         this.data = routeData;
         this.type = routeType;
         this.name = routeName;
+
+        if (this.name.indexOf("/") !== -1) {
+            var routeParts = this.name.split("/");
+            this.name = routeParts[0];
+            this.pathname = `/${routeParts[1]}`;
+        }
+
         this.disconnectType = disconnectType;
 
         this.disconnectRoute = function() {
@@ -78,7 +85,7 @@
         }.bind(this);
 
         this.forwardToConsole = function() {
-            window.location.hostname = this.name;
+            window.location.href = window.location.href.replace(window.location.hostname, this.name).replace(window.location.pathname, `${this.pathname.length > 1 ? this.pathname : ''}${window.location.pathname}`);
         }.bind(this);
     };
 
