@@ -165,9 +165,9 @@ func Start() {
 		clientLoggedIn := false
 		clientLoggedInMutex.Unlock()
 
-		if viper.GetBool("cleanup-unbound") {
+		if viper.GetBool("cleanup-unauthed") {
 			go func() {
-				<-time.After(viper.GetDuration("cleanup-unbound-timeout"))
+				<-time.After(viper.GetDuration("cleanup-unauthed-timeout"))
 				clientLoggedInMutex.Lock()
 				if !clientLoggedIn {
 					conn.Close()

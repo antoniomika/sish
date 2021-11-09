@@ -28,6 +28,9 @@ const hostHeaderPrefix = "host-header"
 // stripPathPrefix defines whether or not to strip the path (if enabled globally).
 const stripPathPrefix = "strip-path"
 
+// sniProxyPrefix defines whether or not to enable SNI Proxying (if enabled globally).
+const sniProxyPrefix = "sni-proxy"
+
 // handleSession handles the channel when a user requests a session.
 // This is how we send console messages.
 func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
@@ -126,6 +129,16 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 
 							sshConn.SendMessage(fmt.Sprintf("Strip path for HTTP handlers set to: %t", sshConn.StripPath), true)
 						}
+					case sniProxyPrefix:
+						sniProxy, err := strconv.ParseBool(param)
+
+						if err != nil {
+							log.Printf("Unable to detect sni proxy. Using false as default: %s", err)
+						}
+
+						sshConn.SNIProxy = sniProxy
+
+						sshConn.SendMessage(fmt.Sprintf("SNI proxy for TCP forwards set to: %t", sshConn.SNIProxy), true)
 					}
 				}
 			default:
@@ -215,16 +228,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 		return
 	}
 
-	sshConn.Listeners.Store(aliasAddr, conn)
-
 	utils.CopyBoth(conn, connection)
-
-	select {
-	case <-sshConn.Close:
-		break
-	default:
-		sshConn.CleanUp(state)
-	}
 }
 
 // writeToSession is where we write to the underlying session channel.
