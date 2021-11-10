@@ -531,7 +531,7 @@ func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
 // GetOpenPort returns open ports that can be bound. It verifies the host to
 // bind the port to and attempts to listen to the port to ensure it is open.
 // If load balancing is enabled, it will return the port if used.
-func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection) (string, uint32, *TCPHolder) {
+func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection, sniProxyEnabled bool) (string, uint32, *TCPHolder) {
 	getUnusedPort := func() (string, uint32, *TCPHolder) {
 		var tH *TCPHolder
 
@@ -540,7 +540,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 		bindAddr := addr
 		listenAddr := ""
 
-		if (bindAddr == "localhost" && viper.GetBool("localhost-as-all")) || viper.GetBool("force-tcp-address") {
+		if (bindAddr == "localhost" && viper.GetBool("localhost-as-all")) || viper.GetBool("force-tcp-address") || sniProxyEnabled {
 			bindAddr = viper.GetString("tcp-address")
 		}
 
@@ -560,7 +560,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 			checkedPort, err := CheckPort(checkerPort, viper.GetString("port-bind-range"))
 			_, ok := state.TCPListeners.Load(listenAddr)
 
-			if err == nil && (!viper.GetBool("tcp-load-balancer") || (viper.GetBool("tcp-load-balancer") && !ok)) {
+			if err == nil && (!viper.GetBool("tcp-load-balancer") || (viper.GetBool("tcp-load-balancer") && !ok) || (sniProxyEnabled && !ok)) {
 				ln, listenErr := net.Listen("tcp", fmt.Sprintf(":%d", port))
 				if listenErr != nil {
 					err = listenErr
@@ -583,7 +583,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 
 			listenAddr = fmt.Sprintf("%s:%d", bindAddr, bindPort)
 			holder, ok := state.TCPListeners.Load(listenAddr)
-			if ok && viper.GetBool("tcp-load-balancer") {
+			if ok && (!sniProxyEnabled && viper.GetBool("tcp-load-balancer") || (sniProxyEnabled && viper.GetBool("sni-load-balancer"))) {
 				tH = holder.(*TCPHolder)
 				ok = false
 			}

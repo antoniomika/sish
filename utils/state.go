@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -72,11 +73,13 @@ type AliasHolder struct {
 
 // TCPHolder holds proxy and connection info.
 // SSHConnections is a map[string]*SSHConnection.
+// Balancers is a map[string]*roundrobin.RoundRobin.
 type TCPHolder struct {
 	TCPHost        string
 	Listener       net.Listener
 	SSHConnections *sync.Map
-	Balancer       *roundrobin.RoundRobin
+	SNIProxy       bool
+	Balancers      *sync.Map
 }
 
 // Handle will copy connections from one handler to a roundrobin server.
@@ -94,7 +97,31 @@ func (tH *TCPHolder) Handle(state *State) {
 			continue
 		}
 
-		connectionLocation, err := tH.Balancer.NextServer()
+		var firstWrite *bytes.Buffer
+
+		balancerName := "root"
+		if tH.SNIProxy {
+			tlsHello, buf, err := PeakTLSHello(cl)
+			if err != nil && tlsHello == nil {
+				log.Printf("Unable to read TLS hello: %s", err)
+				cl.Close()
+				continue
+			}
+
+			balancerName = tlsHello.ServerName
+			firstWrite = buf
+		}
+
+		pB, ok := tH.Balancers.Load(balancerName)
+		if !ok {
+			log.Printf("Unable to load connection location: %s not found on TCP listener %s", balancerName, tH.TCPHost)
+			cl.Close()
+			continue
+		}
+
+		balancer := pB.(*roundrobin.RoundRobin)
+
+		connectionLocation, err := balancer.NextServer()
 		if err != nil {
 			log.Println("Unable to load connection location:", err)
 			cl.Close()
@@ -138,6 +165,16 @@ func (tH *TCPHolder) Handle(state *State) {
 			log.Println("Error connecting to tcp balancer:", err)
 			cl.Close()
 			continue
+		}
+
+		if firstWrite != nil {
+			n, err := conn.Write(firstWrite.Bytes())
+			log.Println(n, err)
+			if err != nil {
+				log.Println("Unable to write to conn:", err)
+				cl.Close()
+				continue
+			}
 		}
 
 		go CopyBoth(conn, cl)

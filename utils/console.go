@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/spf13/viper"
+	"github.com/vulcand/oxy/roundrobin"
 )
 
 // upgrader is the default WS upgrader that we use for webconsole clients.
@@ -232,19 +233,29 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 			aliasHolder := val.(*TCPHolder)
 
 			for _, v := range listeners {
-				for _, server := range aliasHolder.Balancer.Servers() {
-					serverAddr, err := base64.StdEncoding.DecodeString(server.Host)
-					if err != nil {
-						log.Println("Error decoding server host:", err)
-						continue
+				aliasHolder.Balancers.Range(func(ikey, ival interface{}) bool {
+					balancer := ival.(*roundrobin.RoundRobin)
+
+					if aliasHolder.SNIProxy {
+						tcpAlias = fmt.Sprintf("%s-%s", tcpAlias, key.(string))
 					}
 
-					aliasAddress := string(serverAddr)
+					for _, server := range balancer.Servers() {
+						serverAddr, err := base64.StdEncoding.DecodeString(server.Host)
+						if err != nil {
+							log.Println("Error decoding server host:", err)
+							continue
+						}
 
-					if v == aliasAddress {
-						listenerParts[tcpAlias] = aliasAddress
+						aliasAddress := string(serverAddr)
+
+						if v == aliasAddress {
+							listenerParts[tcpAlias] = aliasAddress
+						}
 					}
-				}
+
+					return true
+				})
 			}
 
 			return true

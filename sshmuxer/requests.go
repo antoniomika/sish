@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
@@ -65,11 +66,16 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		comparePortHTTPS = 443
 	}
 
-	if bindPort != comparePortHTTP && bindPort != comparePortHTTPS {
+	<-time.After(1 * time.Second)
+
+	sniProxyEnabled := viper.GetBool("sni-proxy") && sshConn.SNIProxy
+	tcpAliasEnabled := viper.GetBool("tcp-aliases") && sshConn.TCPAlias
+
+	if (bindPort != comparePortHTTP && bindPort != comparePortHTTPS) || tcpAliasEnabled {
 		testAddr := net.ParseIP(check.Addr)
-		if viper.GetBool("tcp-aliases") && check.Addr != "localhost" && testAddr == nil && !sshConn.SNIProxy {
+		if check.Addr != "localhost" && testAddr == nil && tcpAliasEnabled && !sniProxyEnabled {
 			listenerType = utils.AliasListener
-		} else if (check.Addr == "localhost" || testAddr != nil) || sshConn.SNIProxy {
+		} else if (check.Addr == "localhost" || testAddr != nil) || sniProxyEnabled {
 			listenerType = utils.TCPListener
 		}
 	}
@@ -121,7 +127,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	}()
 
 	connType := "tcp"
-	if stringPort == strconv.FormatUint(uint64(comparePortHTTP), 10) {
+	if sniProxyEnabled {
+		connType = "tls"
+	} else if stringPort == strconv.FormatUint(uint64(comparePortHTTP), 10) {
 		connType = "http"
 	} else if stringPort == strconv.FormatUint(uint64(comparePortHTTPS), 10) {
 		connType = "https"
@@ -185,7 +193,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			}
 		}
 	case utils.TCPListener:
-		tH, serverURL, tcpAddr, requestMessages, err := handleTCPListener(check, bindPort, mainRequestMessages, listenerHolder, state, sshConn)
+		tH, balancer, serverURL, tcpAddr, requestMessages, err := handleTCPListener(check, bindPort, mainRequestMessages, listenerHolder, state, sshConn, sniProxyEnabled)
 		if err != nil {
 			err = newRequest.Reply(false, nil)
 			if err != nil {
@@ -201,14 +209,14 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		go tH.Handle(state)
 
 		deferHandler = func() {
-			err := tH.Balancer.RemoveServer(serverURL)
+			err := balancer.RemoveServer(serverURL)
 			if err != nil {
 				log.Println("Unable to remove server from balancer:", err)
 			}
 
 			tH.SSHConnections.Delete(listenerHolder.Addr().String())
 
-			if len(tH.Balancer.Servers()) == 0 {
+			if len(balancer.Servers()) == 0 {
 				tH.Listener.Close()
 				state.Listeners.Delete(tcpAddr)
 				state.TCPListeners.Delete(tcpAddr)

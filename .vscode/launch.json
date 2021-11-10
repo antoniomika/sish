@@ -20,9 +20,10 @@
         "--bind-random-subdomains=false",
         "--bind-random-ports=false",
         "--bind-random-aliases=false",
+        "--sni-proxy=true",
+        "--tcp-aliases=true",
         "--https=false",
         "--authentication=false",
-        "--tcp-aliases=true",
         "--proxy-protocol=true",
         "--proxy-protocol-listener=true",
         "--proxy-protocol-use-timeout=true",
@@ -32,7 +33,8 @@
         "--verify-ssl=false",
         "--http-load-balancer=true",
         "--tcp-load-balancer=true",
-        "--alias-load-balancer=true"
+        "--alias-load-balancer=true",
+        "--sni-load-balancer=false"
       ]
     }
   ]

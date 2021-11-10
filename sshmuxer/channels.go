@@ -31,6 +31,9 @@ const stripPathPrefix = "strip-path"
 // sniProxyPrefix defines whether or not to enable SNI Proxying (if enabled globally).
 const sniProxyPrefix = "sni-proxy"
 
+// tcpAliasPrefix defines whether or not to enable TCP Aliasing (if enabled globally).
+const tcpAliasPrefix = "tcp-alias"
+
 // handleSession handles the channel when a user requests a session.
 // This is how we send console messages.
 func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
@@ -106,30 +109,38 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 
 					switch command {
 					case proxyProtoPrefix:
-						if viper.GetBool("proxy-protocol") {
-							sshConn.ProxyProto = getProxyProtoVersion(param)
-							if sshConn.ProxyProto != 0 {
-								sshConn.SendMessage(fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)
-							}
+						if !viper.GetBool("proxy-protocol") {
+							break
+						}
+						sshConn.ProxyProto = getProxyProtoVersion(param)
+						if sshConn.ProxyProto != 0 {
+							sshConn.SendMessage(fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)
 						}
 					case hostHeaderPrefix:
-						if viper.GetBool("rewrite-host-header") {
-							sshConn.HostHeader = param
-							sshConn.SendMessage(fmt.Sprintf("Using host header %s for HTTP handlers", sshConn.HostHeader), true)
+						if !viper.GetBool("rewrite-host-header") {
+							break
 						}
+						sshConn.HostHeader = param
+						sshConn.SendMessage(fmt.Sprintf("Using host header %s for HTTP handlers", sshConn.HostHeader), true)
 					case stripPathPrefix:
-						if sshConn.StripPath {
-							stripPath, err := strconv.ParseBool(param)
-
-							if err != nil {
-								log.Printf("Unable to detect strip path. Using configuration: %s", err)
-							} else {
-								sshConn.StripPath = stripPath
-							}
-
-							sshConn.SendMessage(fmt.Sprintf("Strip path for HTTP handlers set to: %t", sshConn.StripPath), true)
+						if !sshConn.StripPath {
+							break
 						}
+
+						nstripPath, err := strconv.ParseBool(param)
+
+						if err != nil {
+							log.Printf("Unable to detect strip path. Using configuration: %s", err)
+						} else {
+							sshConn.StripPath = nstripPath
+						}
+
+						sshConn.SendMessage(fmt.Sprintf("Strip path for HTTP handlers set to: %t", sshConn.StripPath), true)
 					case sniProxyPrefix:
+						if !viper.GetBool("sni-proxy") {
+							break
+						}
+
 						sniProxy, err := strconv.ParseBool(param)
 
 						if err != nil {
@@ -139,6 +150,20 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						sshConn.SNIProxy = sniProxy
 
 						sshConn.SendMessage(fmt.Sprintf("SNI proxy for TCP forwards set to: %t", sshConn.SNIProxy), true)
+					case tcpAliasPrefix:
+						if !viper.GetBool("tcp-aliases") {
+							break
+						}
+
+						tcpAlias, err := strconv.ParseBool(param)
+
+						if err != nil {
+							log.Printf("Unable to detect sni proxy. Using false as default: %s", err)
+						}
+
+						sshConn.TCPAlias = tcpAlias
+
+						sshConn.SendMessage(fmt.Sprintf("TCP Alias for TCP forwards set to: %t", sshConn.TCPAlias), true)
 					}
 				}
 			default:
