@@ -18,7 +18,7 @@
                     <th scope="row" data-bind="text: startTimePretty"></th>
                     <th scope="row" data-bind="text: requestIP"></th>
                     <th scope="row" data-bind="text: requestMethod"></th>
-                    <td data-bind="text: requestUrl.Path"></td>
+                    <td data-bind="text: originalRequestURI"></td>
                     <td data-bind="text: responseStatus"></td>
                     <td data-bind="text: requestTime"></td>
                 </tr>
@@ -74,6 +74,7 @@
         this.startTimePretty = requestData.startTimePretty;
         this.requestMethod = requestData.requestMethod;
         this.requestUrl = requestData.requestUrl;
+        this.originalRequestURI = requestData.originalRequestURI;
         this.responseStatus = requestData.responseStatus;
         this.requestTime = requestData.requestTime;
         this.requestIP = requestData.requestIP;

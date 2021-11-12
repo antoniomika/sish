@@ -58,7 +58,7 @@ func Start() {
 		httpsPort = viper.GetInt("https-port-override")
 	}
 
-	utils.WatchCerts()
+	utils.WatchKeys()
 
 	state := utils.NewState()
 	state.Console.State = state
@@ -165,9 +165,9 @@ func Start() {
 		clientLoggedIn := false
 		clientLoggedInMutex.Unlock()
 
-		if viper.GetBool("cleanup-unbound") {
+		if viper.GetBool("cleanup-unauthed") {
 			go func() {
-				<-time.After(viper.GetDuration("cleanup-unbound-timeout"))
+				<-time.After(viper.GetDuration("cleanup-unauthed-timeout"))
 				clientLoggedInMutex.Lock()
 				if !clientLoggedIn {
 					conn.Close()
@@ -194,6 +194,7 @@ func Start() {
 				Listeners: &sync.Map{},
 				Closed:    &sync.Once{},
 				Close:     make(chan bool),
+				Exec:      make(chan bool),
 				Messages:  make(chan string),
 				Session:   make(chan bool),
 				SetupLock: &sync.Mutex{},
@@ -221,8 +222,19 @@ func Start() {
 			if viper.GetBool("cleanup-unbound") {
 				go func() {
 					select {
+					case <-holderConn.Exec:
+					case <-time.After(1 * time.Second):
+						break
+					}
+
+					select {
 					case <-time.After(viper.GetDuration("cleanup-unbound-timeout")):
 						count := 0
+
+						if holderConn.LocalForward {
+							count = 1
+						}
+
 						holderConn.Listeners.Range(func(key, value interface{}) bool {
 							count++
 							return true

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
@@ -41,6 +42,12 @@ type forwardedTCPPayload struct {
 // handleRemoteForward will handle a remote forward request
 // and stand up the relevant listeners.
 func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
+	select {
+	case <-sshConn.Exec:
+	case <-time.After(1 * time.Second):
+		break
+	}
+
 	cleanupOnce := &sync.Once{}
 	check := &channelForwardMsg{}
 
@@ -53,11 +60,26 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	stringPort := strconv.FormatUint(uint64(bindPort), 10)
 
 	listenerType := utils.HTTPListener
-	if bindPort != uint32(80) && bindPort != uint32(443) {
+
+	comparePortHTTP := viper.GetUint32("http-port-override")
+	comparePortHTTPS := viper.GetUint32("https-port-override")
+
+	if comparePortHTTP == 0 {
+		comparePortHTTP = 80
+	}
+
+	if comparePortHTTPS == 0 {
+		comparePortHTTPS = 443
+	}
+
+	tcpAliasEnabled := viper.GetBool("tcp-aliases") || sshConn.TCPAlias
+	sniProxyEnabled := viper.GetBool("sni-proxy") && sshConn.SNIProxy
+
+	if bindPort != comparePortHTTP && bindPort != comparePortHTTPS {
 		testAddr := net.ParseIP(check.Addr)
-		if viper.GetBool("tcp-aliases") && check.Addr != "localhost" && testAddr == nil {
+		if check.Addr != "localhost" && testAddr == nil && tcpAliasEnabled && !sniProxyEnabled {
 			listenerType = utils.AliasListener
-		} else if check.Addr == "localhost" || testAddr != nil {
+		} else if (check.Addr == "localhost" || testAddr != nil) || sniProxyEnabled {
 			listenerType = utils.TCPListener
 		}
 	}
@@ -109,9 +131,11 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	}()
 
 	connType := "tcp"
-	if stringPort == "80" {
+	if sniProxyEnabled {
+		connType = "tls"
+	} else if stringPort == strconv.FormatUint(uint64(comparePortHTTP), 10) {
 		connType = "http"
-	} else if stringPort == "443" {
+	} else if stringPort == strconv.FormatUint(uint64(comparePortHTTPS), 10) {
 		connType = "https"
 	}
 
@@ -121,7 +145,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	switch listenerType {
 	case utils.HTTPListener:
-		pH, serverURL, host, requestMessages, err := handleHTTPListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn)
+		pH, serverURL, requestMessages, err := handleHTTPListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn)
 		if err != nil {
 			err = newRequest.Reply(false, nil)
 			if err != nil {
@@ -141,10 +165,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			pH.SSHConnections.Delete(listenerHolder.Addr().String())
 
 			if len(pH.Balancer.Servers()) == 0 {
-				state.HTTPListeners.Delete(host)
+				state.HTTPListeners.Delete(pH.HTTPUrl.String())
 
 				if viper.GetBool("admin-console") || viper.GetBool("service-console") {
-					state.Console.RemoveRoute(host)
+					state.Console.RemoveRoute(pH.HTTPUrl.String())
 				}
 			}
 		}
@@ -173,7 +197,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			}
 		}
 	case utils.TCPListener:
-		tH, serverURL, tcpAddr, requestMessages, err := handleTCPListener(check, bindPort, mainRequestMessages, listenerHolder, state, sshConn)
+		tH, balancer, serverURL, tcpAddr, requestMessages, err := handleTCPListener(check, bindPort, mainRequestMessages, listenerHolder, state, sshConn, sniProxyEnabled)
 		if err != nil {
 			err = newRequest.Reply(false, nil)
 			if err != nil {
@@ -189,14 +213,14 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		go tH.Handle(state)
 
 		deferHandler = func() {
-			err := tH.Balancer.RemoveServer(serverURL)
+			err := balancer.RemoveServer(serverURL)
 			if err != nil {
 				log.Println("Unable to remove server from balancer:", err)
 			}
 
 			tH.SSHConnections.Delete(listenerHolder.Addr().String())
 
-			if len(tH.Balancer.Servers()) == 0 {
+			if len(balancer.Servers()) == 0 {
 				tH.Listener.Close()
 				state.Listeners.Delete(tcpAddr)
 				state.TCPListeners.Delete(tcpAddr)

@@ -10,10 +10,12 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	mathrand "math/rand"
 	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -23,11 +25,12 @@ import (
 	"time"
 
 	"github.com/ScaleFT/sshkeys"
-	"github.com/fsnotify/fsnotify"
+	"github.com/caddyserver/certmagic"
 	"github.com/jpillora/ipfilter"
 	"github.com/logrusorgru/aurora"
 	"github.com/mikesmitty/edkey"
 	"github.com/pires/go-proxyproto"
+	"github.com/radovskyb/watcher"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
@@ -219,32 +222,51 @@ func CheckPort(port uint32, portRanges string) (uint32, error) {
 	return 0, fmt.Errorf("not a safe port")
 }
 
-// WatchCerts watches ssh keys for changes and will load them.
-func WatchCerts() {
-	loadCerts()
-	watcher, err := fsnotify.NewWatcher()
+func loadCerts(certManager *certmagic.Config) {
+	certFiles, err := filepath.Glob(filepath.Join(viper.GetString("https-certificate-directory"), "*.crt"))
 	if err != nil {
-		log.Fatal(err)
+		log.Println("Error loading unmanaged certificates:", err)
+	}
+
+	for _, v := range certFiles {
+		err := certManager.CacheUnmanagedCertificatePEMFile(v, fmt.Sprintf("%s.key", strings.TrimSuffix(v, ".crt")), []string{})
+		if err != nil {
+			log.Println("Error loading unmanaged certificate:", err)
+		}
+	}
+}
+
+// WatchCerts watches https certs for changes and will load them.
+func WatchCerts(certManager *certmagic.Config) {
+	loadCerts(certManager)
+
+	w := watcher.New()
+	w.SetMaxEvents(1)
+
+	if err := w.AddRecursive(viper.GetString("https-certificate-directory")); err != nil {
+		log.Fatalln(err)
 	}
 
 	go func() {
+		w.Wait()
+
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
 		go func() {
 			for range c {
-				watcher.Close()
+				w.Close()
 				os.Exit(0)
 			}
 		}()
 
 		for {
 			select {
-			case _, ok := <-watcher.Events:
+			case _, ok := <-w.Event:
 				if !ok {
 					return
 				}
-				loadCerts()
-			case _, ok := <-watcher.Errors:
+				loadCerts(certManager)
+			case _, ok := <-w.Error:
 				if !ok {
 					return
 				}
@@ -252,27 +274,68 @@ func WatchCerts() {
 		}
 	}()
 
-	err = watcher.Add(viper.GetString("authentication-keys-directory"))
-	if err != nil {
-		log.Fatal(err)
-	}
+	go func() {
+		if err := w.Start(viper.GetDuration("https-certificate-directory-watch-interval")); err != nil {
+			log.Fatalln(err)
+		}
+	}()
 }
 
-// loadCerts loads public keys from the keys directory into a slice that is used
-// authenticating a user.
-func loadCerts() {
-	tmpCertHolder := make([]ssh.PublicKey, 0)
+// WatchKeys watches ssh keys for changes and will load them.
+func WatchKeys() {
+	loadKeys()
 
-	files, err := ioutil.ReadDir(viper.GetString("authentication-keys-directory"))
-	if err != nil {
-		log.Fatal(err)
+	w := watcher.New()
+	w.SetMaxEvents(1)
+
+	if err := w.AddRecursive(viper.GetString("authentication-keys-directory")); err != nil {
+		log.Fatalln(err)
 	}
 
-	parseKey := func(keyBytes []byte, fileInfo os.FileInfo) {
-		keyHandle := func(keyBytes []byte, fileInfo os.FileInfo) []byte {
+	go func() {
+		w.Wait()
+
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		go func() {
+			for range c {
+				w.Close()
+				os.Exit(0)
+			}
+		}()
+
+		for {
+			select {
+			case _, ok := <-w.Event:
+				if !ok {
+					return
+				}
+				loadKeys()
+			case _, ok := <-w.Error:
+				if !ok {
+					return
+				}
+			}
+		}
+	}()
+
+	go func() {
+		if err := w.Start(viper.GetDuration("authentication-keys-directory-watch-interval")); err != nil {
+			log.Fatalln(err)
+		}
+	}()
+}
+
+// loadKeys loads public keys from the keys directory into a slice that is used
+// authenticating a user.
+func loadKeys() {
+	tmpCertHolder := make([]ssh.PublicKey, 0)
+
+	parseKey := func(keyBytes []byte, d fs.DirEntry) {
+		keyHandle := func(keyBytes []byte, d fs.DirEntry) []byte {
 			key, _, _, rest, e := ssh.ParseAuthorizedKey(keyBytes)
 			if e != nil {
-				log.Printf("Can't load file %s as public key: %s\n", fileInfo.Name(), e)
+				log.Printf("Can't load file %s as public key: %s\n", d.Name(), e)
 			}
 
 			if key != nil {
@@ -282,15 +345,36 @@ func loadCerts() {
 		}
 
 		for ok := true; ok; ok = len(keyBytes) > 0 {
-			keyBytes = keyHandle(keyBytes, fileInfo)
+			keyBytes = keyHandle(keyBytes, d)
 		}
 	}
 
-	for _, f := range files {
-		i, e := ioutil.ReadFile(filepath.Join(viper.GetString("authentication-keys-directory"), f.Name()))
-		if e == nil && len(i) > 0 {
-			parseKey(i, f)
+	err := filepath.WalkDir(viper.GetString("authentication-keys-directory"), func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
 		}
+
+		if err != nil {
+			log.Printf("Error walking file %s for public key: %s\n", d.Name(), err)
+			return nil
+		}
+
+		i, e := ioutil.ReadFile(path)
+		if e != nil {
+			log.Printf("Can't read file %s as public key: %s\n", d.Name(), err)
+			return nil
+		}
+
+		if len(i) > 0 {
+			parseKey(i, d)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("Unable to walk authentication-keys-directory %s: %s\n", viper.GetString("authentication-keys-directory"), err)
+		return
 	}
 
 	holderLock.Lock()
@@ -447,7 +531,7 @@ func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
 // GetOpenPort returns open ports that can be bound. It verifies the host to
 // bind the port to and attempts to listen to the port to ensure it is open.
 // If load balancing is enabled, it will return the port if used.
-func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection) (string, uint32, *TCPHolder) {
+func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection, sniProxyEnabled bool) (string, uint32, *TCPHolder) {
 	getUnusedPort := func() (string, uint32, *TCPHolder) {
 		var tH *TCPHolder
 
@@ -456,8 +540,8 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 		bindAddr := addr
 		listenAddr := ""
 
-		if bindAddr == "localhost" && viper.GetBool("localhost-as-all") {
-			bindAddr = ""
+		if (bindAddr == "localhost" && viper.GetBool("localhost-as-all")) || viper.GetBool("force-tcp-address") || sniProxyEnabled {
+			bindAddr = viper.GetString("tcp-address")
 		}
 
 		reportUnavailable := func(unavailable bool) {
@@ -476,8 +560,8 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 			checkedPort, err := CheckPort(checkerPort, viper.GetString("port-bind-range"))
 			_, ok := state.TCPListeners.Load(listenAddr)
 
-			if err == nil && (!viper.GetBool("tcp-load-balancer") || (viper.GetBool("tcp-load-balancer") && !ok)) {
-				ln, listenErr := net.Listen("tcp", fmt.Sprintf(":%d", port))
+			if err == nil && (!viper.GetBool("tcp-load-balancer") || (viper.GetBool("tcp-load-balancer") && !ok) || (sniProxyEnabled && !ok)) {
+				ln, listenErr := net.Listen("tcp", listenAddr)
 				if listenErr != nil {
 					err = listenErr
 				} else {
@@ -499,7 +583,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 
 			listenAddr = fmt.Sprintf("%s:%d", bindAddr, bindPort)
 			holder, ok := state.TCPListeners.Load(listenAddr)
-			if ok && viper.GetBool("tcp-load-balancer") {
+			if ok && (!sniProxyEnabled && viper.GetBool("tcp-load-balancer") || (sniProxyEnabled && viper.GetBool("sni-load-balancer"))) {
 				tH = holder.(*TCPHolder)
 				ok = false
 			}
@@ -521,13 +605,8 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection)
 
 // GetOpenHost returns an open host or a random host if that one is unavailable.
 // If load balancing is enabled, it will return the requested domain.
-func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HTTPHolder) {
-	dnsMatch, _, err := verifyDNS(addr, sshConn)
-	if err != nil && viper.GetBool("debug") {
-		log.Println("Error looking up txt records for domain:", addr)
-	}
-
-	getUnusedHost := func() (string, *HTTPHolder) {
+func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *HTTPHolder) {
+	getUnusedHost := func() (*url.URL, *HTTPHolder) {
 		var pH *HTTPHolder
 
 		first := true
@@ -537,11 +616,57 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HT
 			hostExtension = viper.GetString("append-user-to-subdomain-separator") + sshConn.SSHConn.User()
 		}
 
-		proposedHost := addr + hostExtension + "." + viper.GetString("domain")
+		rest := addr
+		var username string
+		var password string
+		var path string
+
+		if strings.Contains(rest, "@") {
+			hostParts := strings.SplitN(rest, "@", 2)
+
+			rest = hostParts[1]
+
+			if viper.GetBool("bind-http-auth") && len(hostParts[0]) > 0 {
+				authParts := strings.Split(hostParts[0], ":")
+
+				if len(authParts) > 0 {
+					username = authParts[0]
+				}
+
+				if len(authParts) > 1 {
+					password = authParts[1]
+				}
+			}
+		}
+
+		if strings.Contains(rest, "/") {
+			pathParts := strings.SplitN(rest, "/", 2)
+
+			if viper.GetBool("bind-http-path") && len(pathParts[1]) > 0 {
+				path = fmt.Sprintf("/%s", pathParts[1])
+			}
+
+			addr = pathParts[0]
+		}
+
+		dnsMatch, _, err := verifyDNS(addr, sshConn)
+		if err != nil && viper.GetBool("debug") {
+			log.Println("Error looking up txt records for domain:", addr)
+		}
+
+		proposedHost := fmt.Sprintf("%s%s.%s", addr, hostExtension, viper.GetString("domain"))
 		domainParts := strings.Join(strings.Split(addr, ".")[1:], ".")
 
 		if dnsMatch || (viper.GetBool("bind-any-host") && strings.Contains(addr, ".")) || inList(domainParts, strings.FieldsFunc(viper.GetString("bind-hosts"), CommaSplitFields)) {
 			proposedHost = addr
+
+			if proposedHost == fmt.Sprintf(".%s", viper.GetString("domain")) {
+				proposedHost = viper.GetString("domain")
+			}
+		}
+
+		if viper.GetBool("bind-root-domain") && proposedHost == fmt.Sprintf(".%s", viper.GetString("domain")) {
+			proposedHost = viper.GetString("domain")
 		}
 
 		host := strings.ToLower(proposedHost)
@@ -582,7 +707,13 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (string, *HT
 		for checkHost(host) {
 		}
 
-		return host, pH
+		hostUrl := &url.URL{
+			User: url.UserPassword(username, password),
+			Host: host,
+			Path: path,
+		}
+
+		return hostUrl, pH
 	}
 
 	return getUnusedHost()

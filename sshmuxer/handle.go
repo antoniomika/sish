@@ -56,7 +56,6 @@ func checkSession(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *
 			for {
 				select {
 				case <-sshConn.Messages:
-					break
 				case <-sshConn.Close:
 					return
 				}

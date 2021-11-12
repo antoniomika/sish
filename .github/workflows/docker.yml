@@ -102,6 +102,19 @@ jobs:
 
         if [[ "${GITHUB_ACTOR}" == "${GITHUB_REPOSITORY%/*}" ]]; then
           docker buildx build \
+            --target build-image \
+            --cache-from ${GITHUB_REPOSITORY}-cache \
+            --build-arg VERSION=${REF} \
+            --build-arg COMMIT=${GITHUB_SHA} \
+            --build-arg DATE=${DATE} \
+            --build-arg REPOSITORY=${GITHUB_REPOSITORY} \
+            -t ${GITHUB_REPOSITORY}-build-image:${GITHUB_SHA} \
+            -t ${GITHUB_REPOSITORY}-build-image:${REF} \
+            ${OTHER_ARGS} ${OTHER_PUSH_ARGS} .
+        fi
+
+        if [[ "${GITHUB_ACTOR}" == "${GITHUB_REPOSITORY%/*}" ]]; then
+          docker buildx build \
             --target build-cache \
             --build-arg VERSION=${REF} \
             --build-arg COMMIT=${GITHUB_SHA} \

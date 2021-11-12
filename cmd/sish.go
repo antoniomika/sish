@@ -33,7 +33,7 @@ var (
 	// rootCmd is the root cobra command.
 	rootCmd = &cobra.Command{
 		Use:     "sish",
-		Short:   "The sish command initializes and runs the sish ssh multiplexer",
+		Short:   "The sish command initializes and runs the sish SSH multiplexer",
 		Long:    "sish is a command line utility that implements an SSH server that can handle HTTP(S)/WS(S)/TCP multiplexing, forwarding and load balancing.\nIt can handle multiple vhosting and reverse tunneling endpoints for a large number of clients.",
 		Run:     runCommand,
 		Version: Version,
@@ -51,6 +51,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("ssh-address", "a", "localhost:2222", "The address to listen for SSH connections")
 	rootCmd.PersistentFlags().StringP("http-address", "i", "localhost:80", "The address to listen for HTTP connections")
 	rootCmd.PersistentFlags().StringP("https-address", "t", "localhost:443", "The address to listen for HTTPS connections")
+	rootCmd.PersistentFlags().StringP("tcp-address", "", "", "The address to listen for TCP connections")
 	rootCmd.PersistentFlags().StringP("redirect-root-location", "r", "https://github.com/antoniomika/sish", "The location to redirect requests to the root domain\nto instead of responding with a 404")
 	rootCmd.PersistentFlags().StringP("https-certificate-directory", "s", "deploy/ssl/", "The directory containing HTTPS certificate files (name.crt and name.key). There can be many crt/key pairs")
 	rootCmd.PersistentFlags().StringP("https-ondemand-certificate-email", "", "", "The email to use with Let's Encrypt for cert notifications. Can be left blank")
@@ -63,10 +64,10 @@ func init() {
 	rootCmd.PersistentFlags().StringP("whitelisted-countries", "y", "", "A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections")
 	rootCmd.PersistentFlags().StringP("private-key-passphrase", "p", "S3Cr3tP4$$phrAsE", "Passphrase to use to encrypt the server private key")
 	rootCmd.PersistentFlags().StringP("private-key-location", "l", "deploy/keys/ssh_key", "The location of the SSH server private key. sish will create a private key here if\nit doesn't exist using the --private-key-passphrase to encrypt it if supplied")
-	rootCmd.PersistentFlags().StringP("authentication-password", "u", "", "Password to use for ssh server password authentication")
+	rootCmd.PersistentFlags().StringP("authentication-password", "u", "", "Password to use for SSH server password authentication")
 	rootCmd.PersistentFlags().StringP("authentication-keys-directory", "k", "deploy/pubkeys/", "Directory where public keys for public key authentication are stored.\nsish will watch this directory and automatically load new keys and remove keys\nfrom the authentication list")
 	rootCmd.PersistentFlags().StringP("port-bind-range", "n", "0,1024-65535", "Ports or port ranges that sish will allow to be bound when a user attempts to use TCP forwarding")
-	rootCmd.PersistentFlags().StringP("proxy-protocol-version", "q", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined.\nIf userdefined, the user needs to add a command to SSH called proxyproto:version (ie proxyproto:1)")
+	rootCmd.PersistentFlags().StringP("proxy-protocol-version", "q", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined.\nIf userdefined, the user needs to add a command to SSH called proxyproto=version (ie proxyproto=1)")
 	rootCmd.PersistentFlags().StringP("proxy-protocol-policy", "", "use", "What to do with the proxy protocol header. Can be use, ignore, reject, or require")
 	rootCmd.PersistentFlags().StringP("admin-console-token", "j", "S3Cr3tP4$$W0rD", "The token to use for admin console access if it's enabled")
 	rootCmd.PersistentFlags().StringP("service-console-token", "m", "", "The token to use for service console access. Auto generated if empty for each connected tunnel")
@@ -79,11 +80,13 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("force-requested-ports", "", false, "Force the ports used to be the one that is requested. Will fail the bind if it exists already")
 	rootCmd.PersistentFlags().BoolP("force-requested-aliases", "", false, "Force the aliases used to be the one that is requested. Will fail the bind if it exists already")
 	rootCmd.PersistentFlags().BoolP("force-requested-subdomains", "", false, "Force the subdomains used to be the one that is requested. Will fail the bind if it exists already")
+	rootCmd.PersistentFlags().BoolP("force-tcp-address", "", false, "Force the address used for the TCP interface to be the one defined by --tcp-address")
 	rootCmd.PersistentFlags().BoolP("bind-random-subdomains", "", true, "Force bound HTTP tunnels to use random subdomains instead of user provided ones")
 	rootCmd.PersistentFlags().BoolP("bind-random-aliases", "", true, "Force bound alias tunnels to use random aliases instead of user provided ones")
 	rootCmd.PersistentFlags().BoolP("verify-ssl", "", true, "Verify SSL certificates made on proxied HTTP connections")
 	rootCmd.PersistentFlags().BoolP("verify-dns", "", true, "Verify DNS information for hosts and ensure it matches a connecting users sha256 key fingerprint")
-	rootCmd.PersistentFlags().BoolP("cleanup-unbound", "", true, "Cleanup unbound (unforwarded) SSH connections after a set timeout")
+	rootCmd.PersistentFlags().BoolP("cleanup-unauthed", "", true, "Cleanup unauthed SSH connections after a set timeout")
+	rootCmd.PersistentFlags().BoolP("cleanup-unbound", "", false, "Cleanup unbound (unforwarded) SSH connections after a set timeout")
 	rootCmd.PersistentFlags().BoolP("bind-random-ports", "", true, "Force TCP tunnels to bind a random port, where the kernel will randomly assign it")
 	rootCmd.PersistentFlags().BoolP("append-user-to-subdomain", "", false, "Append the SSH user to the subdomain. This is useful in multitenant environments")
 	rootCmd.PersistentFlags().BoolP("debug", "", false, "Enable debugging information")
@@ -98,10 +101,12 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("admin-console", "", false, "Enable the admin console accessible at http(s)://domain/_sish/console?x-authorization=admin-console-token")
 	rootCmd.PersistentFlags().BoolP("service-console", "", false, "Enable the service console for each service and send the info to connected clients")
 	rootCmd.PersistentFlags().BoolP("tcp-aliases", "", false, "Enable the use of TCP aliasing")
+	rootCmd.PersistentFlags().BoolP("sni-proxy", "", false, "Enable the use of SNI proxying")
 	rootCmd.PersistentFlags().BoolP("log-to-client", "", false, "Enable logging HTTP and TCP requests to the client")
 	rootCmd.PersistentFlags().BoolP("idle-connection", "", true, "Enable connection idle timeouts for reads and writes")
 	rootCmd.PersistentFlags().BoolP("http-load-balancer", "", false, "Enable the HTTP load balancer (multiple clients can bind the same domain)")
 	rootCmd.PersistentFlags().BoolP("tcp-load-balancer", "", false, "Enable the TCP load balancer (multiple clients can bind the same port)")
+	rootCmd.PersistentFlags().BoolP("sni-load-balancer", "", false, "Enable the SNI load balancer (multiple clients can bind the same SNI domain/port)")
 	rootCmd.PersistentFlags().BoolP("alias-load-balancer", "", false, "Enable the alias load balancer (multiple clients can bind the same alias)")
 	rootCmd.PersistentFlags().BoolP("localhost-as-all", "", true, "Enable forcing localhost to mean all interfaces for tcp listeners")
 	rootCmd.PersistentFlags().BoolP("log-to-stdout", "", true, "Enable writing log output to stdout")
@@ -109,11 +114,16 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("log-to-file-compress", "", false, "Enable compressing log output files")
 	rootCmd.PersistentFlags().BoolP("https-ondemand-certificate", "", false, "Enable retrieving certificates on demand via Let's Encrypt")
 	rootCmd.PersistentFlags().BoolP("https-ondemand-certificate-accept-terms", "", false, "Accept the Let's Encrypt terms")
-	rootCmd.PersistentFlags().BoolP("bind-any-host", "", false, "Bind any host when accepting an HTTP listener")
+	rootCmd.PersistentFlags().BoolP("bind-http-auth", "", true, "Allow binding http auth on a forwarded host")
+	rootCmd.PersistentFlags().BoolP("bind-http-path", "", true, "Allow binding specific paths on a forwarded host")
+	rootCmd.PersistentFlags().BoolP("strip-http-path", "", true, "Strip the http path from the forward")
+	rootCmd.PersistentFlags().BoolP("bind-any-host", "", false, "Allow binding any host when accepting an HTTP listener")
+	rootCmd.PersistentFlags().BoolP("bind-root-domain", "", false, "Allow binding the root domain when accepting an HTTP listener")
 	rootCmd.PersistentFlags().BoolP("load-templates", "", true, "Load HTML templates. This is required for admin/service consoles")
+	rootCmd.PersistentFlags().BoolP("rewrite-host-header", "", true, "Force rewrite the host header if the user provides host-header=host.com")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only")
-	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for https command output. This does not effect ports used for connecting, it's for cosmetic use only")
+	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for HTTPS command output. This does not effect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("bind-random-subdomains-length", "", 3, "The length of the random subdomain to generate if a subdomain is unavailable or if random subdomains are enforced")
 	rootCmd.PersistentFlags().IntP("bind-random-aliases-length", "", 3, "The length of the random alias to generate if a alias is unavailable or if random aliases are enforced")
 	rootCmd.PersistentFlags().IntP("log-to-file-max-size", "", 500, "The maximum size of outputed log files in megabytes")
@@ -123,8 +133,11 @@ func init() {
 	rootCmd.PersistentFlags().DurationP("idle-connection-timeout", "", 5*time.Second, "Duration to wait for activity before closing a connection for all reads and writes")
 	rootCmd.PersistentFlags().DurationP("ping-client-interval", "", 5*time.Second, "Duration representing an interval to ping a client to ensure it is up")
 	rootCmd.PersistentFlags().DurationP("ping-client-timeout", "", 5*time.Second, "Duration to wait for activity before closing a connection after sending a ping to a client")
+	rootCmd.PersistentFlags().DurationP("cleanup-unauthed-timeout", "", 5*time.Second, "Duration to wait before cleaning up an unauthed connection")
 	rootCmd.PersistentFlags().DurationP("cleanup-unbound-timeout", "", 5*time.Second, "Duration to wait before cleaning up an unbound (unforwarded) connection")
 	rootCmd.PersistentFlags().DurationP("proxy-protocol-timeout", "", 200*time.Millisecond, "The duration to wait for the proxy proto header")
+	rootCmd.PersistentFlags().DurationP("authentication-keys-directory-watch-interval", "", 200*time.Millisecond, "The interval to poll for filesystem changes for SSH keys")
+	rootCmd.PersistentFlags().DurationP("https-certificate-directory-watch-interval", "", 200*time.Millisecond, "The interval to poll for filesystem changes for HTTPS certificates")
 }
 
 // initConfig initializes the configuration and loads needed

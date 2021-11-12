@@ -6,7 +6,9 @@ import (
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
@@ -14,9 +16,27 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// commandSplitter is the character that terminates a prefix.
+const commandSplitter = "="
+
 // proxyProtoPrefix is used when deciding what proxy protocol
 // version to use.
-var proxyProtoPrefix = "proxyproto:"
+const proxyProtoPrefix = "proxyproto"
+
+// hostHeaderPrefix is the host-header for a specific session.
+const hostHeaderPrefix = "host-header"
+
+// stripPathPrefix defines whether or not to strip the path (if enabled globally).
+const stripPathPrefix = "strip-path"
+
+// sniProxyPrefix defines whether or not to enable SNI Proxying (if enabled globally).
+const sniProxyPrefix = "sni-proxy"
+
+// tcpAliasPrefix defines whether or not to enable TCP Aliasing (if enabled globally).
+const tcpAliasPrefix = "tcp-alias"
+
+// localForwardPrefix defines whether or not a local forward is being used (allows for logging).
+const localForwardPrefix = "local-forward"
 
 // handleSession handles the channel when a user requests a session.
 // This is how we send console messages.
@@ -69,6 +89,8 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 	}()
 
 	go func() {
+		sshConn.StripPath = viper.GetBool("strip-http-path")
+
 		for req := range requests {
 			switch req.Type {
 			case "shell":
@@ -76,14 +98,92 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 				if err != nil {
 					log.Println("Error replying to socket request:", err)
 				}
+
+				close(sshConn.Exec)
 			case "exec":
 				payloadString := string(req.Payload[4:])
-				if strings.HasPrefix(payloadString, proxyProtoPrefix) && viper.GetBool("proxy-protocol") {
-					sshConn.ProxyProto = getProxyProtoVersion(strings.TrimPrefix(payloadString, proxyProtoPrefix))
-					if sshConn.ProxyProto != 0 {
-						sshConn.SendMessage(fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)
+				commandFlags := strings.Fields(payloadString)
+
+				for _, commandFlag := range commandFlags {
+					commandFlagParts := strings.Split(commandFlag, commandSplitter)
+
+					if len(commandFlagParts) < 2 {
+						continue
+					}
+
+					command, param := commandFlagParts[0], commandFlagParts[1]
+
+					switch command {
+					case proxyProtoPrefix:
+						if !viper.GetBool("proxy-protocol") {
+							break
+						}
+						sshConn.ProxyProto = getProxyProtoVersion(param)
+						if sshConn.ProxyProto != 0 {
+							sshConn.SendMessage(fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)
+						}
+					case hostHeaderPrefix:
+						if !viper.GetBool("rewrite-host-header") {
+							break
+						}
+						sshConn.HostHeader = param
+						sshConn.SendMessage(fmt.Sprintf("Using host header %s for HTTP handlers", sshConn.HostHeader), true)
+					case stripPathPrefix:
+						if !sshConn.StripPath {
+							break
+						}
+
+						nstripPath, err := strconv.ParseBool(param)
+
+						if err != nil {
+							log.Printf("Unable to detect strip path setting. Using configuration: %s", err)
+						} else {
+							sshConn.StripPath = nstripPath
+						}
+
+						sshConn.SendMessage(fmt.Sprintf("Strip path for HTTP handlers set to: %t", sshConn.StripPath), true)
+					case sniProxyPrefix:
+						if !viper.GetBool("sni-proxy") {
+							break
+						}
+
+						sniProxy, err := strconv.ParseBool(param)
+
+						if err != nil {
+							log.Printf("Unable to detect sni proxy setting. Using false as default: %s", err)
+						}
+
+						sshConn.SNIProxy = sniProxy
+
+						sshConn.SendMessage(fmt.Sprintf("SNI proxy for TCP forwards set to: %t", sshConn.SNIProxy), true)
+					case tcpAliasPrefix:
+						if !viper.GetBool("tcp-aliases") {
+							break
+						}
+
+						tcpAlias, err := strconv.ParseBool(param)
+
+						if err != nil {
+							log.Printf("Unable to detect tcp alias setting. Using false as default: %s", err)
+						}
+
+						sshConn.TCPAlias = tcpAlias
+
+						sshConn.SendMessage(fmt.Sprintf("TCP Alias for TCP forwards set to: %t", sshConn.TCPAlias), true)
+					case localForwardPrefix:
+						localForward, err := strconv.ParseBool(param)
+
+						if err != nil {
+							log.Printf("Unable to detect tcp alias setting. Using false as default: %s", err)
+						}
+
+						sshConn.LocalForward = localForward
+
+						sshConn.SendMessage(fmt.Sprintf("Connection used for local forwards set to: %t", sshConn.LocalForward), true)
 					}
 				}
+
+				close(sshConn.Exec)
 			default:
 				if viper.GetBool("debug") {
 					log.Println("Sub Channel Type", req.Type, req.WantReply, string(req.Payload))
@@ -102,6 +202,12 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 	}
 
 	go ssh.DiscardRequests(requests)
+
+	select {
+	case <-sshConn.Exec:
+	case <-time.After(1 * time.Second):
+		break
+	}
 
 	if viper.GetBool("debug") {
 		log.Println("Handling alias connection for:", connection)
@@ -162,6 +268,10 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 			return true
 		})
+
+		if sshConn.LocalForward {
+			sshConn.SendMessage(logLine, true)
+		}
 	}
 
 	conn, err := net.Dial("unix", aliasAddr)
@@ -171,16 +281,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 		return
 	}
 
-	sshConn.Listeners.Store(aliasAddr, conn)
-
 	utils.CopyBoth(conn, connection)
-
-	select {
-	case <-sshConn.Close:
-		break
-	default:
-		sshConn.CleanUp(state)
-	}
 }
 
 // writeToSession is where we write to the underlying session channel.
