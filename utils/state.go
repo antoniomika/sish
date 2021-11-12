@@ -168,8 +168,7 @@ func (tH *TCPHolder) Handle(state *State) {
 		}
 
 		if firstWrite != nil {
-			n, err := conn.Write(firstWrite.Bytes())
-			log.Println(n, err)
+			_, err := conn.Write(firstWrite.Bytes())
 			if err != nil {
 				log.Println("Unable to write to conn:", err)
 				cl.Close()
