@@ -8,6 +8,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
@@ -33,6 +34,9 @@ const sniProxyPrefix = "sni-proxy"
 
 // tcpAliasPrefix defines whether or not to enable TCP Aliasing (if enabled globally).
 const tcpAliasPrefix = "tcp-alias"
+
+// localForwardPrefix defines whether or not a local forward is being used (allows for logging).
+const localForwardPrefix = "local-forward"
 
 // handleSession handles the channel when a user requests a session.
 // This is how we send console messages.
@@ -94,6 +98,8 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 				if err != nil {
 					log.Println("Error replying to socket request:", err)
 				}
+
+				close(sshConn.Exec)
 			case "exec":
 				payloadString := string(req.Payload[4:])
 				commandFlags := strings.Fields(payloadString)
@@ -130,7 +136,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						nstripPath, err := strconv.ParseBool(param)
 
 						if err != nil {
-							log.Printf("Unable to detect strip path. Using configuration: %s", err)
+							log.Printf("Unable to detect strip path setting. Using configuration: %s", err)
 						} else {
 							sshConn.StripPath = nstripPath
 						}
@@ -144,7 +150,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						sniProxy, err := strconv.ParseBool(param)
 
 						if err != nil {
-							log.Printf("Unable to detect sni proxy. Using false as default: %s", err)
+							log.Printf("Unable to detect sni proxy setting. Using false as default: %s", err)
 						}
 
 						sshConn.SNIProxy = sniProxy
@@ -158,14 +164,26 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						tcpAlias, err := strconv.ParseBool(param)
 
 						if err != nil {
-							log.Printf("Unable to detect sni proxy. Using false as default: %s", err)
+							log.Printf("Unable to detect tcp alias setting. Using false as default: %s", err)
 						}
 
 						sshConn.TCPAlias = tcpAlias
 
 						sshConn.SendMessage(fmt.Sprintf("TCP Alias for TCP forwards set to: %t", sshConn.TCPAlias), true)
+					case localForwardPrefix:
+						localForward, err := strconv.ParseBool(param)
+
+						if err != nil {
+							log.Printf("Unable to detect tcp alias setting. Using false as default: %s", err)
+						}
+
+						sshConn.LocalForward = localForward
+
+						sshConn.SendMessage(fmt.Sprintf("Connection used for local forwards set to: %t", sshConn.LocalForward), true)
 					}
 				}
+
+				close(sshConn.Exec)
 			default:
 				if viper.GetBool("debug") {
 					log.Println("Sub Channel Type", req.Type, req.WantReply, string(req.Payload))
@@ -184,6 +202,12 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 	}
 
 	go ssh.DiscardRequests(requests)
+
+	select {
+	case <-sshConn.Exec:
+	case <-time.After(1 * time.Second):
+		break
+	}
 
 	if viper.GetBool("debug") {
 		log.Println("Handling alias connection for:", connection)
@@ -244,6 +268,10 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 			return true
 		})
+
+		if sshConn.LocalForward {
+			sshConn.SendMessage(logLine, true)
+		}
 	}
 
 	conn, err := net.Dial("unix", aliasAddr)

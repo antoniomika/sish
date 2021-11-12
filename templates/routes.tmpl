@@ -85,7 +85,7 @@
         }.bind(this);
 
         this.forwardToConsole = function() {
-            window.location.href = window.location.href.replace(window.location.hostname, this.name).replace(window.location.pathname, `${this.pathname.length > 1 ? this.pathname : ''}${window.location.pathname}`);
+            window.location.href = window.location.href.replace(window.location.hostname, this.name).replace(window.location.pathname, `${this.pathname && this.pathname.length > 1 ? this.pathname : ''}${window.location.pathname}`);
         }.bind(this);
     };
 

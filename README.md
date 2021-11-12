@@ -290,7 +290,9 @@ Flags:
       --bind-random-subdomains                                  Force bound HTTP tunnels to use random subdomains instead of user provided ones (default true)
       --bind-random-subdomains-length int                       The length of the random subdomain to generate if a subdomain is unavailable or if random subdomains are enforced (default 3)
       --bind-root-domain                                        Allow binding the root domain when accepting an HTTP listener
-      --cleanup-unbound                                         Cleanup unbound (unforwarded) SSH connections after a set timeout (default true)
+      --cleanup-unauthed                                        Cleanup unauthed SSH connections after a set timeout (default true)
+      --cleanup-unauthed-timeout duration                       Duration to wait before cleaning up an unauthed connection (default 5s)
+      --cleanup-unbound                                         Cleanup unbound (unforwarded) SSH connections after a set timeout
       --cleanup-unbound-timeout duration                        Duration to wait before cleaning up an unbound (unforwarded) connection (default 5s)
   -c, --config string                                           Config file (default "config.yml")
       --debug                                                   Enable debugging information
@@ -346,6 +348,8 @@ Flags:
       --rewrite-host-header                                     Force rewrite the host header if the user provides host-header=host.com (default true)
       --service-console                                         Enable the service console for each service and send the info to connected clients
   -m, --service-console-token string                            The token to use for service console access. Auto generated if empty for each connected tunnel
+      --sni-load-balancer                                       Enable the SNI load balancer (multiple clients can bind the same SNI domain/port)
+      --sni-proxy                                               Enable the use of SNI proxying
   -a, --ssh-address string                                      The address to listen for SSH connections (default "localhost:2222")
       --strip-http-path                                         Strip the http path from the forward (default true)
       --tcp-address string                                      The address to listen for TCP connections

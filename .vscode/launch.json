@@ -34,7 +34,7 @@
         "--http-load-balancer=true",
         "--tcp-load-balancer=true",
         "--alias-load-balancer=true",
-        "--sni-load-balancer=false"
+        "--sni-load-balancer=true"
       ]
     }
   ]

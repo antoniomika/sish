@@ -194,6 +194,7 @@ func Start() {
 				Listeners: &sync.Map{},
 				Closed:    &sync.Once{},
 				Close:     make(chan bool),
+				Exec:      make(chan bool),
 				Messages:  make(chan string),
 				Session:   make(chan bool),
 				SetupLock: &sync.Mutex{},
@@ -221,8 +222,19 @@ func Start() {
 			if viper.GetBool("cleanup-unbound") {
 				go func() {
 					select {
+					case <-holderConn.Exec:
+					case <-time.After(1 * time.Second):
+						break
+					}
+
+					select {
 					case <-time.After(viper.GetDuration("cleanup-unbound-timeout")):
 						count := 0
+
+						if holderConn.LocalForward {
+							count = 1
+						}
+
 						holderConn.Listeners.Range(func(key, value interface{}) bool {
 							count++
 							return true

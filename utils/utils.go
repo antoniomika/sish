@@ -561,7 +561,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 			_, ok := state.TCPListeners.Load(listenAddr)
 
 			if err == nil && (!viper.GetBool("tcp-load-balancer") || (viper.GetBool("tcp-load-balancer") && !ok) || (sniProxyEnabled && !ok)) {
-				ln, listenErr := net.Listen("tcp", fmt.Sprintf(":%d", port))
+				ln, listenErr := net.Listen("tcp", listenAddr)
 				if listenErr != nil {
 					err = listenErr
 				} else {

@@ -237,7 +237,7 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 					balancer := ival.(*roundrobin.RoundRobin)
 
 					if aliasHolder.SNIProxy {
-						tcpAlias = fmt.Sprintf("%s-%s", tcpAlias, key.(string))
+						tcpAlias = fmt.Sprintf("%s-%s", tcpAlias, ikey.(string))
 					}
 
 					for _, server := range balancer.Servers() {

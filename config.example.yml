@@ -21,7 +21,9 @@ bind-random-ports: true
 bind-random-subdomains: true
 bind-random-subdomains-length: 3
 bind-root-domain: false
-cleanup-unbound: true
+cleanup-unauthed: true
+cleanup-unauthed-timeout: 5s
+cleanup-unbound: false
 cleanup-unbound-timeout: 5s
 config: config.yml
 debug: false
@@ -72,6 +74,8 @@ redirect-root-location: https://github.com/antoniomika/sish
 rewrite-host-header: true
 service-console: false
 service-console-token: ""
+sni-load-balancer: false
+sni-proxy: false
 ssh-address: localhost:2222
 strip-http-path: true
 tcp-address: ""

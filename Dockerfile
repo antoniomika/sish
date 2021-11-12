@@ -38,6 +38,8 @@ ENV GOOS=${TARGETOS} GOARCH=${TARGETARCH}
 
 RUN go build -o /go/bin/app -ldflags="-s -w -X github.com/${REPOSITORY}/cmd.Version=${VERSION} -X github.com/${REPOSITORY}/cmd.Commit=${COMMIT} -X github.com/${REPOSITORY}/cmd.Date=${DATE}"
 
+ENTRYPOINT ["/go/bin/app"]
+
 FROM scratch as release
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 

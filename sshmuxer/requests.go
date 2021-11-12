@@ -42,6 +42,12 @@ type forwardedTCPPayload struct {
 // handleRemoteForward will handle a remote forward request
 // and stand up the relevant listeners.
 func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
+	select {
+	case <-sshConn.Exec:
+	case <-time.After(1 * time.Second):
+		break
+	}
+
 	cleanupOnce := &sync.Once{}
 	check := &channelForwardMsg{}
 
@@ -66,12 +72,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		comparePortHTTPS = 443
 	}
 
-	<-time.After(1 * time.Second)
-
+	tcpAliasEnabled := viper.GetBool("tcp-aliases") || sshConn.TCPAlias
 	sniProxyEnabled := viper.GetBool("sni-proxy") && sshConn.SNIProxy
-	tcpAliasEnabled := viper.GetBool("tcp-aliases") && sshConn.TCPAlias
 
-	if (bindPort != comparePortHTTP && bindPort != comparePortHTTPS) || tcpAliasEnabled {
+	if bindPort != comparePortHTTP && bindPort != comparePortHTTPS {
 		testAddr := net.ParseIP(check.Addr)
 		if check.Addr != "localhost" && testAddr == nil && tcpAliasEnabled && !sniProxyEnabled {
 			listenerType = utils.AliasListener

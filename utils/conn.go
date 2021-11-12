@@ -21,12 +21,14 @@ type SSHConnection struct {
 	Listeners      *sync.Map
 	Closed         *sync.Once
 	Close          chan bool
+	Exec           chan bool
 	Messages       chan string
 	ProxyProto     byte
 	HostHeader     string
 	StripPath      bool
 	SNIProxy       bool
 	TCPAlias       bool
+	LocalForward   bool
 	Session        chan bool
 	CleanupHandler bool
 	SetupLock      *sync.Mutex
