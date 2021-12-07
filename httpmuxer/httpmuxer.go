@@ -258,7 +258,19 @@ func Start(state *utils.State) {
 					return fmt.Errorf("ondemand certificate retrieval is not enabled")
 				}
 
-				_, ok := state.HTTPListeners.Load(name)
+				ok := false
+
+				state.HTTPListeners.Range(func(key, value interface{}) bool {
+					locationListener := value.(*utils.HTTPHolder)
+
+					if name == locationListener.HTTPUrl.Host {
+						ok = true
+						return false
+					}
+
+					return true
+				})
+
 				if !ok {
 					return fmt.Errorf("cannot find connection for host: %s", name)
 				}

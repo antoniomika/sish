@@ -692,9 +692,25 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 				host = getRandomHost()
 			}
 
-			holder, ok := state.HTTPListeners.Load(host)
+			var holder *HTTPHolder
+			ok := false
+
+			state.HTTPListeners.Range(func(key, value interface{}) bool {
+				locationListener := value.(*HTTPHolder)
+
+				parsedPassword, _ := locationListener.HTTPUrl.User.Password()
+
+				if host == locationListener.HTTPUrl.Host && strings.HasPrefix(path, locationListener.HTTPUrl.Path) && username == locationListener.HTTPUrl.User.Username() && password == parsedPassword {
+					ok = true
+					holder = locationListener
+					return false
+				}
+
+				return true
+			})
+
 			if ok && viper.GetBool("http-load-balancer") {
-				pH = holder.(*HTTPHolder)
+				pH = holder
 				ok = false
 			}
 
