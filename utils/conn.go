@@ -29,6 +29,7 @@ type SSHConnection struct {
 	SNIProxy       bool
 	TCPAlias       bool
 	LocalForward   bool
+	AutoClose      bool
 	Session        chan bool
 	CleanupHandler bool
 	SetupLock      *sync.Mutex
@@ -54,6 +55,22 @@ func (s *SSHConnection) SendMessage(message string, block bool) {
 			i++
 		}
 	}
+}
+
+// ListenerCount returns the number of current active listeners on this connection
+func (s *SSHConnection) ListenerCount() int {
+	if s.LocalForward {
+		return -1
+	}
+
+	count := 0
+
+	s.Listeners.Range(func(key, value interface{}) bool {
+		count++
+		return true
+	})
+
+	return count
 }
 
 // CleanUp closes all allocated resources for a SSH session and cleans them up.

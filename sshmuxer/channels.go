@@ -38,6 +38,9 @@ const tcpAliasPrefix = "tcp-alias"
 // localForwardPrefix defines whether or not a local forward is being used (allows for logging).
 const localForwardPrefix = "local-forward"
 
+// autoClosePrefix defines whether or not a connection will close when all forwards are cleaned up.
+const autoClosePrefix = "auto-close"
+
 // handleSession handles the channel when a user requests a session.
 // This is how we send console messages.
 func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
@@ -169,7 +172,17 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 
 						sshConn.TCPAlias = tcpAlias
 
-						sshConn.SendMessage(fmt.Sprintf("TCP Alias for TCP forwards set to: %t", sshConn.TCPAlias), true)
+						sshConn.SendMessage(fmt.Sprintf("TCP alias for TCP forwards set to: %t", sshConn.TCPAlias), true)
+					case autoClosePrefix:
+						autoClose, err := strconv.ParseBool(param)
+
+						if err != nil {
+							log.Printf("Unable to detect auto close setting. Using false as default: %s", err)
+						}
+
+						sshConn.AutoClose = autoClose
+
+						sshConn.SendMessage(fmt.Sprintf("Auto close for connection set to: %t", sshConn.AutoClose), true)
 					case localForwardPrefix:
 						localForward, err := strconv.ParseBool(param)
 

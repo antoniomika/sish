@@ -219,28 +219,22 @@ func Start() {
 			go handleRequests(reqs, holderConn, state)
 			go handleChannels(chans, holderConn, state)
 
-			if viper.GetBool("cleanup-unbound") {
-				go func() {
+			go func() {
+				select {
+				case <-holderConn.Exec:
+				case <-time.After(1 * time.Second):
+					break
+				}
+
+				runTime := 0.0
+				ticker := time.NewTicker(1 * time.Second)
+
+				for {
 					select {
-					case <-holderConn.Exec:
-					case <-time.After(1 * time.Second):
-						break
-					}
+					case <-ticker.C:
+						runTime++
 
-					select {
-					case <-time.After(viper.GetDuration("cleanup-unbound-timeout")):
-						count := 0
-
-						if holderConn.LocalForward {
-							count = 1
-						}
-
-						holderConn.Listeners.Range(func(key, value interface{}) bool {
-							count++
-							return true
-						})
-
-						if count == 0 {
+						if ((viper.GetBool("cleanup-unbound") && runTime > viper.GetDuration("cleanup-unbound-timeout").Seconds()) || holderConn.AutoClose) && holderConn.ListenerCount() == 0 {
 							holderConn.SendMessage("No forwarding requests sent. Closing connection.", true)
 							time.Sleep(1 * time.Millisecond)
 							holderConn.CleanUp(state)
@@ -248,8 +242,8 @@ func Start() {
 					case <-holderConn.Close:
 						return
 					}
-				}()
-			}
+				}
+			}()
 
 			if viper.GetBool("ping-client") {
 				go func() {

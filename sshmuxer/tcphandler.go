@@ -73,6 +73,14 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		state.TCPListeners.Store(tcpAddr, tH)
 	}
 
+	newName, err := utils.GetOpenSNIHost(balancerName, state, sshConn, tH)
+
+	if err != nil || (!strings.HasPrefix(newName, check.Addr) && viper.GetBool("force-requested-subdomains")) {
+		return nil, nil, nil, "", "", fmt.Errorf("error assigning requested address to tunnel")
+	}
+
+	balancerName = newName
+
 	foundBalancer, ok := tH.Balancers.Load(balancerName)
 	if ok {
 		balancer = foundBalancer.(*roundrobin.RoundRobin)
@@ -95,7 +103,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		Host: base64.StdEncoding.EncodeToString([]byte(listenerHolder.Addr().String())),
 	}
 
-	err := balancer.UpsertServer(serverURL)
+	err = balancer.UpsertServer(serverURL)
 	if err != nil {
 		log.Println("Unable to add server to balancer")
 	}
