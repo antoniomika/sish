@@ -26,7 +26,7 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 
 	hostUrl, pH := utils.GetOpenHost(check.Addr, state, sshConn)
 
-	if !strings.HasPrefix(hostUrl.Host, check.Addr) && viper.GetBool("force-requested-subdomains") {
+	if (hostUrl == nil || !strings.HasPrefix(hostUrl.Host, check.Addr)) && viper.GetBool("force-requested-subdomains") {
 		return nil, nil, "", fmt.Errorf("error assigning requested subdomain to tunnel")
 	}
 

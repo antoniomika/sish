@@ -1,9 +1,9 @@
 admin-console: false
-admin-console-token: S3Cr3tP4$$W0rD
+admin-console-token: ""
 alias-load-balancer: false
 append-user-to-subdomain: false
 append-user-to-subdomain-separator: '-'
-authentication: false
+authentication: true
 authentication-keys-directory: deploy/pubkeys/
 authentication-keys-directory-watch-interval: 200ms
 authentication-password: ""
@@ -61,8 +61,8 @@ ping-client: true
 ping-client-interval: 5s
 ping-client-timeout: 5s
 port-bind-range: 0,1024-65535
-private-key-location: deploy/keys/ssh_key
 private-key-passphrase: S3Cr3tP4$$phrAsE
+private-keys-directory: deploy/keys
 proxy-protocol: false
 proxy-protocol-listener: false
 proxy-protocol-policy: use

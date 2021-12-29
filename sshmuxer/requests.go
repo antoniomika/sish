@@ -72,14 +72,18 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		comparePortHTTPS = 443
 	}
 
-	tcpAliasEnabled := viper.GetBool("tcp-aliases") || sshConn.TCPAlias
-	sniProxyEnabled := viper.GetBool("sni-proxy") && sshConn.SNIProxy
+	tcpAliasForced := viper.GetBool("tcp-aliases") && sshConn.TCPAlias
+	sniProxyForced := viper.GetBool("sni-proxy") && sshConn.SNIProxy
 
-	if bindPort != comparePortHTTP && bindPort != comparePortHTTPS {
+	if tcpAliasForced {
+		listenerType = utils.AliasListener
+	} else if sniProxyForced {
+		listenerType = utils.TCPListener
+	} else if bindPort != comparePortHTTP && bindPort != comparePortHTTPS {
 		testAddr := net.ParseIP(check.Addr)
-		if check.Addr != "localhost" && testAddr == nil && tcpAliasEnabled && !sniProxyEnabled {
+		if check.Addr != "localhost" && testAddr == nil {
 			listenerType = utils.AliasListener
-		} else if (check.Addr == "localhost" || testAddr != nil) || sniProxyEnabled {
+		} else if check.Addr == "localhost" || testAddr != nil {
 			listenerType = utils.TCPListener
 		}
 	}
@@ -131,11 +135,11 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	}()
 
 	connType := "tcp"
-	if sniProxyEnabled {
+	if sniProxyForced {
 		connType = "tls"
-	} else if stringPort == strconv.FormatUint(uint64(comparePortHTTP), 10) {
+	} else if !tcpAliasForced && stringPort == strconv.FormatUint(uint64(comparePortHTTP), 10) {
 		connType = "http"
-	} else if stringPort == strconv.FormatUint(uint64(comparePortHTTPS), 10) {
+	} else if !tcpAliasForced && stringPort == strconv.FormatUint(uint64(comparePortHTTPS), 10) {
 		connType = "https"
 	}
 
@@ -151,6 +155,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			if err != nil {
 				log.Println("Error replying to socket request:", err)
 			}
+
+			cleanupOnce.Do(cleanupChanListener)
+
 			return
 		}
 
@@ -179,6 +186,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			if err != nil {
 				log.Println("Error replying to socket request:", err)
 			}
+
+			cleanupOnce.Do(cleanupChanListener)
+
 			return
 		}
 
@@ -197,12 +207,15 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			}
 		}
 	case utils.TCPListener:
-		tH, balancer, serverURL, tcpAddr, requestMessages, err := handleTCPListener(check, bindPort, mainRequestMessages, listenerHolder, state, sshConn, sniProxyEnabled)
+		tH, balancer, serverURL, tcpAddr, requestMessages, err := handleTCPListener(check, bindPort, mainRequestMessages, listenerHolder, state, sshConn, sniProxyForced)
 		if err != nil {
 			err = newRequest.Reply(false, nil)
 			if err != nil {
 				log.Println("Error replying to socket request:", err)
 			}
+
+			cleanupOnce.Do(cleanupChanListener)
+
 			return
 		}
 

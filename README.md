@@ -4,12 +4,9 @@ An open source serveo/ngrok alternative.
 
 ## Deploy
 
-Builds are made automatically for each commit to the repo and are pushed to Dockerhub. Builds are
-tagged using a commit sha, branch name, tag, latest if released on main.
-You can find a list [here](https://hub.docker.com/r/antoniomika/sish/tags).
-Each release builds separate `sish` binaries that can be downloaded from
-[here](https://github.com/antoniomika/sish/releases) for various OS/archs.
-Feel free to either use the automated binaries or to build your own. If you submit a PR, images are
+Builds are made automatically for each commit to the repo and are pushed to Dockerhub. Builds are tagged using a commit sha,
+branch name, tag, latest if released on main. You can find a list [here](https://hub.docker.com/r/antoniomika/sish/tags).
+Each release builds separate `sish` binaries that can be downloaded from [here](https://github.com/antoniomika/sish/releases) for various OS/archs. Feel free to either use the automated binaries or to build your own. If you submit a PR, images are
 not built by default and will require a retag from a maintainer to be built.
 
 1. Pull the Docker image
@@ -28,7 +25,7 @@ not built by default and will require a retag from a maintainer to be built.
         --https=true \
         --https-certificate-directory=/ssl \
         --authentication-keys-directory=/pubkeys \
-        --private-key-location=/keys/ssh_key \
+        --private-keys-directory=/keys \
         --bind-random-ports=false
       ```
 
@@ -126,6 +123,31 @@ I can use the forwarded connection to then access my laptop from anywhere:
 ssh -p 2222 ssi.sh
 ```
 
+### SNI forwarding
+
+Sometimes, you may have multiple TCP services running on the same port.
+If these services support [SNI](https://en.wikipedia.org/wiki/Server_Name_Indication), you can have sish
+route TLS connections to different backends based on the SNI name provided. For example, I have two webservices
+(servers) and I want to offload TLS to each without sish offloading SSL. This can be achieved by disabling sish's
+internal HTTPS service (you won't be able to use the service console for this however). Then, I can start a ssh
+connection from each server like so:
+
+From server A
+
+```bash
+ssh -R servera.example.com:443:localhost:443 ssi.sh sni-proxy=true
+```
+
+From server B
+
+```bash
+ssh -R serverb.example.com:443:localhost:443 ssi.sh sni-proxy=true
+```
+
+As long as server{a,b}.example.com points to where sish is hosted and a user can bind those hosts, TLS connections to
+servera.example.com:443 will be forwarded to server A and TLS connections to serverb.example.com:443 will
+be forwarded to server B. It is then up to each server to complete the TLS handshake and the subsequent request.
+
 ### TCP alias forwarding
 
 Let's say instead I don't want the service to be accessible by the rest of the world, you can then use a TCP
@@ -153,6 +175,21 @@ Shorthand for which is this with newer SSH versions:
 ```bash
 ssh -J ssi.sh mylaptop
 ```
+
+You can also use TCP aliases with any port you would like. If for example you wanted to use an alias
+with port `80` or `443` (default to a HTTP tunnel), provide the command `tcp-alias=true` to the ssh command:
+
+```bash
+ssh -R service:80:localhost:80 ssi.sh tcp-alias=true
+```
+
+Aliases can be accessed on a different computer using SSH local forwards also. For the above, I could use:
+
+```bash
+ssh -L 80:service:80 ssi.sh
+```
+
+to then access the forwarded server service at `localhost:80` on the client side of the computer I am on.
 
 ## Authentication
 
@@ -243,6 +280,14 @@ to write.
 [me@antoniomika.me](mailto:me@antoniomika.me)
 or on [freenode IRC #sish](https://kiwiirc.com/client/chat.freenode.net:6697/#sish)
 
+## Upgrading to v2.0
+
+v2 introduces only a few breaking changes, namely around authentication. v2 enables authentication by default. If you were
+an authenticated instance before, be sure to set `--authentication` accordingly. v2 also brings support for multiple
+SSH host private keys, which allows you to use different encryption schemes. This changed the `--private-key-location` to
+`--private-keys-directory`. Keys generated or previously used in sish will work as normal, just be sure to update this
+argument if it was changed from the default.
+
 ## Upgrading to v1.0
 
 There are numerous breaking changes in sish between pre-1.0 and post-1.0 versions. The largest changes are
@@ -266,11 +311,11 @@ Usage:
 
 Flags:
       --admin-console                                           Enable the admin console accessible at http(s)://domain/_sish/console?x-authorization=admin-console-token
-  -j, --admin-console-token string                              The token to use for admin console access if it's enabled (default "S3Cr3tP4$$W0rD")
+  -j, --admin-console-token string                              The token to use for admin console access if it's enabled
       --alias-load-balancer                                     Enable the alias load balancer (multiple clients can bind the same alias)
       --append-user-to-subdomain                                Append the SSH user to the subdomain. This is useful in multitenant environments
       --append-user-to-subdomain-separator string               The token to use for separating username and subdomain selection in a virtualhost (default "-")
-      --authentication                                          Require authentication for the SSH service
+      --authentication                                          Require authentication for the SSH service (default true)
   -k, --authentication-keys-directory string                    Directory where public keys for public key authentication are stored.
                                                                 sish will watch this directory and automatically load new keys and remove keys
                                                                 from the authentication list (default "deploy/pubkeys/")
@@ -332,9 +377,8 @@ Flags:
       --ping-client-interval duration                           Duration representing an interval to ping a client to ensure it is up (default 5s)
       --ping-client-timeout duration                            Duration to wait for activity before closing a connection after sending a ping to a client (default 5s)
   -n, --port-bind-range string                                  Ports or port ranges that sish will allow to be bound when a user attempts to use TCP forwarding (default "0,1024-65535")
-  -l, --private-key-location string                             The location of the SSH server private key. sish will create a private key here if
-                                                                it doesn't exist using the --private-key-passphrase to encrypt it if supplied (default "deploy/keys/ssh_key")
   -p, --private-key-passphrase string                           Passphrase to use to encrypt the server private key (default "S3Cr3tP4$$phrAsE")
+  -l, --private-keys-directory string                           The location of other SSH server private keys. sish will add these as valid auth methods for SSH. Note, these need to be unencrypted OR use the private-key-passphrase (default "deploy/keys")
       --proxy-protocol                                          Use the proxy-protocol while proxying connections in order to pass-on IP address and port information
       --proxy-protocol-listener                                 Use the proxy-protocol to resolve ip addresses from user connections
       --proxy-protocol-policy string                            What to do with the proxy protocol header. Can be use, ignore, reject, or require (default "use")
