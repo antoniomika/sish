@@ -57,7 +57,7 @@ func (s *SSHConnection) SendMessage(message string, block bool) {
 	}
 }
 
-// ListenerCount returns the number of current active listeners on this connection
+// ListenerCount returns the number of current active listeners on this connection.
 func (s *SSHConnection) ListenerCount() int {
 	if s.LocalForward {
 		return -1
