@@ -99,7 +99,7 @@ func (tH *TCPHolder) Handle(state *State) {
 
 		var firstWrite *bytes.Buffer
 
-		balancerName := "root"
+		balancerName := ""
 		if tH.SNIProxy {
 			tlsHello, buf, err := PeakTLSHello(cl)
 			if err != nil && tlsHello == nil {

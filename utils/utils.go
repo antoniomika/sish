@@ -770,17 +770,16 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			hostExtension = viper.GetString("append-user-to-subdomain-separator") + sshConn.SSHConn.User()
 		}
 
-		rest := addr
 		var username string
 		var password string
 		var path string
 
 		var bindErr error
 
-		if strings.Contains(rest, "@") {
-			hostParts := strings.SplitN(rest, "@", 2)
+		if strings.Contains(addr, "@") {
+			hostParts := strings.SplitN(addr, "@", 2)
 
-			rest = hostParts[1]
+			addr = hostParts[1]
 
 			if viper.GetBool("bind-http-auth") && len(hostParts[0]) > 0 {
 				authParts := strings.Split(hostParts[0], ":")
@@ -795,8 +794,8 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			}
 		}
 
-		if strings.Contains(rest, "/") {
-			pathParts := strings.SplitN(rest, "/", 2)
+		if strings.Contains(addr, "/") {
+			pathParts := strings.SplitN(addr, "/", 2)
 
 			if viper.GetBool("bind-http-path") && len(pathParts[1]) > 0 {
 				path = fmt.Sprintf("/%s", pathParts[1])
