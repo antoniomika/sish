@@ -129,15 +129,14 @@ func Start(state *utils.State) {
 			parsedPassword, _ := locationListener.HTTPUrl.User.Password()
 
 			if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
-				currentListener = locationListener
-
-				credsEmpty := locationListener.HTTPUrl.User.Username() == "" && parsedPassword == ""
+				credsNeeded := locationListener.HTTPUrl.User.Username() != "" && parsedPassword != ""
 				credsMatch := requestUsername == locationListener.HTTPUrl.User.Username() && requestPassword == parsedPassword
 
-				if credsEmpty || credsMatch {
-					authNeeded = false
+				if credsNeeded {
+					currentListener = locationListener
 
 					if credsMatch {
+						authNeeded = false
 						return false
 					}
 				}
@@ -145,6 +144,20 @@ func Start(state *utils.State) {
 
 			return true
 		})
+
+		if currentListener == nil {
+			state.HTTPListeners.Range(func(key, value interface{}) bool {
+				locationListener := value.(*utils.HTTPHolder)
+
+				if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
+					currentListener = locationListener
+					authNeeded = false
+					return false
+				}
+
+				return true
+			})
+		}
 
 		if currentListener == nil && hostIsRoot {
 			if viper.GetBool("redirect-root") && !strings.HasPrefix(c.Request.URL.Path, "/favicon.ico") {
