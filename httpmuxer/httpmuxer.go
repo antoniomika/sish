@@ -121,7 +121,6 @@ func Start(state *utils.State) {
 		var currentListener *utils.HTTPHolder
 
 		requestUsername, requestPassword, _ := c.Request.BasicAuth()
-		exactMatch := false
 		authNeeded := true
 
 		state.HTTPListeners.Range(func(key, value interface{}) bool {
@@ -130,17 +129,35 @@ func Start(state *utils.State) {
 			parsedPassword, _ := locationListener.HTTPUrl.User.Password()
 
 			if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
-				currentListener = locationListener
+				credsNeeded := locationListener.HTTPUrl.User.Username() != "" && parsedPassword != ""
+				credsMatch := requestUsername == locationListener.HTTPUrl.User.Username() && requestPassword == parsedPassword
 
-				if requestUsername == locationListener.HTTPUrl.User.Username() && requestPassword == parsedPassword {
-					exactMatch = true
-					authNeeded = false
-					return false
+				if credsNeeded {
+					currentListener = locationListener
+
+					if credsMatch {
+						authNeeded = false
+						return false
+					}
 				}
 			}
 
 			return true
 		})
+
+		if currentListener == nil {
+			state.HTTPListeners.Range(func(key, value interface{}) bool {
+				locationListener := value.(*utils.HTTPHolder)
+
+				if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
+					currentListener = locationListener
+					authNeeded = false
+					return false
+				}
+
+				return true
+			})
+		}
 
 		if currentListener == nil && hostIsRoot {
 			if viper.GetBool("redirect-root") && !strings.HasPrefix(c.Request.URL.Path, "/favicon.ico") {
@@ -162,7 +179,7 @@ func Start(state *utils.State) {
 
 		c.Set("httpHolder", currentListener)
 
-		if !exactMatch || authNeeded {
+		if authNeeded {
 			c.Header("WWW-Authenticate", "Basic realm=\"sish\"")
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return
@@ -214,7 +231,7 @@ func Start(state *utils.State) {
 			})
 		}
 
-		if exactMatch && (viper.GetBool("admin-console") || viper.GetBool("service-console")) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
+		if (viper.GetBool("admin-console") || viper.GetBool("service-console")) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
 			state.Console.HandleRequest(currentListener.HTTPUrl.String(), hostIsRoot, c)
 			return
 		}
