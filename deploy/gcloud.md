@@ -48,7 +48,7 @@ gcloud compute instances create-with-container sish \
     --container-arg="--https=true" \
     --container-arg="--https-certificate-directory=/ssl" \
     --container-arg="--authentication-keys-directory=/pubkeys" \
-    --container-arg="--private-key-location=/keys/ssh_key" \
+    --container-arg="--private-keys-directory=/keys" \
     --container-arg="--bind-random-ports=false" \
     --container-arg="--bind-random-subdomains=false" \
     --container-arg="--bind-random-aliases=false" \

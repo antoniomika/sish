@@ -26,7 +26,7 @@ services:
       --https=true
       --https-certificate-directory=/ssl
       --authentication-keys-directory=/pubkeys
-      --private-key-location=/keys/ssh_key
+      --private-keys-directory=/keys
       --bind-random-ports=false
       --bind-random-subdomains=false
       --domain=ssi.sh
