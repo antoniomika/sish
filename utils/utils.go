@@ -450,7 +450,10 @@ func GetSSHConfig() *ssh.ServerConfig {
 			return nil, fmt.Errorf("password doesn't match")
 		},
 		PublicKeyCallback: func(c ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-			log.Printf("Login attempt: %s, user %s key: %s", c.RemoteAddr(), c.User(), string(ssh.MarshalAuthorizedKey(key)))
+			authKey := ssh.MarshalAuthorizedKey(key)
+			authKey = authKey[:len(authKey)-1]
+
+			log.Printf("Login attempt: %s, user %s key: %s", c.RemoteAddr(), c.User(), string(authKey))
 
 			holderLock.Lock()
 			defer holderLock.Unlock()
@@ -458,7 +461,7 @@ func GetSSHConfig() *ssh.ServerConfig {
 				if bytes.Equal(key.Marshal(), i.Marshal()) {
 					permssionsData := &ssh.Permissions{
 						Extensions: map[string]string{
-							"pubKey":            string(key.Marshal()),
+							"pubKey":            string(authKey),
 							"pubKeyFingerprint": ssh.FingerprintSHA256(key),
 						},
 					}
