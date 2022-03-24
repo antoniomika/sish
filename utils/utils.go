@@ -32,6 +32,7 @@ import (
 	"github.com/pires/go-proxyproto"
 	"github.com/radovskyb/watcher"
 	"github.com/spf13/viper"
+	"github.com/vulcand/oxy/roundrobin"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -649,7 +650,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 			listenAddr = fmt.Sprintf("%s:%d", bindAddr, bindPort)
 			holder, ok := state.TCPListeners.Load(listenAddr)
 			if ok && (!sniProxyEnabled && viper.GetBool("tcp-load-balancer") || (sniProxyEnabled && viper.GetBool("sni-load-balancer"))) {
-				tH = holder.(*TCPHolder)
+				tH = holder
 				ok = false
 			}
 
@@ -730,9 +731,7 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 
 			ok := false
 
-			tH.Balancers.Range(func(key, value interface{}) bool {
-				strKey := key.(string)
-
+			tH.Balancers.Range(func(strKey string, value *roundrobin.RoundRobin) bool {
 				if strKey == host {
 					ok = true
 					return false
@@ -858,9 +857,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			var holder *HTTPHolder
 			ok := false
 
-			state.HTTPListeners.Range(func(key, value interface{}) bool {
-				locationListener := value.(*HTTPHolder)
-
+			state.HTTPListeners.Range(func(key string, locationListener *HTTPHolder) bool {
 				parsedPassword, _ := locationListener.HTTPUrl.User.Password()
 
 				if host == locationListener.HTTPUrl.Host && strings.HasPrefix(path, locationListener.HTTPUrl.Path) && username == locationListener.HTTPUrl.User.Username() && password == parsedPassword {
@@ -941,7 +938,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 
 			holder, ok := state.AliasListeners.Load(alias)
 			if ok && viper.GetBool("alias-load-balancer") {
-				aH = holder.(*AliasHolder)
+				aH = holder
 				ok = false
 			}
 

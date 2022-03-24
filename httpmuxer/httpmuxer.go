@@ -89,13 +89,13 @@ func Start(state *utils.State) {
 			currentListener := param.Keys["httpHolder"].(*utils.HTTPHolder)
 
 			if currentListener != nil {
-				sshConnTmp, ok := currentListener.SSHConnections.Load(param.Keys["proxySocket"])
+				proxySock, _ := param.Keys["proxySocket"].(string)
+				sshConnTmp, ok := currentListener.SSHConnections.Load(proxySock)
 				if ok {
-					sshConn := sshConnTmp.(*utils.SSHConnection)
+					sshConn := sshConnTmp
 					sshConn.SendMessage(strings.TrimSpace(logLine), true)
 				} else {
-					currentListener.SSHConnections.Range(func(key, val interface{}) bool {
-						sshConn := val.(*utils.SSHConnection)
+					currentListener.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
 						sshConn.SendMessage(strings.TrimSpace(logLine), true)
 						return true
 					})
@@ -123,9 +123,7 @@ func Start(state *utils.State) {
 		requestUsername, requestPassword, _ := c.Request.BasicAuth()
 		authNeeded := true
 
-		state.HTTPListeners.Range(func(key, value interface{}) bool {
-			locationListener := value.(*utils.HTTPHolder)
-
+		state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
 			parsedPassword, _ := locationListener.HTTPUrl.User.Password()
 
 			if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
@@ -146,9 +144,7 @@ func Start(state *utils.State) {
 		})
 
 		if currentListener == nil {
-			state.HTTPListeners.Range(func(key, value interface{}) bool {
-				locationListener := value.(*utils.HTTPHolder)
-
+			state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
 				if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
 					currentListener = locationListener
 					authNeeded = false
@@ -187,8 +183,7 @@ func Start(state *utils.State) {
 
 		stripPath := viper.GetBool("strip-http-path")
 
-		currentListener.SSHConnections.Range(func(key, val interface{}) bool {
-			sshConn := val.(*utils.SSHConnection)
+		currentListener.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
 			newHost := sshConn.HostHeader
 
 			if sshConn.StripPath != viper.GetBool("strip-http-path") {
@@ -214,8 +209,7 @@ func Start(state *utils.State) {
 		}
 
 		if viper.GetBool("rewrite-host-header") {
-			currentListener.SSHConnections.Range(func(key, val interface{}) bool {
-				sshConn := val.(*utils.SSHConnection)
+			currentListener.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
 				newHost := sshConn.HostHeader
 
 				if newHost == "" {
@@ -277,9 +271,7 @@ func Start(state *utils.State) {
 
 				ok := false
 
-				state.HTTPListeners.Range(func(key, value interface{}) bool {
-					locationListener := value.(*utils.HTTPHolder)
-
+				state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
 					if name == locationListener.HTTPUrl.Host {
 						ok = true
 						return false

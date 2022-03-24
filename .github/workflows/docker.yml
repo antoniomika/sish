@@ -15,6 +15,10 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v2
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.18
     - name: Lint the codebase
       uses: golangci/golangci-lint-action@v2
       with:
@@ -49,6 +53,7 @@ jobs:
 
         DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         REF="${BRANCH_NAME:-main}"
+        OTHER_TAGS=()
         OTHER_ARGS=""
         OTHER_PUSH_ARGS=""
 
@@ -61,9 +66,9 @@ jobs:
 
         if [[ "${GITHUB_REF}" =~ ^refs\/tags\/v.*$ ]]; then
           REF="${GITHUB_REF//refs\/tags\/v}"
-          OTHER_ARGS="${OTHER_ARGS} -t ${GITHUB_REPOSITORY}:${GITHUB_REF//refs\/tags\/}"
+          OTHER_TAGS+=("${GITHUB_REF//refs\/tags\/}")
           if ! [[ ${GITHUB_REF} =~ ^refs\/tags\/v.*-.*$ ]]; then
-            OTHER_ARGS="${OTHER_ARGS} -t ${GITHUB_REPOSITORY}:latest"
+            OTHER_TAGS+=("latest")
           fi
         fi
 
@@ -76,6 +81,16 @@ jobs:
           fi
         fi
 
+        OTHER_TAGS+=("${GITHUB_SHA}" "${REF}")
+
+        MAIN_IMAGE_TAGS=""
+        BUILD_IMAGE_TAGS=""
+
+        for TAG in ${OTHER_TAGS[@]}; do
+          MAIN_IMAGE_TAGS="${MAIN_IMAGE_TAGS} -t ${GITHUB_REPOSITORY}:${TAG}"
+          BUILD_IMAGE_TAGS="${BUILD_IMAGE_TAGS} -t ${GITHUB_REPOSITORY}-build-image:${TAG}"
+        done
+
         docker buildx build \
           --target release \
           --cache-from ${GITHUB_REPOSITORY}-cache \
@@ -83,9 +98,7 @@ jobs:
           --build-arg COMMIT=${GITHUB_SHA} \
           --build-arg DATE=${DATE} \
           --build-arg REPOSITORY=${GITHUB_REPOSITORY} \
-          -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} \
-          -t ${GITHUB_REPOSITORY}:${REF} \
-          ${OTHER_ARGS} ${OTHER_PUSH_ARGS} .
+          ${MAIN_IMAGE_TAGS} ${OTHER_ARGS} ${OTHER_PUSH_ARGS} .
 
         if [[ "${OTHER_ARGS}" != *"--load"* ]]; then
           docker buildx build \
@@ -95,9 +108,7 @@ jobs:
             --build-arg COMMIT=${GITHUB_SHA} \
             --build-arg DATE=${DATE} \
             --build-arg REPOSITORY=${GITHUB_REPOSITORY} \
-            -t ${GITHUB_REPOSITORY}:${GITHUB_SHA} \
-            -t ${GITHUB_REPOSITORY}:${REF} \
-            --load .
+            ${MAIN_IMAGE_TAGS} --load .
         fi
 
         if [[ "${GITHUB_ACTOR}" == "${GITHUB_REPOSITORY%/*}" ]]; then
@@ -108,9 +119,7 @@ jobs:
             --build-arg COMMIT=${GITHUB_SHA} \
             --build-arg DATE=${DATE} \
             --build-arg REPOSITORY=${GITHUB_REPOSITORY} \
-            -t ${GITHUB_REPOSITORY}-build-image:${GITHUB_SHA} \
-            -t ${GITHUB_REPOSITORY}-build-image:${REF} \
-            ${OTHER_ARGS} ${OTHER_PUSH_ARGS} .
+            ${BUILD_IMAGE_TAGS} ${OTHER_ARGS} ${OTHER_PUSH_ARGS} .
         fi
 
         if [[ "${GITHUB_ACTOR}" == "${GITHUB_REPOSITORY%/*}" ]]; then

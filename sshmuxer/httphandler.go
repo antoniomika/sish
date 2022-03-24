@@ -6,10 +6,10 @@ import (
 	"log"
 	"net/url"
 	"strings"
-	"sync"
 
 	"github.com/antoniomika/sish/httpmuxer"
 	"github.com/antoniomika/sish/utils"
+	"github.com/antoniomika/syncmap"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/viper"
 	"github.com/vulcand/oxy/forward"
@@ -55,7 +55,7 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 
 		pH = &utils.HTTPHolder{
 			HTTPUrl:        hostUrl,
-			SSHConnections: &sync.Map{},
+			SSHConnections: syncmap.New[string, *utils.SSHConnection](),
 			Forward:        fwd,
 			Balancer:       lb,
 		}

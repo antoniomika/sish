@@ -78,7 +78,7 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 			requestHeaders := c.Request.Header.Clone()
 			requestHeaders.Add("Host", hostname)
 
-			data, err := json.Marshal(map[string]interface{}{
+			data, err := json.Marshal(map[string]any{
 				"startTime":          startTime,
 				"startTimePretty":    startTime.Format(viper.GetString("time-format")),
 				"currentTime":        currentTime,

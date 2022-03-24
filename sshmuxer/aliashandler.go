@@ -6,9 +6,9 @@ import (
 	"log"
 	"net/url"
 	"strings"
-	"sync"
 
 	"github.com/antoniomika/sish/utils"
+	"github.com/antoniomika/syncmap"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/viper"
 	"github.com/vulcand/oxy/roundrobin"
@@ -33,7 +33,7 @@ func handleAliasListener(check *channelForwardMsg, stringPort string, requestMes
 
 		aH = &utils.AliasHolder{
 			AliasHost:      validAlias,
-			SSHConnections: &sync.Map{},
+			SSHConnections: syncmap.New[string, *utils.SSHConnection](),
 			Balancer:       lb,
 		}
 

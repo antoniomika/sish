@@ -14,6 +14,7 @@ import (
 
 	"github.com/antoniomika/sish/httpmuxer"
 	"github.com/antoniomika/sish/utils"
+	"github.com/antoniomika/syncmap"
 	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
@@ -72,32 +73,32 @@ func Start() {
 				log.Println("===Goroutines=====")
 				log.Println(runtime.NumGoroutine())
 				log.Println("===Listeners======")
-				state.Listeners.Range(func(key, value interface{}) bool {
+				state.Listeners.Range(func(key string, value net.Listener) bool {
 					log.Println(key, value)
 					return true
 				})
 				log.Println("===Clients========")
-				state.SSHConnections.Range(func(key, value interface{}) bool {
+				state.SSHConnections.Range(func(key string, value *utils.SSHConnection) bool {
 					log.Println(key, value)
 					return true
 				})
 				log.Println("===HTTP Clients===")
-				state.HTTPListeners.Range(func(key, value interface{}) bool {
+				state.HTTPListeners.Range(func(key string, value *utils.HTTPHolder) bool {
 					log.Println(key, value)
 					return true
 				})
 				log.Println("===TCP Aliases====")
-				state.AliasListeners.Range(func(key, value interface{}) bool {
+				state.AliasListeners.Range(func(key string, value *utils.AliasHolder) bool {
 					log.Println(key, value)
 					return true
 				})
 				log.Println("===Web Console Routes====")
-				state.Console.Clients.Range(func(key, value interface{}) bool {
+				state.Console.Clients.Range(func(key string, value []*utils.WebClient) bool {
 					log.Println(key, value)
 					return true
 				})
 				log.Println("===Web Console Tokens====")
-				state.Console.RouteTokens.Range(func(key, value interface{}) bool {
+				state.Console.RouteTokens.Range(func(key, value string) bool {
 					log.Println(key, value)
 					return true
 				})
@@ -191,7 +192,7 @@ func Start() {
 
 			holderConn := &utils.SSHConnection{
 				SSHConn:   sshConn,
-				Listeners: &sync.Map{},
+				Listeners: syncmap.New[string, net.Listener](),
 				Closed:    &sync.Once{},
 				Close:     make(chan bool),
 				Exec:      make(chan bool),

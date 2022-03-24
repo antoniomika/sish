@@ -4,10 +4,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strings"
-	"sync"
 
+	"github.com/antoniomika/syncmap"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/spf13/viper"
@@ -33,19 +34,17 @@ type WebClient struct {
 }
 
 // WebConsole represents the data structure that stores web console client information.
-// Clients is a map[string][]*WebClient.
-// RouteTokens is a map[string]string.
 type WebConsole struct {
-	Clients     *sync.Map
-	RouteTokens *sync.Map
+	Clients     *syncmap.Map[string, []*WebClient]
+	RouteTokens *syncmap.Map[string, string]
 	State       *State
 }
 
 // NewWebConsole sets up the WebConsole.
 func NewWebConsole() *WebConsole {
 	return &WebConsole{
-		Clients:     &sync.Map{},
-		RouteTokens: &sync.Map{},
+		Clients:     syncmap.New[string, []*WebClient](),
+		RouteTokens: syncmap.New[string, string](),
 	}
 }
 
@@ -60,7 +59,11 @@ func (c *WebConsole) HandleRequest(proxyUrl string, hostIsRoot bool, g *gin.Cont
 
 	tokenInterface, ok := c.RouteTokens.Load(proxyUrl)
 	if ok {
-		routeToken, ok := tokenInterface.(string)
+		routeToken := tokenInterface
+		if routeToken == "" {
+			ok = false
+		}
+
 		if viper.GetBool("service-console") && ok && (g.Request.URL.Query().Get("x-authorization") == routeToken || g.Request.Header.Get("x-authorization") == routeToken) {
 			userAuthed = true
 		}
@@ -126,11 +129,8 @@ func (c *WebConsole) HandleWebSocket(proxyUrl string, g *gin.Context) {
 func (c *WebConsole) HandleDisconnectClient(proxyUrl string, g *gin.Context) {
 	client := strings.TrimPrefix(g.Request.URL.Path, "/_sish/api/disconnectclient/")
 
-	c.State.SSHConnections.Range(func(key interface{}, val interface{}) bool {
-		clientName := key.(string)
-
+	c.State.SSHConnections.Range(func(clientName string, holderConn *SSHConnection) bool {
 		if clientName == client {
-			holderConn := val.(*SSHConnection)
 			holderConn.CleanUp(c.State)
 
 			return false
@@ -139,7 +139,7 @@ func (c *WebConsole) HandleDisconnectClient(proxyUrl string, g *gin.Context) {
 		return true
 	})
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"status": true,
 	}
 
@@ -173,7 +173,7 @@ func (c *WebConsole) HandleDisconnectRoute(proxyUrl string, g *gin.Context) {
 		}
 	}
 
-	data := map[string]interface{}{
+	data := map[string]any{
 		"status": true,
 	}
 
@@ -184,20 +184,20 @@ func (c *WebConsole) HandleDisconnectRoute(proxyUrl string, g *gin.Context) {
 // also go through all of the forwarded connections for the SSH client and
 // return them.
 func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"status": true,
 	}
 
-	clients := map[string]map[string]interface{}{}
-	c.State.SSHConnections.Range(func(key interface{}, val interface{}) bool {
-		clientName := key.(string)
-		sshConn := val.(*SSHConnection)
-
+	clients := map[string]map[string]any{}
+	c.State.SSHConnections.Range(func(clientName string, sshConn *SSHConnection) bool {
 		listeners := []string{}
-		routeListeners := map[string]map[string]interface{}{}
+		routeListeners := map[string]map[string]any{}
 
-		sshConn.Listeners.Range(func(key interface{}, val interface{}) bool {
-			name, ok := key.(string)
+		sshConn.Listeners.Range(func(name string, val net.Listener) bool {
+			ok := true
+			if name == "" {
+				ok = false
+			}
 
 			if ok {
 				listeners = append(listeners, name)
@@ -206,11 +206,8 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 			return true
 		})
 
-		tcpAliases := map[string]interface{}{}
-		c.State.AliasListeners.Range(func(key interface{}, val interface{}) bool {
-			tcpAlias := key.(string)
-			aliasHolder := val.(*AliasHolder)
-
+		tcpAliases := map[string]any{}
+		c.State.AliasListeners.Range(func(tcpAlias string, aliasHolder *AliasHolder) bool {
 			for _, v := range listeners {
 				for _, server := range aliasHolder.Balancer.Servers() {
 					serverAddr, err := base64.StdEncoding.DecodeString(server.Host)
@@ -230,17 +227,12 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 			return true
 		})
 
-		listenerParts := map[string]interface{}{}
-		c.State.TCPListeners.Range(func(key interface{}, val interface{}) bool {
-			tcpAlias := key.(string)
-			aliasHolder := val.(*TCPHolder)
-
+		listenerParts := map[string]any{}
+		c.State.TCPListeners.Range(func(tcpAlias string, aliasHolder *TCPHolder) bool {
 			for _, v := range listeners {
-				aliasHolder.Balancers.Range(func(ikey, ival interface{}) bool {
-					balancer := ival.(*roundrobin.RoundRobin)
-
+				aliasHolder.Balancers.Range(func(ikey string, balancer *roundrobin.RoundRobin) bool {
 					if aliasHolder.SNIProxy {
-						tcpAlias = fmt.Sprintf("%s-%s", tcpAlias, ikey.(string))
+						tcpAlias = fmt.Sprintf("%s-%s", tcpAlias, ikey)
 					}
 
 					for _, server := range balancer.Servers() {
@@ -264,14 +256,10 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 			return true
 		})
 
-		httpListeners := map[string]interface{}{}
-		c.State.HTTPListeners.Range(func(key interface{}, val interface{}) bool {
-			httpHolder := val.(*HTTPHolder)
-
+		httpListeners := map[string]any{}
+		c.State.HTTPListeners.Range(func(key string, httpHolder *HTTPHolder) bool {
 			listenerHandlers := []string{}
-			httpHolder.SSHConnections.Range(func(key interface{}, val interface{}) bool {
-				httpAddr := key.(string)
-
+			httpHolder.SSHConnections.Range(func(httpAddr string, val *SSHConnection) bool {
 				for _, v := range listeners {
 					if v == httpAddr {
 						listenerHandlers = append(listenerHandlers, httpAddr)
@@ -306,7 +294,7 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 			}
 		}
 
-		clients[clientName] = map[string]interface{}{
+		clients[clientName] = map[string]any{
 			"remoteAddr":        sshConn.SSHConn.RemoteAddr().String(),
 			"user":              sshConn.SSHConn.User(),
 			"version":           string(sshConn.SSHConn.ClientVersion()),
@@ -331,7 +319,7 @@ func (c *WebConsole) RouteToken(route string) (string, bool) {
 	routeToken := ""
 
 	if ok {
-		routeToken = token.(string)
+		routeToken = token
 	}
 
 	return routeToken, ok
@@ -351,13 +339,7 @@ func (c *WebConsole) AddRoute(route string, token string) {
 
 // RemoveRoute removes a route token from the console.
 func (c *WebConsole) RemoveRoute(route string) {
-	data, ok := c.Clients.Load(route)
-
-	if !ok {
-		return
-	}
-
-	clients, ok := data.([]*WebClient)
+	clients, ok := c.Clients.Load(route)
 
 	if !ok {
 		return
@@ -373,13 +355,7 @@ func (c *WebConsole) RemoveRoute(route string) {
 
 // AddClient adds a client to the console route.
 func (c *WebConsole) AddClient(route string, w *WebClient) {
-	data, ok := c.Clients.Load(route)
-
-	if !ok {
-		return
-	}
-
-	clients, ok := data.([]*WebClient)
+	clients, ok := c.Clients.Load(route)
 
 	if !ok {
 		return
@@ -392,13 +368,7 @@ func (c *WebConsole) AddClient(route string, w *WebClient) {
 
 // RemoveClient removes a client from the console route.
 func (c *WebConsole) RemoveClient(route string, w *WebClient) {
-	data, ok := c.Clients.Load(route)
-
-	if !ok {
-		return
-	}
-
-	clients, ok := data.([]*WebClient)
+	clients, ok := c.Clients.Load(route)
 
 	if !ok {
 		return
@@ -422,13 +392,7 @@ func (c *WebConsole) RemoveClient(route string, w *WebClient) {
 
 // BroadcastRoute sends a message to all clients on a route.
 func (c *WebConsole) BroadcastRoute(route string, message []byte) {
-	data, ok := c.Clients.Load(route)
-
-	if !ok {
-		return
-	}
-
-	clients, ok := data.([]*WebClient)
+	clients, ok := c.Clients.Load(route)
 
 	if !ok {
 		return

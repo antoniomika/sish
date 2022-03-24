@@ -7,9 +7,9 @@ import (
 	"net"
 	"net/url"
 	"strings"
-	"sync"
 
 	"github.com/antoniomika/sish/utils"
+	"github.com/antoniomika/syncmap"
 	"github.com/logrusorgru/aurora"
 	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
@@ -45,8 +45,8 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 
 		tH = &utils.TCPHolder{
 			TCPHost:        tcpAddr,
-			SSHConnections: &sync.Map{},
-			Balancers:      &sync.Map{},
+			SSHConnections: syncmap.New[string, *utils.SSHConnection](),
+			Balancers:      syncmap.New[string, *roundrobin.RoundRobin](),
 			SNIProxy:       sshConn.SNIProxy,
 		}
 
@@ -85,7 +85,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 
 	foundBalancer, ok := tH.Balancers.Load(balancerName)
 	if ok {
-		balancer = foundBalancer.(*roundrobin.RoundRobin)
+		balancer = foundBalancer
 	} else {
 		newBalancer, err := roundrobin.New(nil)
 
