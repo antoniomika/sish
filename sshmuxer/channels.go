@@ -242,7 +242,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 		return
 	}
 
-	aH := loc.(*utils.AliasHolder)
+	aH := loc
 
 	connectionLocation, err := aH.Balancer.NextServer()
 	if err != nil {
@@ -264,12 +264,8 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 	log.Println(logLine)
 
 	if viper.GetBool("log-to-client") {
-		aH.SSHConnections.Range(func(key, val interface{}) bool {
-			sshConn := val.(*utils.SSHConnection)
-
-			sshConn.Listeners.Range(func(key, val interface{}) bool {
-				listenerAddr := key.(string)
-
+		aH.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
+			sshConn.Listeners.Range(func(listenerAddr string, val net.Listener) bool {
 				if listenerAddr == aliasAddr {
 					sshConn.SendMessage(logLine, true)
 

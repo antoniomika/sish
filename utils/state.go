@@ -8,9 +8,9 @@ import (
 	"log"
 	"net"
 	"net/url"
-	"sync"
 	"time"
 
+	"github.com/antoniomika/syncmap"
 	"github.com/jpillora/ipfilter"
 	"github.com/spf13/viper"
 	"github.com/vulcand/oxy/forward"
@@ -55,31 +55,27 @@ type ListenerHolder struct {
 }
 
 // HTTPHolder holds proxy and connection info.
-// SSHConnections is a map[string]*SSHConnection.
 type HTTPHolder struct {
 	HTTPUrl        *url.URL
-	SSHConnections *sync.Map
+	SSHConnections *syncmap.Map[string, *SSHConnection]
 	Forward        *forward.Forwarder
 	Balancer       *roundrobin.RoundRobin
 }
 
 // AliasHolder holds alias and connection info.
-// SSHConnections is a map[string]*SSHConnection.
 type AliasHolder struct {
 	AliasHost      string
-	SSHConnections *sync.Map
+	SSHConnections *syncmap.Map[string, *SSHConnection]
 	Balancer       *roundrobin.RoundRobin
 }
 
 // TCPHolder holds proxy and connection info.
-// SSHConnections is a map[string]*SSHConnection.
-// Balancers is a map[string]*roundrobin.RoundRobin.
 type TCPHolder struct {
 	TCPHost        string
 	Listener       net.Listener
-	SSHConnections *sync.Map
+	SSHConnections *syncmap.Map[string, *SSHConnection]
 	SNIProxy       bool
-	Balancers      *sync.Map
+	Balancers      *syncmap.Map[string, *roundrobin.RoundRobin]
 }
 
 // Handle will copy connections from one handler to a roundrobin server.
@@ -119,7 +115,7 @@ func (tH *TCPHolder) Handle(state *State) {
 			continue
 		}
 
-		balancer := pB.(*roundrobin.RoundRobin)
+		balancer := pB
 
 		connectionLocation, err := balancer.NextServer()
 		if err != nil {
@@ -141,12 +137,8 @@ func (tH *TCPHolder) Handle(state *State) {
 		log.Println(logLine)
 
 		if viper.GetBool("log-to-client") {
-			tH.SSHConnections.Range(func(key, val interface{}) bool {
-				sshConn := val.(*SSHConnection)
-
-				sshConn.Listeners.Range(func(key, val interface{}) bool {
-					listenerAddr := key.(string)
-
+			tH.SSHConnections.Range(func(key string, sshConn *SSHConnection) bool {
+				sshConn.Listeners.Range(func(listenerAddr string, val net.Listener) bool {
 					if listenerAddr == hostAddr {
 						sshConn.SendMessage(logLine, true)
 
@@ -182,18 +174,13 @@ func (tH *TCPHolder) Handle(state *State) {
 
 // State handles overall state. It retains mutexed maps for various
 // datastructures and shared objects.
-// SSHConnections is a map[string]*SSHConnection.
-// Listeners is a map[string]net.Listener.
-// HTTPListeners is a map[string]HTTPHolder.
-// AliasListeners is a map[string]AliasHolder.
-// TCPListeners is a map[string]TCPHolder.
 type State struct {
 	Console        *WebConsole
-	SSHConnections *sync.Map
-	Listeners      *sync.Map
-	HTTPListeners  *sync.Map
-	AliasListeners *sync.Map
-	TCPListeners   *sync.Map
+	SSHConnections *syncmap.Map[string, *SSHConnection]
+	Listeners      *syncmap.Map[string, net.Listener]
+	HTTPListeners  *syncmap.Map[string, *HTTPHolder]
+	AliasListeners *syncmap.Map[string, *AliasHolder]
+	TCPListeners   *syncmap.Map[string, *TCPHolder]
 	IPFilter       *ipfilter.IPFilter
 	LogWriter      io.Writer
 }
@@ -201,11 +188,11 @@ type State struct {
 // NewState returns a new State struct.
 func NewState() *State {
 	return &State{
-		SSHConnections: &sync.Map{},
-		Listeners:      &sync.Map{},
-		HTTPListeners:  &sync.Map{},
-		AliasListeners: &sync.Map{},
-		TCPListeners:   &sync.Map{},
+		SSHConnections: syncmap.New[string, *SSHConnection](),
+		Listeners:      syncmap.New[string, net.Listener](),
+		HTTPListeners:  syncmap.New[string, *HTTPHolder](),
+		AliasListeners: syncmap.New[string, *AliasHolder](),
+		TCPListeners:   syncmap.New[string, *TCPHolder](),
 		IPFilter:       Filter,
 		Console:        NewWebConsole(),
 		LogWriter:      multiWriter,

@@ -9,16 +9,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/antoniomika/syncmap"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
 
 // SSHConnection handles state for a SSHConnection. It wraps an ssh.ServerConn
 // and allows us to pass other state around the application.
-// Listeners is a map[string]net.Listener.
 type SSHConnection struct {
 	SSHConn        *ssh.ServerConn
-	Listeners      *sync.Map
+	Listeners      *syncmap.Map[string, net.Listener]
 	Closed         *sync.Once
 	Close          chan bool
 	Exec           chan bool
@@ -65,7 +65,7 @@ func (s *SSHConnection) ListenerCount() int {
 
 	count := 0
 
-	s.Listeners.Range(func(key, value interface{}) bool {
+	s.Listeners.Range(func(key string, value net.Listener) bool {
 		count++
 		return true
 	})
