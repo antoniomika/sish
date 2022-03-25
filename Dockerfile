@@ -4,11 +4,6 @@ LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 
 ENV CGO_ENABLED 0
 
-ARG VERSION=dev
-ARG COMMIT=none
-ARG DATE=unknown
-ARG REPOSITORY=unknown
-
 WORKDIR /app
 
 RUN mkdir -p /emptydir
@@ -30,6 +25,11 @@ COPY --from=builder /go/pkg/mod /mod
 COPY --from=builder /root/.cache/go-build /go-build
 
 FROM builder as build-image
+
+ARG VERSION=dev
+ARG COMMIT=none
+ARG DATE=unknown
+ARG REPOSITORY=unknown
 
 ARG TARGETOS
 ARG TARGETARCH
