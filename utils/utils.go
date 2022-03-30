@@ -389,7 +389,9 @@ func loadKeys() {
 		keyHandle := func(keyBytes []byte, d fs.DirEntry) []byte {
 			key, _, _, rest, e := ssh.ParseAuthorizedKey(keyBytes)
 			if e != nil {
-				log.Printf("Can't load file %s as public key: %s\n", d.Name(), e)
+				if e.Error() != "ssh: no key found" || (e.Error() == "ssh: no key found" && viper.GetBool("debug")) {
+					log.Printf("Can't load file %s:\"%s\" as public key: %s\n", d.Name(), string(keyBytes), e)
+				}
 			}
 
 			if key != nil {
