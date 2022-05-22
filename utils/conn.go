@@ -85,49 +85,79 @@ func (s *SSHConnection) CleanUp(state *State) {
 
 // TeeConn represents a simple net.Conn interface for SNI Processing.
 type TeeConn struct {
-	Reader io.Reader
-	Buffer *bytes.Buffer
+	Conn      net.Conn
+	Reader    io.Reader
+	Buffer    *bytes.Buffer
+	FirstRead bool
+	Flushed   bool
 }
 
 // Read implements a reader ontop of the TeeReader.
-func (conn TeeConn) Read(p []byte) (int, error) { return conn.Reader.Read(p) }
-
-// Write is a shim function to fit net.Conn.
-func (conn TeeConn) Write(p []byte) (int, error) { return 0, io.ErrClosedPipe }
-
-// Close is a shim function to fit net.Conn.
-func (conn TeeConn) Close() error { return nil }
-
-// LocalAddr is a shim function to fit net.Conn.
-func (conn TeeConn) LocalAddr() net.Addr { return nil }
-
-// RemoteAddr is a shim function to fit net.Conn.
-func (conn TeeConn) RemoteAddr() net.Addr { return nil }
-
-// SetDeadline is a shim function to fit net.Conn.
-func (conn TeeConn) SetDeadline(t time.Time) error { return nil }
-
-// SetReadDeadline is a shim function to fit net.Conn.
-func (conn TeeConn) SetReadDeadline(t time.Time) error { return nil }
-
-// SetWriteDeadline is a shim function to fit net.Conn.
-func (conn TeeConn) SetWriteDeadline(t time.Time) error { return nil }
-
-// GetBuffer returns the tee'd buffer.
-func (conn TeeConn) GetBuffer() *bytes.Buffer { return conn.Buffer }
-
-func NewTeeConn(reader io.Reader) TeeConn {
-	teeConn := TeeConn{
-		Buffer: bytes.NewBuffer([]byte{}),
+func (conn *TeeConn) Read(p []byte) (int, error) {
+	if !conn.FirstRead {
+		conn.FirstRead = true
+		return conn.Reader.Read(p)
 	}
 
-	teeConn.Reader = io.TeeReader(reader, teeConn.Buffer)
+	if conn.FirstRead && !conn.Flushed {
+		conn.Flushed = true
+		copy(p[0:conn.Buffer.Len()], conn.Buffer.Bytes())
+		return conn.Buffer.Len(), nil
+	}
+
+	return conn.Conn.Read(p)
+}
+
+// Write is a shim function to fit net.Conn.
+func (conn *TeeConn) Write(p []byte) (int, error) {
+	if !conn.Flushed {
+		return 0, io.ErrClosedPipe
+	}
+
+	return conn.Conn.Write(p)
+}
+
+// Close is a shim function to fit net.Conn.
+func (conn *TeeConn) Close() error {
+	if !conn.Flushed {
+		return nil
+	}
+
+	return conn.Conn.Close()
+}
+
+// LocalAddr is a shim function to fit net.Conn.
+func (conn *TeeConn) LocalAddr() net.Addr { return conn.Conn.LocalAddr() }
+
+// RemoteAddr is a shim function to fit net.Conn.
+func (conn *TeeConn) RemoteAddr() net.Addr { return conn.Conn.RemoteAddr() }
+
+// SetDeadline is a shim function to fit net.Conn.
+func (conn *TeeConn) SetDeadline(t time.Time) error { return conn.Conn.SetDeadline(t) }
+
+// SetReadDeadline is a shim function to fit net.Conn.
+func (conn *TeeConn) SetReadDeadline(t time.Time) error { return conn.Conn.SetReadDeadline(t) }
+
+// SetWriteDeadline is a shim function to fit net.Conn.
+func (conn *TeeConn) SetWriteDeadline(t time.Time) error { return conn.Conn.SetWriteDeadline(t) }
+
+// GetBuffer returns the tee'd buffer.
+func (conn *TeeConn) GetBuffer() *bytes.Buffer { return conn.Buffer }
+
+func NewTeeConn(conn net.Conn) *TeeConn {
+	teeConn := &TeeConn{
+		Conn:    conn,
+		Buffer:  bytes.NewBuffer([]byte{}),
+		Flushed: false,
+	}
+
+	teeConn.Reader = io.TeeReader(conn, teeConn.Buffer)
 
 	return teeConn
 }
 
-// PeakTLSHello peaks the TLS Connection Hello to proxy based on SNI.
-func PeakTLSHello(reader io.Reader) (*tls.ClientHelloInfo, *bytes.Buffer, error) {
+// PeekTLSHello peeks the TLS Connection Hello to proxy based on SNI.
+func PeekTLSHello(conn net.Conn) (*tls.ClientHelloInfo, *bytes.Buffer, *TeeConn, error) {
 	var tlsHello *tls.ClientHelloInfo
 
 	tlsConfig := &tls.Config{
@@ -137,11 +167,11 @@ func PeakTLSHello(reader io.Reader) (*tls.ClientHelloInfo, *bytes.Buffer, error)
 		},
 	}
 
-	teeConn := NewTeeConn(reader)
+	teeConn := NewTeeConn(conn)
 
 	err := tls.Server(teeConn, tlsConfig).Handshake()
 
-	return tlsHello, teeConn.GetBuffer(), err
+	return tlsHello, teeConn.GetBuffer(), teeConn, err
 }
 
 // IdleTimeoutConn handles the connection with a context deadline.

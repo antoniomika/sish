@@ -76,6 +76,7 @@ type TCPHolder struct {
 	SSHConnections *syncmap.Map[string, *SSHConnection]
 	SNIProxy       bool
 	Balancers      *syncmap.Map[string, *roundrobin.RoundRobin]
+	NoHandle       bool
 }
 
 // Handle will copy connections from one handler to a roundrobin server.
@@ -97,7 +98,7 @@ func (tH *TCPHolder) Handle(state *State) {
 
 		balancerName := ""
 		if tH.SNIProxy {
-			tlsHello, buf, err := PeakTLSHello(cl)
+			tlsHello, buf, _, err := PeekTLSHello(cl)
 			if err != nil && tlsHello == nil {
 				log.Printf("Unable to read TLS hello: %s", err)
 				cl.Close()

@@ -14,6 +14,7 @@ import (
 	"github.com/logrusorgru/aurora"
 	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
+	"github.com/vulcand/oxy/roundrobin"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -207,7 +208,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			}
 		}
 	case utils.TCPListener:
-		tH, balancer, serverURL, tcpAddr, requestMessages, err := handleTCPListener(check, bindPort, mainRequestMessages, listenerHolder, state, sshConn, sniProxyForced)
+		tH, balancer, balancerName, serverURL, tcpAddr, requestMessages, err := handleTCPListener(check, bindPort, mainRequestMessages, listenerHolder, state, sshConn, sniProxyForced)
 		if err != nil {
 			err = newRequest.Reply(false, nil)
 			if err != nil {
@@ -223,7 +224,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 		mainRequestMessages = requestMessages
 
-		go tH.Handle(state)
+		if !tH.NoHandle {
+			go tH.Handle(state)
+		}
 
 		deferHandler = func() {
 			err := balancer.RemoveServer(serverURL)
@@ -234,9 +237,19 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			tH.SSHConnections.Delete(listenerHolder.Addr().String())
 
 			if len(balancer.Servers()) == 0 {
-				tH.Listener.Close()
-				state.Listeners.Delete(tcpAddr)
-				state.TCPListeners.Delete(tcpAddr)
+				tH.Balancers.Delete(balancerName)
+
+				balancers := 0
+				tH.Balancers.Range(func(n string, b *roundrobin.RoundRobin) bool {
+					balancers += 1
+					return false
+				})
+
+				if balancers == 0 {
+					tH.Listener.Close()
+					state.Listeners.Delete(tcpAddr)
+					state.TCPListeners.Delete(tcpAddr)
+				}
 			}
 		}
 	}

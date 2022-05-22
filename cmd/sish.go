@@ -102,6 +102,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("service-console", "", false, "Enable the service console for each service and send the info to connected clients")
 	rootCmd.PersistentFlags().BoolP("tcp-aliases", "", false, "Enable the use of TCP aliasing")
 	rootCmd.PersistentFlags().BoolP("sni-proxy", "", false, "Enable the use of SNI proxying")
+	rootCmd.PersistentFlags().BoolP("sni-proxy-https", "", false, "Enable the use of SNI proxying on the HTTPS port")
 	rootCmd.PersistentFlags().BoolP("log-to-client", "", false, "Enable logging HTTP and TCP requests to the client")
 	rootCmd.PersistentFlags().BoolP("idle-connection", "", true, "Enable connection idle timeouts for reads and writes")
 	rootCmd.PersistentFlags().BoolP("http-load-balancer", "", false, "Enable the HTTP load balancer (multiple clients can bind the same domain)")
