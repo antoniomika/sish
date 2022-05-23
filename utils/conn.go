@@ -27,6 +27,7 @@ type SSHConnection struct {
 	HostHeader     string
 	StripPath      bool
 	SNIProxy       bool
+	TCPAddress     string
 	TCPAlias       bool
 	LocalForward   bool
 	AutoClose      bool

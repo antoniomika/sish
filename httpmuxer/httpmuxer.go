@@ -5,7 +5,6 @@ package httpmuxer
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -361,18 +360,16 @@ func Start(state *utils.State) {
 				httpsListener = pListener
 			}
 
-			l := tls.NewListener(httpsListener, tlsConfig)
-
 			if tH != nil {
-				tH.Listener = l
+				tH.Listener = httpsListener
 
-				state.Listeners.Store(httpsServer.Addr, l)
+				state.Listeners.Store(httpsServer.Addr, httpsListener)
 				state.TCPListeners.Store(httpsServer.Addr, tH)
 			}
 
-			defer l.Close()
+			defer httpsListener.Close()
 
-			log.Fatal(httpsServer.Serve(l))
+			log.Fatal(httpsServer.ServeTLS(httpsListener, "", ""))
 		}()
 	}
 
