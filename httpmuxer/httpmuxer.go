@@ -5,20 +5,24 @@ package httpmuxer
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/antoniomika/sish/utils"
+	"github.com/antoniomika/syncmap"
 	"github.com/caddyserver/certmagic"
 	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
 	"github.com/vulcand/oxy/forward"
+	"github.com/vulcand/oxy/roundrobin"
 
 	"github.com/gin-gonic/gin"
 )
@@ -256,12 +260,12 @@ func Start(state *utils.State) {
 
 		certManager := certmagic.NewDefault()
 
-		acmeManager := certmagic.NewACMEManager(certManager, certmagic.DefaultACME)
+		acmeIssuer := certmagic.NewACMEIssuer(certManager, certmagic.DefaultACME)
 
-		acmeManager.Agreed = viper.GetBool("https-ondemand-certificate-accept-terms")
-		acmeManager.Email = viper.GetString("https-ondemand-certificate-email")
+		acmeIssuer.Agreed = viper.GetBool("https-ondemand-certificate-accept-terms")
+		acmeIssuer.Email = viper.GetString("https-ondemand-certificate-email")
 
-		certManager.Issuers = []certmagic.Issuer{acmeManager}
+		certManager.Issuers = []certmagic.Issuer{acmeIssuer}
 
 		certManager.OnDemand = &certmagic.OnDemandConfig{
 			DecisionFunc: func(name string) error {
@@ -291,29 +295,74 @@ func Start(state *utils.State) {
 
 		utils.WatchCerts(certManager)
 
+		tlsConfig := certManager.TLSConfig()
+		tlsConfig.NextProtos = append([]string{"h2", "http/1.1"}, tlsConfig.NextProtos...)
+
 		httpsServer := &http.Server{
 			Addr:      viper.GetString("https-address"),
-			TLSConfig: certManager.TLSConfig(),
+			TLSConfig: tlsConfig,
 			Handler:   r,
 		}
 
 		go func() {
-			var httpsListener net.Listener
-
-			l, err := net.Listen("tcp", httpsServer.Addr)
+			// We'll replace this with a custom listener
+			// That listener will then check the hostname of the request and choose the connection to send it to
+			portListener, err := net.Listen("tcp", httpsServer.Addr)
 			if err != nil {
 				log.Fatalf("couldn't listen to %q: %q\n", httpsServer.Addr, err.Error())
 			}
 
+			pListener := portListener
+
 			if viper.GetBool("proxy-protocol-listener") {
 				hListener := &proxyproto.Listener{
-					Listener: l,
+					Listener: portListener,
 				}
 
 				utils.LoadProxyProtoConfig(hListener)
-				httpsListener = hListener
-			} else {
-				httpsListener = l
+				pListener = hListener
+			}
+
+			httpsListener := pListener
+
+			var tH *utils.TCPHolder
+
+			if viper.GetBool("sni-proxy-https") {
+				tH = &utils.TCPHolder{
+					TCPHost:        httpsServer.Addr,
+					SSHConnections: syncmap.New[string, *utils.SSHConnection](),
+					Balancers:      syncmap.New[string, *roundrobin.RoundRobin](),
+					SNIProxy:       true,
+					NoHandle:       true,
+				}
+
+				balancer, err := roundrobin.New(nil)
+				if err != nil {
+					log.Fatal("Error initializing tcp balancer:", err)
+				}
+
+				err = balancer.UpsertServer(&url.URL{
+					Host: base64.StdEncoding.EncodeToString([]byte("_sish_https_root")),
+				})
+
+				if err != nil {
+					log.Fatal("Error upserting empty balancer:", err)
+				}
+
+				tH.Balancers.Store("", balancer)
+
+				httpsListener = &proxyListener{
+					Listener: pListener,
+					Holder:   tH,
+					State:    state,
+				}
+			}
+
+			if tH != nil {
+				tH.Listener = httpsListener
+
+				state.Listeners.Store(httpsServer.Addr, httpsListener)
+				state.TCPListeners.Store(httpsServer.Addr, tH)
 			}
 
 			defer httpsListener.Close()

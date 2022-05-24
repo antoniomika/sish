@@ -76,6 +76,7 @@ service-console: false
 service-console-token: ""
 sni-load-balancer: false
 sni-proxy: false
+sni-proxy-https: false
 ssh-address: localhost:2222
 strip-http-path: true
 tcp-address: ""

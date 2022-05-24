@@ -394,6 +394,7 @@ Flags:
   -m, --service-console-token string                            The token to use for service console access. Auto generated if empty for each connected tunnel
       --sni-load-balancer                                       Enable the SNI load balancer (multiple clients can bind the same SNI domain/port)
       --sni-proxy                                               Enable the use of SNI proxying
+      --sni-proxy-https                                         Enable the use of SNI proxying on the HTTPS port
   -a, --ssh-address string                                      The address to listen for SSH connections (default "localhost:2222")
       --strip-http-path                                         Strip the http path from the forward (default true)
       --tcp-address string                                      The address to listen for TCP connections

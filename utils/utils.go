@@ -5,6 +5,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/pem"
@@ -229,8 +230,10 @@ func loadCerts(certManager *certmagic.Config) {
 		log.Println("Error loading unmanaged certificates:", err)
 	}
 
+	ctx := context.TODO()
+
 	for _, v := range certFiles {
-		err := certManager.CacheUnmanagedCertificatePEMFile(v, fmt.Sprintf("%s.key", strings.TrimSuffix(v, ".crt")), []string{})
+		err := certManager.CacheUnmanagedCertificatePEMFile(ctx, v, fmt.Sprintf("%s.key", strings.TrimSuffix(v, ".crt")), []string{})
 		if err != nil {
 			log.Println("Error loading unmanaged certificate:", err)
 		}
@@ -602,7 +605,11 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 		bindAddr := addr
 		listenAddr := ""
 
-		if (bindAddr == "localhost" && viper.GetBool("localhost-as-all")) || viper.GetBool("force-tcp-address") || sniProxyEnabled {
+		if bindAddr == "" {
+			bindAddr = sshConn.TCPAddress
+		}
+
+		if (bindAddr == "localhost" && viper.GetBool("localhost-as-all")) || viper.GetBool("force-tcp-address") || (sniProxyEnabled && sshConn.TCPAddress == "") {
 			bindAddr = viper.GetString("tcp-address")
 		}
 

@@ -18,11 +18,11 @@ import (
 
 // handleTCPListener handles the creation of the tcpHandler
 // (or addition for load balancing) and set's up the underlying listeners.
-func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection, sniProxyEnabled bool) (*utils.TCPHolder, *roundrobin.RoundRobin, *url.URL, string, string, error) {
+func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection, sniProxyEnabled bool) (*utils.TCPHolder, *roundrobin.RoundRobin, string, *url.URL, string, string, error) {
 	tcpAddr, tcpPort, tH := utils.GetOpenPort(check.Addr, bindPort, state, sshConn, sniProxyEnabled)
 
 	if tcpPort != bindPort && viper.GetBool("force-requested-ports") {
-		return nil, nil, nil, "", "", fmt.Errorf("error assigning requested port to tunnel")
+		return nil, nil, "", nil, "", "", fmt.Errorf("error assigning requested port to tunnel")
 	}
 
 	var balancer *roundrobin.RoundRobin
@@ -36,7 +36,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		lis, err := net.Listen("tcp", tcpAddr)
 		if err != nil {
 			log.Println("Error listening on addr:", err)
-			return nil, nil, nil, "", "", err
+			return nil, nil, "", nil, "", "", err
 		}
 
 		realAddr := lis.Addr().(*net.TCPAddr)
@@ -77,7 +77,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		newName, err := utils.GetOpenSNIHost(balancerName, state, sshConn, tH)
 
 		if err != nil || (!strings.HasPrefix(newName, check.Addr) && viper.GetBool("force-requested-subdomains")) {
-			return nil, nil, nil, "", "", fmt.Errorf("error assigning requested address to tunnel")
+			return nil, nil, "", nil, "", "", fmt.Errorf("error assigning requested address to tunnel")
 		}
 
 		balancerName = newName
@@ -91,7 +91,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 
 		if err != nil {
 			log.Println("Error initializing tcp balancer:", err)
-			return nil, nil, nil, "", "", err
+			return nil, nil, "", nil, "", "", err
 		}
 
 		tH.Balancers.Store(balancerName, newBalancer)
@@ -124,5 +124,5 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 	requestMessages += fmt.Sprintf("%s: %s:%d\r\n", aurora.BgBlue(connType), domainName, listenPort)
 	log.Printf("%s forwarding started: %s:%d -> %s for client: %s\n", aurora.BgBlue(connType), domainName, listenPort, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 
-	return tH, balancer, serverURL, tcpAddr, requestMessages, nil
+	return tH, balancer, balancerName, serverURL, tcpAddr, requestMessages, nil
 }

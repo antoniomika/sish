@@ -19,9 +19,13 @@ import (
 // commandSplitter is the character that terminates a prefix.
 const commandSplitter = "="
 
-// proxyProtoPrefix is used when deciding what proxy protocol
+// proxyProtocolPrefix is used when deciding what proxy protocol
 // version to use.
-const proxyProtoPrefix = "proxyproto"
+const proxyProtocolPrefix = "proxy-protocol"
+
+// proxyProtoPrefixLegacy is used when deciding what proxy protocol
+// version to use.
+const proxyProtoPrefixLegacy = "proxyproto"
 
 // hostHeaderPrefix is the host-header for a specific session.
 const hostHeaderPrefix = "host-header"
@@ -40,6 +44,8 @@ const localForwardPrefix = "local-forward"
 
 // autoClosePrefix defines whether or not a connection will close when all forwards are cleaned up.
 const autoClosePrefix = "auto-close"
+
+const tcpAddressPrefix = "tcp-address"
 
 // handleSession handles the channel when a user requests a session.
 // This is how we send console messages.
@@ -117,7 +123,9 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 					command, param := commandFlagParts[0], commandFlagParts[1]
 
 					switch command {
-					case proxyProtoPrefix:
+					case proxyProtocolPrefix:
+						fallthrough
+					case proxyProtoPrefixLegacy:
 						if !viper.GetBool("proxy-protocol") {
 							break
 						}
@@ -159,6 +167,14 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						sshConn.SNIProxy = sniProxy
 
 						sshConn.SendMessage(fmt.Sprintf("SNI proxy for TCP forwards set to: %t", sshConn.SNIProxy), true)
+					case tcpAddressPrefix:
+						if viper.GetBool("force-tcp-address") {
+							break
+						}
+
+						sshConn.TCPAddress = param
+
+						sshConn.SendMessage(fmt.Sprintf("TCP address for TCP forwards set to: %s", sshConn.TCPAddress), true)
 					case tcpAliasPrefix:
 						if !viper.GetBool("tcp-aliases") {
 							break
