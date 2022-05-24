@@ -305,8 +305,6 @@ func Start(state *utils.State) {
 		}
 
 		go func() {
-			var httpsListener net.Listener
-
 			// We'll replace this with a custom listener
 			// That listener will then check the hostname of the request and choose the connection to send it to
 			portListener, err := net.Listen("tcp", httpsServer.Addr)
@@ -315,6 +313,17 @@ func Start(state *utils.State) {
 			}
 
 			pListener := portListener
+
+			if viper.GetBool("proxy-protocol-listener") {
+				hListener := &proxyproto.Listener{
+					Listener: portListener,
+				}
+
+				utils.LoadProxyProtoConfig(hListener)
+				pListener = hListener
+			}
+
+			httpsListener := pListener
 
 			var tH *utils.TCPHolder
 
@@ -342,22 +351,11 @@ func Start(state *utils.State) {
 
 				tH.Balancers.Store("", balancer)
 
-				pListener = &proxyListener{
-					Listener: portListener,
+				httpsListener = &proxyListener{
+					Listener: pListener,
 					Holder:   tH,
 					State:    state,
 				}
-			}
-
-			if viper.GetBool("proxy-protocol-listener") {
-				hListener := &proxyproto.Listener{
-					Listener: pListener,
-				}
-
-				utils.LoadProxyProtoConfig(hListener)
-				httpsListener = hListener
-			} else {
-				httpsListener = pListener
 			}
 
 			if tH != nil {
