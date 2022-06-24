@@ -100,6 +100,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		}
 		return
 	}
+	tmpfile.Close()
 	os.Remove(tmpfile.Name())
 
 	listenAddr := tmpfile.Name()
