@@ -91,6 +91,8 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	tmpfile, err := ioutil.TempFile("", sshConn.SSHConn.RemoteAddr().String()+":"+stringPort)
 	if err != nil {
+		log.Println("Error creating temporary file:", err)
+
 		err = newRequest.Reply(false, nil)
 		if err != nil {
 			log.Println("Error replying to socket request:", err)
@@ -103,6 +105,8 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	chanListener, err := net.Listen("unix", listenAddr)
 	if err != nil {
+		log.Println("Error listening on unix socket:", err)
+
 		err = newRequest.Reply(false, nil)
 		if err != nil {
 			log.Println("Error replying to socket request:", err)
@@ -152,6 +156,8 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	case utils.HTTPListener:
 		pH, serverURL, requestMessages, err := handleHTTPListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn)
 		if err != nil {
+			log.Println("Error setting up HTTPListener:", err)
+
 			err = newRequest.Reply(false, nil)
 			if err != nil {
 				log.Println("Error replying to socket request:", err)
@@ -183,6 +189,8 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	case utils.AliasListener:
 		aH, serverURL, validAlias, requestMessages, err := handleAliasListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn)
 		if err != nil {
+			log.Println("Error setting up AliasListener:", err)
+
 			err = newRequest.Reply(false, nil)
 			if err != nil {
 				log.Println("Error replying to socket request:", err)
@@ -210,6 +218,8 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	case utils.TCPListener:
 		tH, balancer, balancerName, serverURL, tcpAddr, requestMessages, err := handleTCPListener(check, bindPort, mainRequestMessages, listenerHolder, state, sshConn, sniProxyForced)
 		if err != nil {
+			log.Println("Error setting up TCPListener:", err)
+
 			err = newRequest.Reply(false, nil)
 			if err != nil {
 				log.Println("Error replying to socket request:", err)
