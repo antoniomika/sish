@@ -445,7 +445,8 @@ func loadKeys() {
 // It handles auth and storing user connection information.
 func GetSSHConfig() *ssh.ServerConfig {
 	sshConfig := &ssh.ServerConfig{
-		NoClientAuth: !viper.GetBool("authentication"),
+		ServerVersion: "SSH-2.0-sish",
+		NoClientAuth:  !viper.GetBool("authentication"),
 		PasswordCallback: func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 			log.Printf("Login attempt: %s, user %s", c.RemoteAddr(), c.User())
 

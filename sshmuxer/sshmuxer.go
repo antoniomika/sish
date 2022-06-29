@@ -74,27 +74,61 @@ func Start() {
 				log.Println(runtime.NumGoroutine())
 				log.Println("===Listeners======")
 				state.Listeners.Range(func(key string, value net.Listener) bool {
-					log.Println(key, value)
+					log.Println(key)
 					return true
 				})
 				log.Println("===Clients========")
 				state.SSHConnections.Range(func(key string, value *utils.SSHConnection) bool {
-					log.Println(key, value)
+					listeners := []string{}
+					value.Listeners.Range(func(name string, listener net.Listener) bool {
+						listeners = append(listeners, name)
+						return true
+					})
+
+					log.Println(key, value.SSHConn.User(), listeners)
 					return true
 				})
-				log.Println("===HTTP Clients===")
+				log.Println("===HTTP Listeners===")
 				state.HTTPListeners.Range(func(key string, value *utils.HTTPHolder) bool {
-					log.Println(key, value)
+					clients := []string{}
+					value.SSHConnections.Range(func(name string, conn *utils.SSHConnection) bool {
+						clients = append(clients, conn.SSHConn.RemoteAddr().String())
+						return true
+					})
+
+					log.Println(key, clients)
 					return true
 				})
 				log.Println("===TCP Aliases====")
 				state.AliasListeners.Range(func(key string, value *utils.AliasHolder) bool {
-					log.Println(key, value)
+					clients := []string{}
+					value.SSHConnections.Range(func(name string, conn *utils.SSHConnection) bool {
+						clients = append(clients, conn.SSHConn.RemoteAddr().String())
+						return true
+					})
+
+					log.Println(key, clients)
+					return true
+				})
+				log.Println("===TCP Listeners====")
+				state.TCPListeners.Range(func(key string, value *utils.TCPHolder) bool {
+					clients := []string{}
+					value.SSHConnections.Range(func(name string, conn *utils.SSHConnection) bool {
+						clients = append(clients, conn.SSHConn.RemoteAddr().String())
+						return true
+					})
+
+					log.Println(key, clients)
 					return true
 				})
 				log.Println("===Web Console Routes====")
 				state.Console.Clients.Range(func(key string, value []*utils.WebClient) bool {
-					log.Println(key, value)
+					newData := []string{}
+					for _, cl := range value {
+						newData = append(newData, cl.Conn.RemoteAddr().String())
+					}
+
+					log.Println(key, newData)
 					return true
 				})
 				log.Println("===Web Console Tokens====")

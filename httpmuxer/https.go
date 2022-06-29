@@ -39,7 +39,7 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 
 		balancerName := tlsHello.ServerName
 		balancer, ok := pL.Holder.Balancers.Load(balancerName)
-		if !ok {
+		if balancerName == "" || !ok {
 			return teeConn, err
 		}
 
