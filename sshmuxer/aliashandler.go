@@ -19,7 +19,7 @@ import (
 func handleAliasListener(check *channelForwardMsg, stringPort string, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection) (*utils.AliasHolder, *url.URL, string, string, error) {
 	validAlias, aH := utils.GetOpenAlias(check.Addr, stringPort, state, sshConn)
 
-	if !strings.HasPrefix(validAlias, check.Addr) && viper.GetBool("force-requested-aliases") {
+	if !strings.HasPrefix(validAlias, check.Addr) && viper.GetBool("force-requested-aliases") || validAlias == "" {
 		return nil, nil, "", "", fmt.Errorf("error assigning requested alias to tunnel")
 	}
 

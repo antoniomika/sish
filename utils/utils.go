@@ -928,7 +928,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 				if viper.GetBool("force-requested-aliases") {
 					extra = ""
 
-					bindErr = fmt.Errorf("unable to bind requested port")
+					bindErr = fmt.Errorf("unable to bind requested alias")
 				}
 
 				sshConn.SendMessage(aurora.Sprintf("The alias %s is unavailable.%s", aurora.Red(alias), extra), true)
@@ -958,6 +958,10 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 		}
 
 		for checkAlias(alias) {
+		}
+
+		if bindErr != nil {
+			return "", nil
 		}
 
 		return alias, aH

@@ -58,6 +58,8 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		log.Println("Error unmarshaling remote forward payload:", err)
 	}
 
+	check.Addr = strings.ToLower(check.Addr)
+
 	bindPort := check.Rport
 	stringPort := strconv.FormatUint(uint64(bindPort), 10)
 
