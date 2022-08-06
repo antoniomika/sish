@@ -40,7 +40,7 @@ gcloud compute instances create-with-container sish \
     --container-mount-host-path="host-path=/mnt/stateful_partition/sish/keys,mount-path=/keys" \
     --container-mount-host-path="host-path=/mnt/stateful_partition/sish/pubkeys,mount-path=/pubkeys" \
     --container-image="antoniomika/sish:latest" \
-    --machine-type="f1-micro" \
+    --machine-type="e2-micro" \
     --container-arg="--domain=YOURDOMAIN" \
     --container-arg="--ssh-address=:2222" \
     --container-arg="--http-address=:80" \
