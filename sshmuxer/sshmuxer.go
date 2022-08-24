@@ -138,7 +138,8 @@ func Start() {
 				})
 				log.Print("========End==========\n")
 
-				time.Sleep(2 * time.Second)
+				sleepDuration := viper.GetDuration("debug-interval")
+				time.Sleep(sleepDuration)
 			}
 		}()
 	}

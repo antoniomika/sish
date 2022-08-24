@@ -27,6 +27,7 @@ cleanup-unbound: false
 cleanup-unbound-timeout: 5s
 config: config.yml
 debug: false
+debug-interval: 2s
 domain: ssi.sh
 force-requested-aliases: false
 force-requested-ports: false

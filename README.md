@@ -341,6 +341,7 @@ Flags:
       --cleanup-unbound-timeout duration                        Duration to wait before cleaning up an unbound (unforwarded) connection (default 5s)
   -c, --config string                                           Config file (default "config.yml")
       --debug                                                   Enable debugging information
+      --debug-interval duration                                 The duration to wait between each debug loop output if debug is true (default 2s)
   -d, --domain string                                           The root domain for HTTP(S) multiplexing that will be appended to subdomains (default "ssi.sh")
       --force-requested-aliases                                 Force the aliases used to be the one that is requested. Will fail the bind if it exists already
       --force-requested-ports                                   Force the ports used to be the one that is requested. Will fail the bind if it exists already
