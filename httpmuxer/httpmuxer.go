@@ -51,6 +51,9 @@ func Start(state *utils.State) {
 		clientIPAddr, _, err := net.SplitHostPort(c.Request.RemoteAddr)
 		if state.IPFilter.Blocked(c.ClientIP()) || state.IPFilter.Blocked(clientIPAddr) || err != nil {
 			c.AbortWithStatus(http.StatusForbidden)
+			if viper.GetBool("debug") {
+				log.Println("Aborted: Forbidden: %s", c.Request.RemoteAddr)
+			}
 			return
 		}
 		c.Next()
@@ -166,6 +169,9 @@ func Start(state *utils.State) {
 			}
 
 			c.AbortWithStatus(http.StatusNotFound)
+			if viper.GetBool("debug") {
+				log.Println("Aborted: NotFound: %s", c.Request.URL.Path)
+			}
 			return
 		}
 
@@ -182,6 +188,9 @@ func Start(state *utils.State) {
 		if authNeeded {
 			c.Header("WWW-Authenticate", "Basic realm=\"sish\"")
 			c.AbortWithStatus(http.StatusUnauthorized)
+			if viper.GetBool("debug") {
+				log.Println("Aborted: Unauthorized")
+			}
 			return
 		}
 
