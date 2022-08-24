@@ -6,7 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -46,12 +46,12 @@ func RoundTripper() *http.Transport {
 func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gin.Context, currentListener *utils.HTTPHolder) func(*http.Response) error {
 	return func(response *http.Response) error {
 		if viper.GetBool("admin-console") || viper.GetBool("service-console") {
-			resBody, err := ioutil.ReadAll(response.Body)
+			resBody, err := io.ReadAll(response.Body)
 			if err != nil {
 				log.Println("Error reading response for webconsole:", err)
 			}
 
-			response.Body = ioutil.NopCloser(bytes.NewBuffer(resBody))
+			response.Body = io.NopCloser(bytes.NewBuffer(resBody))
 
 			startTime := c.GetTime("startTime")
 			currentTime := time.Now()
@@ -69,7 +69,7 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 					log.Println("Error reading gzip data:", err)
 				}
 
-				resBody, err = ioutil.ReadAll(gzReader)
+				resBody, err = io.ReadAll(gzReader)
 				if err != nil {
 					log.Println("Error reading gzip data:", err)
 				}

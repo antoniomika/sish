@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	mathrand "math/rand"
 	"net"
@@ -271,7 +270,7 @@ func loadPrivateKeys(config *ssh.ServerConfig) {
 			return nil
 		}
 
-		i, e := ioutil.ReadFile(path)
+		i, e := os.ReadFile(path)
 		if e != nil {
 			log.Printf("Can't read file %s as private key: %s\n", d.Name(), err)
 			return nil
@@ -418,7 +417,7 @@ func loadKeys() {
 			return nil
 		}
 
-		i, e := ioutil.ReadFile(path)
+		i, e := os.ReadFile(path)
 		if e != nil {
 			log.Printf("Can't read file %s as public key: %s\n", d.Name(), err)
 			return nil
@@ -519,7 +518,7 @@ func generatePrivateKey(passphrase string) []byte {
 		pemData = pem.EncodeToMemory(pemBlock)
 	}
 
-	err = ioutil.WriteFile(filepath.Join(viper.GetString("private-keys-directory"), "ssh_key"), pemData, 0600)
+	err = os.WriteFile(filepath.Join(viper.GetString("private-keys-directory"), "ssh_key"), pemData, 0600)
 	if err != nil {
 		log.Println("Error writing to file:", err)
 	}
@@ -532,7 +531,7 @@ func generatePrivateKey(passphrase string) []byte {
 func loadPrivateKey(passphrase string) ssh.Signer {
 	var signer ssh.Signer
 
-	pk, err := ioutil.ReadFile(filepath.Join(viper.GetString("private-keys-directory"), "ssh_key"))
+	pk, err := os.ReadFile(filepath.Join(viper.GetString("private-keys-directory"), "ssh_key"))
 	if err != nil {
 		log.Println("Error loading private key, generating a new one:", err)
 		pk = generatePrivateKey(passphrase)

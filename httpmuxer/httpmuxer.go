@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -243,13 +243,13 @@ func Start(state *utils.State) {
 			return
 		}
 
-		reqBody, err := ioutil.ReadAll(c.Request.Body)
+		reqBody, err := io.ReadAll(c.Request.Body)
 		if err != nil {
 			log.Println("Error reading request body:", err)
 			return
 		}
 
-		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(reqBody))
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(reqBody))
 
 		err = forward.ResponseModifier(ResponseModifier(state, hostname, reqBody, c, currentListener))(currentListener.Forward)
 		if err != nil {
