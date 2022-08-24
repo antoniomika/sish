@@ -66,7 +66,9 @@ func Start() {
 
 	go httpmuxer.Start(state)
 
-	if viper.GetBool("debug") {
+	debugInterval := viper.GetDuration("debug-interval")
+
+	if viper.GetBool("debug") && debugInterval > 0 {
 		go func() {
 			for {
 				log.Println("=======Start=========")
@@ -138,8 +140,7 @@ func Start() {
 				})
 				log.Print("========End==========\n")
 
-				sleepDuration := viper.GetDuration("debug-interval")
-				time.Sleep(sleepDuration)
+				time.Sleep(debugInterval)
 			}
 		}()
 	}
