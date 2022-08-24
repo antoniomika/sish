@@ -52,7 +52,7 @@ func Start(state *utils.State) {
 		if state.IPFilter.Blocked(c.ClientIP()) || state.IPFilter.Blocked(clientIPAddr) || err != nil {
 			c.AbortWithStatus(http.StatusForbidden)
 			if viper.GetBool("debug") {
-				log.Println("Aborted: Forbidden: %s", c.Request.RemoteAddr)
+				log.Println("Aborted: Forbidden:", c.Request.RemoteAddr)
 			}
 			return
 		}
@@ -170,7 +170,7 @@ func Start(state *utils.State) {
 
 			c.AbortWithStatus(http.StatusNotFound)
 			if viper.GetBool("debug") {
-				log.Println("Aborted: NotFound: %s", c.Request.URL.Path)
+				log.Println("Aborted: NotFound:", c.Request.URL.Path)
 			}
 			return
 		}
