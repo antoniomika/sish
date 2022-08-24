@@ -81,7 +81,7 @@ func handleChannels(chans <-chan ssh.NewChannel, sshConn *utils.SSHConnection, s
 	}
 }
 
-//  handleChannel handles a SSH connection's channel request.
+// handleChannel handles a SSH connection's channel request.
 func handleChannel(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	switch channel := newChannel.ChannelType(); channel {
 	case "session":
