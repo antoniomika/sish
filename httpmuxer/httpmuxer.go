@@ -49,10 +49,21 @@ func Start(state *utils.State) {
 
 		// Here is where we check whether or not an IP is blocked.
 		clientIPAddr, _, err := net.SplitHostPort(c.Request.RemoteAddr)
-		if state.IPFilter.Blocked(c.ClientIP()) || state.IPFilter.Blocked(clientIPAddr) || err != nil {
-			status := c.AbortWithStatus(http.StatusForbidden)
-			if status != nil && viper.GetBool("debug") {
+		clientIPAddrBlocked := state.IPFilter.Blocked(clientIPAddr)
+		cClientIP := c.ClientIP()
+		cClientIPBlocked := state.IPFilter.Blocked(cClientIP)
+
+		if clientIPAddrBlocked || cClientIPBlocked || err != nil {
+			status := http.StatusForbidden
+			c.AbortWithStatus(status)
+			if viper.GetBool("debug") {
 				log.Println("Aborting with status", status)
+				if clientIPAddrBlocked {
+					log.Println("Blocked:", clientIPAddr)
+				}
+				if cClientIPBlocked {
+					log.Println("Blocked:", cClientIP)
+				}
 			}
 			return
 		}
@@ -168,8 +179,9 @@ func Start(state *utils.State) {
 				return
 			}
 
-			status := c.AbortWithStatus(http.StatusNotFound)
-			if status != nil && viper.GetBool("debug") {
+			status := http.StatusNotFound
+			c.AbortWithStatus(status)
+			if viper.GetBool("debug") {
 				log.Println("Aborting with status", status)
 			}
 			return
@@ -187,8 +199,9 @@ func Start(state *utils.State) {
 
 		if authNeeded {
 			c.Header("WWW-Authenticate", "Basic realm=\"sish\"")
-			status := c.AbortWithStatus(http.StatusUnauthorized)
-			if status != nil && viper.GetBool("debug") {
+			status := http.StatusUnauthorized
+			c.AbortWithStatus(status)
+			if viper.GetBool("debug") {
 				log.Println("Aborting with status", status)
 			}
 			return
