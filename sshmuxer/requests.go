@@ -2,7 +2,6 @@ package sshmuxer
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -92,7 +91,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		}
 	}
 
-	tmpfile, err := ioutil.TempFile("", strings.ReplaceAll(sshConn.SSHConn.RemoteAddr().String()+":"+stringPort, ":", "_"))
+	tmpfile, err := os.CreateTemp("", strings.ReplaceAll(sshConn.SSHConn.RemoteAddr().String()+":"+stringPort, ":", "_"))
 	if err != nil {
 		log.Println("Error creating temporary file:", err)
 
