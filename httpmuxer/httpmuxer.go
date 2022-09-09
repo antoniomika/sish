@@ -318,7 +318,7 @@ func Start(state *utils.State) {
 		utils.WatchCerts(certManager)
 
 		tlsConfig := certManager.TLSConfig()
-		tlsConfig.NextProtos = append([]string{"h2", "http/1.1"}, tlsConfig.NextProtos...)
+		tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h2", "http/1.1")
 
 		httpsServer := &http.Server{
 			Addr:      viper.GetString("https-address"),
