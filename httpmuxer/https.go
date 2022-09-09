@@ -32,15 +32,13 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 
 		tlsHello, buf, teeConn, peekErr := utils.PeekTLSHello(cl)
 		if peekErr != nil && tlsHello == nil {
-			log.Printf("Unable to read TLS hello: %s", peekErr)
-			cl.Close()
-			continue
+			return teeConn, nil
 		}
 
 		balancerName := tlsHello.ServerName
 		balancer, ok := pL.Holder.Balancers.Load(balancerName)
 		if balancerName == "" || !ok {
-			return teeConn, err
+			return teeConn, nil
 		}
 
 		connectionLocation, err := balancer.NextServer()
