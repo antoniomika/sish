@@ -279,6 +279,8 @@ func Start(state *utils.State) {
 		gin.WrapH(currentListener.Balancer)(c)
 	})
 
+	var acmeIssuer *certmagic.ACMEIssuer = nil
+
 	// If HTTPS is enabled, setup certmagic to allow us to provision HTTPS certs on the fly.
 	// You can use sish without a wildcard cert, but you really should. If you get a lot of clients
 	// with many random subdomains, you'll burn through your Let's Encrypt quota. Be careful!
@@ -289,7 +291,7 @@ func Start(state *utils.State) {
 
 		certManager := certmagic.NewDefault()
 
-		acmeIssuer := certmagic.NewACMEIssuer(certManager, certmagic.DefaultACME)
+		acmeIssuer = certmagic.NewACMEIssuer(certManager, certmagic.DefaultACME)
 
 		acmeIssuer.Agreed = viper.GetBool("https-ondemand-certificate-accept-terms")
 		acmeIssuer.Email = viper.GetString("https-ondemand-certificate-email")
@@ -403,6 +405,9 @@ func Start(state *utils.State) {
 	httpServer := &http.Server{
 		Addr:    viper.GetString("http-address"),
 		Handler: r,
+	}
+	if acmeIssuer != nil {
+		httpServer.Handler = acmeIssuer.HTTPChallengeHandler(r)
 	}
 
 	var httpListener net.Listener
