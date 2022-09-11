@@ -31,7 +31,7 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 		}
 
 		tlsHello, buf, teeConn, peekErr := utils.PeekTLSHello(cl)
-		if peekErr != nil || tlsHello == nil {
+		if peekErr != nil && tlsHello == nil {
 			return teeConn, nil
 		}
 
