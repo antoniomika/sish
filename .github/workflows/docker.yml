@@ -72,15 +72,6 @@ jobs:
           fi
         fi
 
-        if ! docker buildx imagetools inspect ${GITHUB_REPOSITORY}-build-cache:latest > /dev/null 2>&1; then
-          docker pull alpine:latest
-          docker tag alpine:latest ${GITHUB_REPOSITORY}-build-cache:latest
-
-          if [[ "${GITHUB_ACTOR}" == "${GITHUB_REPOSITORY%/*}" ]]; then
-            docker push ${GITHUB_REPOSITORY}-build-cache:latest
-          fi
-        fi
-
         OTHER_TAGS+=("${GITHUB_SHA}" "${REF}")
 
         MAIN_IMAGE_TAGS=""
@@ -120,17 +111,6 @@ jobs:
             --build-arg DATE=${DATE} \
             --build-arg REPOSITORY=${GITHUB_REPOSITORY} \
             ${BUILD_IMAGE_TAGS} ${OTHER_ARGS} ${OTHER_PUSH_ARGS} .
-        fi
-
-        if [[ "${GITHUB_ACTOR}" == "${GITHUB_REPOSITORY%/*}" ]]; then
-          docker buildx build \
-            --target build-cache \
-            --build-arg VERSION=${REF} \
-            --build-arg COMMIT=${GITHUB_SHA} \
-            --build-arg DATE=${DATE} \
-            --build-arg REPOSITORY=${GITHUB_REPOSITORY} \
-            -t ${GITHUB_REPOSITORY}-build-cache:latest \
-            ${OTHER_PUSH_ARGS} .
         fi
 
         docker run --rm ${GITHUB_REPOSITORY}:${GITHUB_SHA} -v

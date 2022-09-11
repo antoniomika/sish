@@ -128,6 +128,13 @@ func Start(state *utils.State) {
 		c.Set("originalRawPath", c.Request.URL.RawPath)
 
 		hostSplit := strings.Split(c.Request.Host, ":")
+		if strings.Contains(c.Request.Host, "[") && strings.Contains(c.Request.Host, "]") {
+			hostSplit = strings.Split(c.Request.Host, "]:")
+			if len(hostSplit) > 1 {
+				hostSplit[0] = hostSplit[0] + "]"
+			}
+		}
+
 		hostname := hostSplit[0]
 		hostIsRoot := hostname == viper.GetString("domain")
 

@@ -1,4 +1,3 @@
-# syntax = docker/dockerfile:experimental
 FROM --platform=$BUILDPLATFORM golang:1.19-alpine as builder
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 
@@ -9,22 +8,13 @@ WORKDIR /app
 RUN mkdir -p /emptydir
 RUN apk add --no-cache git ca-certificates
 
-RUN --mount=type=bind,target=/cache,from=antoniomika/sish-build-cache \
-    mkdir -p /go/pkg/ && cp -R /cache/mod/ /go/pkg/ || true && \
-    mkdir -p /root/.cache/ && cp -R /cache/go-build/ /root/.cache/ || true
+COPY go.* ./
 
-COPY . .
-
-RUN go generate ./...
-RUN go test ./...
-
-FROM scratch as build-cache
-LABEL maintainer="Antonio Mika <me@antoniomika.me>"
-
-COPY --from=builder /go/pkg/mod /mod
-COPY --from=builder /root/.cache/go-build /go-build
+RUN go mod download
 
 FROM builder as build-image
+
+COPY . .
 
 ARG VERSION=dev
 ARG COMMIT=none
