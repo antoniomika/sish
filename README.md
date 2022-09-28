@@ -320,6 +320,7 @@ Flags:
                                                                 sish will watch this directory and automatically load new keys and remove keys
                                                                 from the authentication list (default "deploy/pubkeys/")
       --authentication-keys-directory-watch-interval duration   The interval to poll for filesystem changes for SSH keys (default 200ms)
+  -v, --authentication-key-request-url                          A url to validate public keys for public key authentication. sish will make an HTTP POST request to this URL with a body containing an OpenSSH 'authorized key' formatted public key. A response with status code 200 indicates approval of the auth key
   -u, --authentication-password string                          Password to use for SSH server password authentication
       --banned-aliases string                                   A comma separated list of banned aliases that users are unable to bind
   -o, --banned-countries string                                 A comma separated list of banned countries. Applies to HTTP, TCP, and SSH connections
