@@ -16,6 +16,18 @@ import (
 	"github.com/vulcand/oxy/roundrobin"
 )
 
+type SishHeaderRewriter struct {
+	Host string
+}
+
+func (r *SishHeaderRewriter) Rewrite(req *http.Request) {
+	// Run all the original header rewriter stuff
+	origRewriter := &forward.HeaderRewriter{TrustForwardHeader: true}
+	origRewriter.Rewrite(req)
+
+	req.Header.Add("X-Sish-Host", r.Host)
+}
+
 // handleHTTPListener handles the creation of the httpHandler
 // (or addition for load balancing) and set's up the underlying listeners.
 func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection) (*utils.HTTPHolder, *url.URL, string, error) {
@@ -37,6 +49,7 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 			forward.PassHostHeader(true),
 			forward.RoundTripper(rT),
 			forward.WebsocketRoundTripper(rT),
+			forward.Rewriter(&SishHeaderRewriter{Host: hostUrl.Host}),
 		)
 
 		if err != nil {
