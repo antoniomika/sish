@@ -46,8 +46,8 @@
                 <tr>
                     <th scope="row" data-bind="text: type"></th>
                     <td>
-                        <span data-bind="if: type == 'HTTP'"><a style="text-transform: none; color: white;" class="btn btn-primary" data-bind="click: forwardToConsole, text: name"></a></span>
-                        <span data-bind="ifnot: type == 'HTTP'"><span data-bind="text: name"></span></span>
+                        <span data-bind="if: type == 'HTTP'"><a style="text-transform: none; color: white;" class="btn btn-primary" data-bind="click: forwardToConsole, text: fullName"></a></span>
+                        <span data-bind="ifnot: type == 'HTTP'"><span data-bind="text: fullName"></span></span>
                     </td>
                     <td data-bind="text: data"></td>
                     <td data-bind="text: clientData.remoteAddr"></td>
@@ -66,6 +66,7 @@
 
     var Route = function(clientData, routeType, routeName, routeData, disconnectType) {
         this.clientData = clientData;
+        this.fullName = routeName;
         this.data = routeData;
         this.type = routeType;
         this.name = routeName;
