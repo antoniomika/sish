@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"io"
 	"log"
 	"net"
@@ -29,22 +30,36 @@ func MakeTestKeys(numKeys int) []*rsa.PrivateKey {
 	return testKeys
 }
 
+type AuthRequestBody struct {
+	PubKey     string `json:"auth_key"`
+	UserName   string `json:"user"`
+	RemoteAddr string `json:"remote_addr"`
+}
+
 // PubKeyHttpHandler returns a http handler function which validates an
 // OpenSSH authorized-keys formatted public key against a slice of
 // slice authorized keys.
-func PubKeyHttpHandler(validPublicKeys *[]rsa.PublicKey) func(w http.ResponseWriter, r *http.Request) {
+func PubKeyHttpHandler(validPublicKeys *[]rsa.PublicKey, validUsernames *[]string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		pubKey, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		parsedKey, _, _, _, err := ssh.ParseAuthorizedKey(pubKey)
+		var reqBody AuthRequestBody
+		err = json.Unmarshal(pubKey, &reqBody)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		parsedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(reqBody.PubKey))
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		marshalled := parsedKey.Marshal()
+		keyMatch := false
+		usernameMatch := false
 		for _, key := range *validPublicKeys {
 			authorizedKey, err := ssh.NewPublicKey(&key)
 			if err != nil {
@@ -52,11 +67,20 @@ func PubKeyHttpHandler(validPublicKeys *[]rsa.PublicKey) func(w http.ResponseWri
 				continue
 			}
 			if bytes.Equal(authorizedKey.Marshal(), marshalled) {
-				w.WriteHeader(http.StatusOK)
-				return
+				keyMatch = true
+				break
 			}
 		}
-		w.WriteHeader(http.StatusUnauthorized)
+		for _, username := range *validUsernames {
+			if reqBody.UserName == username {
+				usernameMatch = true
+			}
+		}
+		if keyMatch && usernameMatch {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusUnauthorized)
+		}
 	}
 }
 
@@ -99,35 +123,54 @@ func TestAuthenticationKeyRequest(t *testing.T) {
 
 	testCases := []struct {
 		clientPrivateKey  *rsa.PrivateKey
+		clientUser        string
 		validPublicKeys   []rsa.PublicKey
+		validUsernames    []string
 		expectSuccessAuth bool
 		overrideHttpUrl   string
 	}{
 		// valid key, should succeed auth
 		{
 			clientPrivateKey:  testKeys[0],
+			clientUser:        "ubuntu",
 			validPublicKeys:   []rsa.PublicKey{testKeys[0].PublicKey},
+			validUsernames:    []string{"ubuntu"},
 			expectSuccessAuth: true,
 			overrideHttpUrl:   "",
 		},
 		// invalid key, should be rejected
 		{
 			clientPrivateKey:  testKeys[0],
+			clientUser:        "ubuntu",
 			validPublicKeys:   []rsa.PublicKey{testKeys[1].PublicKey, testKeys[2].PublicKey},
+			validUsernames:    []string{"ubuntu"},
+			expectSuccessAuth: false,
+			overrideHttpUrl:   "",
+		},
+		// invalid username, should be rejected
+		{
+			clientPrivateKey:  testKeys[0],
+			clientUser:        "windows",
+			validPublicKeys:   []rsa.PublicKey{testKeys[0].PublicKey},
+			validUsernames:    []string{"ubuntu"},
 			expectSuccessAuth: false,
 			overrideHttpUrl:   "",
 		},
 		// no http service listening on server url, should be rejected
 		{
 			clientPrivateKey:  testKeys[0],
-			validPublicKeys:   []rsa.PublicKey{},
+			clientUser:        "ubuntu",
+			validPublicKeys:   []rsa.PublicKey{testKeys[0].PublicKey},
+			validUsernames:    []string{"ubuntu"},
 			expectSuccessAuth: false,
 			overrideHttpUrl:   "http://localhost:61234",
 		},
 		// invalid http url, should be rejected
 		{
 			clientPrivateKey:  testKeys[0],
-			validPublicKeys:   []rsa.PublicKey{},
+			clientUser:        "ubuntu",
+			validPublicKeys:   []rsa.PublicKey{testKeys[0].PublicKey},
+			validUsernames:    []string{"ubuntu"},
 			expectSuccessAuth: false,
 			overrideHttpUrl:   "notarealurl",
 		},
@@ -136,7 +179,7 @@ func TestAuthenticationKeyRequest(t *testing.T) {
 	for caseIdx, c := range testCases {
 		if c.overrideHttpUrl == "" {
 			// start an http server that will validate against the specified public keys
-			httpSrv := httptest.NewServer(http.HandlerFunc(PubKeyHttpHandler(&c.validPublicKeys)))
+			httpSrv := httptest.NewServer(http.HandlerFunc(PubKeyHttpHandler(&c.validPublicKeys, &c.validUsernames)))
 			defer httpSrv.Close()
 
 			// set viper to this http server URL as the auth request url it will
@@ -155,7 +198,7 @@ func TestAuthenticationKeyRequest(t *testing.T) {
 		successAuth := make(chan bool)
 		go HandleSSHConn(sshListener, &successAuth)
 
-		// // attempt to connect to the ssh server using the specified private key
+		// attempt to connect to the ssh server using the specified private key
 		signer, err := ssh.NewSignerFromKey(c.clientPrivateKey)
 		if err != nil {
 			t.Error(err)
@@ -165,6 +208,7 @@ func TestAuthenticationKeyRequest(t *testing.T) {
 				ssh.PublicKeys(signer),
 			},
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			User:            c.clientUser,
 		}
 		t.Log(clientConfig)
 

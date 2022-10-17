@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -485,7 +486,7 @@ func GetSSHConfig() *ssh.ServerConfig {
 			// Allow validation of public keys via a sub-request to another service
 			authUrl := viper.GetString("authentication-key-request-url")
 			if authUrl != "" {
-				validKey, err := checkAuthenticationKeyRequest(authUrl, authKey)
+				validKey, err := checkAuthenticationKeyRequest(authUrl, authKey, c.RemoteAddr(), c.User())
 				if err != nil {
 					log.Printf("Error calling authentication URL %s: %s\n", authUrl, err)
 				}
@@ -512,9 +513,9 @@ func GetSSHConfig() *ssh.ServerConfig {
 // checkAuthenticationKeyRequest makes an HTTP POST request to the specified url with
 // the provided ssh public key in OpenSSH 'authorized keys' format to validate
 // whether it should be accepted.
-func checkAuthenticationKeyRequest(authUrl string, authKey []byte) (bool, error) {
+func checkAuthenticationKeyRequest(authUrl string, authKey []byte, addr net.Addr, user string) (bool, error) {
 	parsedUrl, err := url.ParseRequestURI(authUrl)
-	if err != nil || !parsedUrl.IsAbs() {
+	if err != nil {
 		return false, fmt.Errorf("error parsing url %s", err)
 	}
 
@@ -522,7 +523,16 @@ func checkAuthenticationKeyRequest(authUrl string, authKey []byte) (bool, error)
 		Timeout: viper.GetDuration("authentication-key-request-timeout"),
 	}
 	urlS := parsedUrl.String()
-	res, err := c.Post(urlS, "text/plain", bytes.NewBuffer(authKey))
+	reqBodyMap := map[string]string{
+		"auth_key":    string(authKey),
+		"remote_addr": addr.String(),
+		"user":        user,
+	}
+	reqBody, err := json.Marshal(reqBodyMap)
+	if err != nil {
+		return false, fmt.Errorf("error jsonifying request body")
+	}
+	res, err := c.Post(urlS, "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {
 		return false, err
 	}
