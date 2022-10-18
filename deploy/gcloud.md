@@ -91,6 +91,9 @@ gcloud compute instances describe sish \
     --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
 ```
 
+To confirm that the DNS records were created appropriately, you can run:  
+`dig @1.1.1.1 abcxyz.YOURDOMAIN` and `dig @1.1.1.1 YOURDOMAIN`. Both should get an answer with `status: NOERROR`. 
+
 ## Using sish
 
 ### Try using SSH to connect to the sish service
