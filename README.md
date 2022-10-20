@@ -341,7 +341,7 @@ Flags:
       --cleanup-unbound-timeout duration                        Duration to wait before cleaning up an unbound (unforwarded) connection (default 5s)
   -c, --config string                                           Config file (default "config.yml")
       --debug                                                   Enable debugging information
-      --debug-interval duration                                 The duration to wait between each debug loop output if debug is true (default 2s)
+      --debug-interval duration                                 Duration to wait between each debug loop output if debug is true (default 2s)
   -d, --domain string                                           The root domain for HTTP(S) multiplexing that will be appended to subdomains (default "ssi.sh")
       --force-requested-aliases                                 Force the aliases used to be the one that is requested. Will fail the bind if it exists already
       --force-requested-ports                                   Force the ports used to be the one that is requested. Will fail the bind if it exists already
@@ -392,6 +392,7 @@ Flags:
                                                                 to instead of responding with a 404 (default "https://github.com/antoniomika/sish")
       --rewrite-host-header                                     Force rewrite the host header if the user provides host-header=host.com (default true)
       --service-console                                         Enable the service console for each service and send the info to connected clients
+      --service-console-max-content-length int                  The max content length before we stop reading the response body (default -1)
   -m, --service-console-token string                            The token to use for service console access. Auto generated if empty for each connected tunnel
       --sni-load-balancer                                       Enable the SNI load balancer (multiple clients can bind the same SNI domain/port)
       --sni-proxy                                               Enable the use of SNI proxying
