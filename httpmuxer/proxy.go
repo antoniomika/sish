@@ -56,24 +56,24 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 
 			if resBody != nil {
 				response.Body = io.NopCloser(bytes.NewBuffer(resBody))
+
+				if response.Header.Get("Content-Encoding") == "gzip" {
+					gzData := bytes.NewBuffer(resBody)
+					gzReader, err := gzip.NewReader(gzData)
+					if err != nil {
+						log.Println("Error reading gzip data:", err)
+					}
+
+					resBody, err = io.ReadAll(gzReader)
+					if err != nil {
+						log.Println("Error reading gzip data:", err)
+					}
+				}
 			} else {
 				resBody = []byte("{\"_sish_status\": false, \"_sish_message\": \"response body size exceeds limit for service console\"}")
 			}
 
 			startTime := c.GetTime("startTime")
-
-			if resBody != nil && response.Header.Get("Content-Encoding") == "gzip" {
-				gzData := bytes.NewBuffer(resBody)
-				gzReader, err := gzip.NewReader(gzData)
-				if err != nil {
-					log.Println("Error reading gzip data:", err)
-				}
-
-				resBody, err = io.ReadAll(gzReader)
-				if err != nil {
-					log.Println("Error reading gzip data:", err)
-				}
-			}
 
 			requestHeaders := c.Request.Header.Clone()
 			requestHeaders.Add("Host", hostname)
