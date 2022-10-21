@@ -316,6 +316,13 @@ Flags:
       --append-user-to-subdomain                                Append the SSH user to the subdomain. This is useful in multitenant environments
       --append-user-to-subdomain-separator string               The token to use for separating username and subdomain selection in a virtualhost (default "-")
       --authentication                                          Require authentication for the SSH service (default true)
+      --authentication-key-request-timeout duration             Duration to wait for a response from the authentication key request (default 5s)
+  -v, --authentication-key-request-url string                   A url to validate public keys for public key authentication.
+                                                                sish will make an HTTP POST request to this URL with a JSON body containing an
+                                                                OpenSSH 'authorized key' formatted public key, username,
+                                                                and ip address. E.g.:
+                                                                {"auth_key": string, "user": string, "remote_addr": string}
+                                                                A response with status code 200 indicates approval of the auth key
   -k, --authentication-keys-directory string                    Directory where public keys for public key authentication are stored.
                                                                 sish will watch this directory and automatically load new keys and remove keys
                                                                 from the authentication list (default "deploy/pubkeys/")

@@ -66,6 +66,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("private-keys-directory", "l", "deploy/keys", "The location of other SSH server private keys. sish will add these as valid auth methods for SSH. Note, these need to be unencrypted OR use the private-key-passphrase")
 	rootCmd.PersistentFlags().StringP("authentication-password", "u", "", "Password to use for SSH server password authentication")
 	rootCmd.PersistentFlags().StringP("authentication-keys-directory", "k", "deploy/pubkeys/", "Directory where public keys for public key authentication are stored.\nsish will watch this directory and automatically load new keys and remove keys\nfrom the authentication list")
+	rootCmd.PersistentFlags().StringP("authentication-key-request-url", "v", "", "A url to validate public keys for public key authentication.\nsish will make an HTTP POST request to this URL with a JSON body containing an\nOpenSSH 'authorized key' formatted public key, username,\nand ip address. E.g.:\n{\"auth_key\": string, \"user\": string, \"remote_addr\": string}\nA response with status code 200 indicates approval of the auth key")
 	rootCmd.PersistentFlags().StringP("port-bind-range", "n", "0,1024-65535", "Ports or port ranges that sish will allow to be bound when a user attempts to use TCP forwarding")
 	rootCmd.PersistentFlags().StringP("proxy-protocol-version", "q", "1", "What version of the proxy protocol to use. Can either be 1, 2, or userdefined.\nIf userdefined, the user needs to add a command to SSH called proxyproto=version (ie proxyproto=1)")
 	rootCmd.PersistentFlags().StringP("proxy-protocol-policy", "", "use", "What to do with the proxy protocol header. Can be use, ignore, reject, or require")
@@ -141,6 +142,7 @@ func init() {
 	rootCmd.PersistentFlags().DurationP("proxy-protocol-timeout", "", 200*time.Millisecond, "The duration to wait for the proxy proto header")
 	rootCmd.PersistentFlags().DurationP("authentication-keys-directory-watch-interval", "", 200*time.Millisecond, "The interval to poll for filesystem changes for SSH keys")
 	rootCmd.PersistentFlags().DurationP("https-certificate-directory-watch-interval", "", 200*time.Millisecond, "The interval to poll for filesystem changes for HTTPS certificates")
+	rootCmd.PersistentFlags().DurationP("authentication-key-request-timeout", "", 5*time.Second, "Duration to wait for a response from the authentication key request")
 }
 
 // initConfig initializes the configuration and loads needed

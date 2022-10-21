@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"log"
 	mathrand "math/rand"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -261,6 +263,11 @@ func loadPrivateKeys(config *ssh.ServerConfig) {
 	}
 
 	err := filepath.WalkDir(viper.GetString("private-keys-directory"), func(path string, d fs.DirEntry, err error) error {
+		if err != nil && d == nil {
+			// This is likely an error with the directory we are walking (such as it not existing)
+			return err
+		}
+
 		if d.IsDir() {
 			return nil
 		}
@@ -476,6 +483,24 @@ func GetSSHConfig() *ssh.ServerConfig {
 				}
 			}
 
+			// Allow validation of public keys via a sub-request to another service
+			authUrl := viper.GetString("authentication-key-request-url")
+			if authUrl != "" {
+				validKey, err := checkAuthenticationKeyRequest(authUrl, authKey, c.RemoteAddr(), c.User())
+				if err != nil {
+					log.Printf("Error calling authentication URL %s: %s\n", authUrl, err)
+				}
+				if validKey {
+					permssionsData := &ssh.Permissions{
+						Extensions: map[string]string{
+							"pubKey":            string(authKey),
+							"pubKeyFingerprint": ssh.FingerprintSHA256(key),
+						},
+					}
+					return permssionsData, nil
+				}
+			}
+
 			return nil, fmt.Errorf("public key doesn't match")
 		},
 	}
@@ -483,6 +508,41 @@ func GetSSHConfig() *ssh.ServerConfig {
 	loadPrivateKeys(sshConfig)
 
 	return sshConfig
+}
+
+// checkAuthenticationKeyRequest makes an HTTP POST request to the specified url with
+// the provided ssh public key in OpenSSH 'authorized keys' format to validate
+// whether it should be accepted.
+func checkAuthenticationKeyRequest(authUrl string, authKey []byte, addr net.Addr, user string) (bool, error) {
+	parsedUrl, err := url.ParseRequestURI(authUrl)
+	if err != nil {
+		return false, fmt.Errorf("error parsing url %s", err)
+	}
+
+	c := &http.Client{
+		Timeout: viper.GetDuration("authentication-key-request-timeout"),
+	}
+	urlS := parsedUrl.String()
+	reqBodyMap := map[string]string{
+		"auth_key":    string(authKey),
+		"remote_addr": addr.String(),
+		"user":        user,
+	}
+	reqBody, err := json.Marshal(reqBodyMap)
+	if err != nil {
+		return false, fmt.Errorf("error jsonifying request body")
+	}
+	res, err := c.Post(urlS, "application/json", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return false, err
+	}
+
+	if res.StatusCode != http.StatusOK {
+		log.Printf("Public key rejected by auth service: %s with status %d", urlS, res.StatusCode)
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // generatePrivateKey creates a new ed25519 private key to be used by the
