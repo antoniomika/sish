@@ -6,6 +6,7 @@ package httpmuxer
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -118,6 +119,28 @@ func Start(state *utils.State) {
 						return true
 					})
 				}
+			}
+		}
+
+		routeInfo, routeOk := param.Keys["broadcastRoute"].(string)
+		routeData, dataOk := param.Keys["broadcastData"].(map[string]any)
+
+		if routeOk && dataOk {
+			roundTime := 10 * time.Microsecond
+			if param.Latency > time.Second {
+				roundTime = 10 * time.Millisecond
+			}
+
+			routeData["currentTime"] = param.TimeStamp.Format(viper.GetString("time-format"))
+			routeData["requestTime"] = param.Latency.Round(roundTime).String()
+			routeData["responseCode"] = param.StatusCode
+			routeData["responseStatus"] = fmt.Sprintf("%d %s", param.StatusCode, http.StatusText(param.StatusCode))
+
+			jsonData, err := json.Marshal(routeData)
+			if err != nil {
+				log.Println("unable to marshal json data", err)
+			} else {
+				state.Console.BroadcastRoute(routeInfo, jsonData)
 			}
 		}
 
@@ -263,13 +286,22 @@ func Start(state *utils.State) {
 			return
 		}
 
-		reqBody, err := io.ReadAll(c.Request.Body)
-		if err != nil {
-			log.Println("Error reading request body:", err)
-			return
+		var err error
+		var reqBody []byte
+
+		if viper.GetInt64("service-console-max-content-length") == -1 || (viper.GetInt64("service-console-max-content-length") > -1 && c.Request.ContentLength > -1 && c.Request.ContentLength < viper.GetInt64("service-console-max-content-length")) {
+			reqBody, err = io.ReadAll(c.Request.Body)
+			if err != nil {
+				log.Println("Error reading request body:", err)
+				return
+			}
 		}
 
-		c.Request.Body = io.NopCloser(bytes.NewBuffer(reqBody))
+		if reqBody != nil {
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(reqBody))
+		} else {
+			reqBody = []byte("{\"_sish_status\": false, \"_sish_message\": \"request body size exceeds limit for service console\"}")
+		}
 
 		err = forward.ResponseModifier(ResponseModifier(state, hostname, reqBody, c, currentListener))(currentListener.Forward)
 		if err != nil {

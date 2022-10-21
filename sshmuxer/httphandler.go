@@ -34,6 +34,7 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 		rT := httpmuxer.RoundTripper()
 
 		fwd, err := forward.New(
+			forward.Stream(true),
 			forward.PassHostHeader(true),
 			forward.RoundTripper(rT),
 			forward.WebsocketRoundTripper(rT),

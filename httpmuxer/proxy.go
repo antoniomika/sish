@@ -5,13 +5,11 @@ import (
 	"compress/gzip"
 	"crypto/tls"
 	"encoding/base64"
-	"encoding/json"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/antoniomika/sish/utils"
 	"github.com/gin-gonic/gin"
@@ -46,57 +44,51 @@ func RoundTripper() *http.Transport {
 func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gin.Context, currentListener *utils.HTTPHolder) func(*http.Response) error {
 	return func(response *http.Response) error {
 		if viper.GetBool("admin-console") || viper.GetBool("service-console") {
-			resBody, err := io.ReadAll(response.Body)
-			if err != nil {
-				log.Println("Error reading response for webconsole:", err)
+			var err error
+			var resBody []byte
+
+			if viper.GetInt64("service-console-max-content-length") == -1 || (viper.GetInt64("service-console-max-content-length") > -1 && response.ContentLength > -1 && response.ContentLength < viper.GetInt64("service-console-max-content-length")) {
+				resBody, err = io.ReadAll(response.Body)
+				if err != nil {
+					log.Println("Error reading response body:", err)
+				}
 			}
 
-			response.Body = io.NopCloser(bytes.NewBuffer(resBody))
+			if resBody != nil {
+				response.Body = io.NopCloser(bytes.NewBuffer(resBody))
+
+				if response.Header.Get("Content-Encoding") == "gzip" {
+					gzData := bytes.NewBuffer(resBody)
+					gzReader, err := gzip.NewReader(gzData)
+					if err != nil {
+						log.Println("Error reading gzip data:", err)
+					}
+
+					resBody, err = io.ReadAll(gzReader)
+					if err != nil {
+						log.Println("Error reading gzip data:", err)
+					}
+				}
+			} else {
+				resBody = []byte("{\"_sish_status\": false, \"_sish_message\": \"response body size exceeds limit for service console\"}")
+			}
 
 			startTime := c.GetTime("startTime")
-			currentTime := time.Now()
-			diffTime := currentTime.Sub(startTime)
-
-			roundTime := 10 * time.Microsecond
-			if diffTime > time.Second {
-				roundTime = 10 * time.Millisecond
-			}
-
-			if response.Header.Get("Content-Encoding") == "gzip" {
-				gzData := bytes.NewBuffer(resBody)
-				gzReader, err := gzip.NewReader(gzData)
-				if err != nil {
-					log.Println("Error reading gzip data:", err)
-				}
-
-				resBody, err = io.ReadAll(gzReader)
-				if err != nil {
-					log.Println("Error reading gzip data:", err)
-				}
-			}
 
 			requestHeaders := c.Request.Header.Clone()
 			requestHeaders.Add("Host", hostname)
 
-			data, err := json.Marshal(map[string]any{
+			data := map[string]any{
 				"startTime":          startTime,
 				"startTimePretty":    startTime.Format(viper.GetString("time-format")),
-				"currentTime":        currentTime,
 				"requestIP":          c.ClientIP(),
-				"requestTime":        diffTime.Round(roundTime).String(),
 				"requestMethod":      c.Request.Method,
 				"requestUrl":         c.Request.URL,
 				"originalRequestURI": c.GetString("originalURI"),
 				"requestHeaders":     requestHeaders,
 				"requestBody":        base64.StdEncoding.EncodeToString(reqBody),
 				"responseHeaders":    response.Header,
-				"responseCode":       response.StatusCode,
-				"responseStatus":     response.Status,
 				"responseBody":       base64.StdEncoding.EncodeToString(resBody),
-			})
-
-			if err != nil {
-				log.Println("Error marshaling json for webconsole:", err)
 			}
 
 			if response.Request != nil {
@@ -108,7 +100,8 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 				c.Set("proxySocket", string(hostLocation))
 			}
 
-			state.Console.BroadcastRoute(currentListener.HTTPUrl.String(), data)
+			c.Set("broadcastRoute", currentListener.HTTPUrl.String())
+			c.Set("broadcastData", data)
 		}
 
 		return nil

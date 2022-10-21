@@ -130,6 +130,7 @@ func init() {
 	rootCmd.PersistentFlags().IntP("log-to-file-max-size", "", 500, "The maximum size of outputed log files in megabytes")
 	rootCmd.PersistentFlags().IntP("log-to-file-max-backups", "", 3, "The maxium number of rotated logs files to keep")
 	rootCmd.PersistentFlags().IntP("log-to-file-max-age", "", 28, "The maxium number of days to store log output in a file")
+	rootCmd.PersistentFlags().IntP("service-console-max-content-length", "", -1, "The max content length before we stop reading the response body")
 
 	rootCmd.PersistentFlags().DurationP("debug-interval", "", 2*time.Second, "Duration to wait between each debug loop output if debug is true")
 	rootCmd.PersistentFlags().DurationP("idle-connection-timeout", "", 5*time.Second, "Duration to wait for activity before closing a connection for all reads and writes")
