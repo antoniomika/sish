@@ -317,7 +317,7 @@ Flags:
       --append-user-to-subdomain-separator string               The token to use for separating username and subdomain selection in a virtualhost (default "-")
       --authentication                                          Require authentication for the SSH service (default true)
       --authentication-key-request-timeout duration             Duration to wait for a response from the authentication key request (default 5s)
-  -v, --authentication-key-request-url string                   A url to validate public keys for public key authentication.
+      --authentication-key-request-url string                   A url to validate public keys for public key authentication.
                                                                 sish will make an HTTP POST request to this URL with a JSON body containing an
                                                                 OpenSSH 'authorized key' formatted public key, username,
                                                                 and ip address. E.g.:
@@ -414,7 +414,7 @@ Flags:
       --time-format string                                      The time format to use for both HTTP and general log messages (default "2006/01/02 - 15:04:05")
       --verify-dns                                              Verify DNS information for hosts and ensure it matches a connecting users sha256 key fingerprint (default true)
       --verify-ssl                                              Verify SSL certificates made on proxied HTTP connections (default true)
-      --version                                                 version for sish
+  -v, --version                                                 version for sish
   -y, --whitelisted-countries string                            A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections
   -w, --whitelisted-ips string                                  A comma separated list of whitelisted ips. Applies to HTTP, TCP, and SSH connections
 ```
