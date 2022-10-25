@@ -124,8 +124,10 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("load-templates", "", true, "Load HTML templates. This is required for admin/service consoles")
 	rootCmd.PersistentFlags().BoolP("rewrite-host-header", "", true, "Force rewrite the host header if the user provides host-header=host.com")
 
-	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only")
-	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for HTTPS command output. This does not effect ports used for connecting, it's for cosmetic use only")
+	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not affect ports used for connecting, it's for cosmetic use only")
+	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for https command output. This does not affect ports used for connecting, it's for cosmetic use only")
+	rootCmd.PersistentFlags().IntP("http-request-port-override", "", 0, "The port to use for http requests. Will default to 80, then http-port-override. Otherwise will use this value")
+	rootCmd.PersistentFlags().IntP("https-request-port-override", "", 0, "The port to use for https requests. Will default to 443, then https-port-override. Otherwise will use this value")
 	rootCmd.PersistentFlags().IntP("bind-random-subdomains-length", "", 3, "The length of the random subdomain to generate if a subdomain is unavailable or if random subdomains are enforced")
 	rootCmd.PersistentFlags().IntP("bind-random-aliases-length", "", 3, "The length of the random alias to generate if a alias is unavailable or if random aliases are enforced")
 	rootCmd.PersistentFlags().IntP("log-to-file-max-size", "", 500, "The maximum size of outputed log files in megabytes")

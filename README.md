@@ -358,7 +358,8 @@ Flags:
   -h, --help                                                    help for sish
   -i, --http-address string                                     The address to listen for HTTP connections (default "localhost:80")
       --http-load-balancer                                      Enable the HTTP load balancer (multiple clients can bind the same domain)
-      --http-port-override int                                  The port to use for http command output. This does not effect ports used for connecting, it's for cosmetic use only
+      --http-port-override int                                  The port to use for http command output. This does not affect ports used for connecting, it's for cosmetic use only
+      --http-request-port-override int                          The port to use for http requests. Will default to 80, then http-port-override. Otherwise will use this value
       --https                                                   Listen for HTTPS connections. Requires a correct --https-certificate-directory
   -t, --https-address string                                    The address to listen for HTTPS connections (default "localhost:443")
   -s, --https-certificate-directory string                      The directory containing HTTPS certificate files (name.crt and name.key). There can be many crt/key pairs (default "deploy/ssl/")
@@ -366,7 +367,8 @@ Flags:
       --https-ondemand-certificate                              Enable retrieving certificates on demand via Let's Encrypt
       --https-ondemand-certificate-accept-terms                 Accept the Let's Encrypt terms
       --https-ondemand-certificate-email string                 The email to use with Let's Encrypt for cert notifications. Can be left blank
-      --https-port-override int                                 The port to use for HTTPS command output. This does not effect ports used for connecting, it's for cosmetic use only
+      --https-port-override int                                 The port to use for https command output. This does not affect ports used for connecting, it's for cosmetic use only
+      --https-request-port-override int                         The port to use for https requests. Will default to 443, then https-port-override. Otherwise will use this value
       --idle-connection                                         Enable connection idle timeouts for reads and writes (default true)
       --idle-connection-timeout duration                        Duration to wait for activity before closing a connection for all reads and writes (default 5s)
       --load-templates                                          Load HTML templates. This is required for admin/service consoles (default true)
@@ -412,7 +414,7 @@ Flags:
       --time-format string                                      The time format to use for both HTTP and general log messages (default "2006/01/02 - 15:04:05")
       --verify-dns                                              Verify DNS information for hosts and ensure it matches a connecting users sha256 key fingerprint (default true)
       --verify-ssl                                              Verify SSL certificates made on proxied HTTP connections (default true)
-  -v, --version                                                 version for sish
+      --version                                                 version for sish
   -y, --whitelisted-countries string                            A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections
   -w, --whitelisted-ips string                                  A comma separated list of whitelisted ips. Applies to HTTP, TCP, and SSH connections
 ```

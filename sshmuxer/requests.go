@@ -67,6 +67,17 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	comparePortHTTP := viper.GetUint32("http-port-override")
 	comparePortHTTPS := viper.GetUint32("https-port-override")
 
+	httpRequestPortOverride := viper.GetUint32("http-request-port-override")
+	httpsRequestPortOverride := viper.GetUint32("https-request-port-override")
+
+	if httpRequestPortOverride != 0 {
+		comparePortHTTP = httpRequestPortOverride
+	}
+
+	if httpsRequestPortOverride != 0 {
+		comparePortHTTPS = httpsRequestPortOverride
+	}
+
 	if comparePortHTTP == 0 {
 		comparePortHTTP = 80
 	}
@@ -157,7 +168,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	switch listenerType {
 	case utils.HTTPListener:
-		pH, serverURL, requestMessages, err := handleHTTPListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn)
+		pH, serverURL, requestMessages, err := handleHTTPListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn, connType)
 		if err != nil {
 			log.Println("Error setting up HTTPListener:", err)
 
