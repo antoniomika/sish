@@ -141,7 +141,7 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 			httpsPortString = fmt.Sprintf(":%d", httpsPort)
 		}
 
-		requestMessages += fmt.Sprintf("%s: https://%s%s%s%s\r\n", aurora.BgBlue("HTTPS"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path)
+		requestMessages += fmt.Sprintf("%s: https://%s%s%s%s\r\n", aurora.BgBlue("HTTPS"), userPass, pH.HTTPUrl.Host, httpsPortString, pH.HTTPUrl.Path)
 		log.Printf("%s forwarding started: https://%s%s%s%s -> %s for client: %s\n", aurora.BgBlue("HTTPS"), userPass, pH.HTTPUrl.Host, httpsPortString, pH.HTTPUrl.Path, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 	}
 
