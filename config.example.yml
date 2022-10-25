@@ -4,6 +4,8 @@ alias-load-balancer: false
 append-user-to-subdomain: false
 append-user-to-subdomain-separator: '-'
 authentication: true
+authentication-key-request-timeout: 5s
+authentication-key-request-url: ""
 authentication-keys-directory: deploy/pubkeys/
 authentication-keys-directory-watch-interval: 200ms
 authentication-password: ""
@@ -37,6 +39,7 @@ geodb: false
 http-address: localhost:80
 http-load-balancer: false
 http-port-override: 0
+http-request-port-override: 0
 https: false
 https-address: localhost:443
 https-certificate-directory: deploy/ssl/
@@ -45,6 +48,7 @@ https-ondemand-certificate: false
 https-ondemand-certificate-accept-terms: false
 https-ondemand-certificate-email: ""
 https-port-override: 0
+https-request-port-override: 0
 idle-connection: true
 idle-connection-timeout: 5s
 load-templates: true
@@ -74,6 +78,7 @@ redirect-root: true
 redirect-root-location: https://github.com/antoniomika/sish
 rewrite-host-header: true
 service-console: false
+service-console-max-content-length: -1
 service-console-token: ""
 sni-load-balancer: false
 sni-proxy: false

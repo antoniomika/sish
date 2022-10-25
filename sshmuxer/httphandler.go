@@ -18,12 +18,7 @@ import (
 
 // handleHTTPListener handles the creation of the httpHandler
 // (or addition for load balancing) and set's up the underlying listeners.
-func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection) (*utils.HTTPHolder, *url.URL, string, error) {
-	scheme := "http"
-	if stringPort == "443" {
-		scheme = "https"
-	}
-
+func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection, scheme string) (*utils.HTTPHolder, *url.URL, string, error) {
 	hostUrl, pH := utils.GetOpenHost(check.Addr, state, sshConn)
 
 	if (hostUrl == nil || !strings.HasPrefix(hostUrl.Host, check.Addr)) && viper.GetBool("force-requested-subdomains") {
@@ -141,7 +136,7 @@ func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMess
 			httpsPortString = fmt.Sprintf(":%d", httpsPort)
 		}
 
-		requestMessages += fmt.Sprintf("%s: https://%s%s%s%s\r\n", aurora.BgBlue("HTTPS"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path)
+		requestMessages += fmt.Sprintf("%s: https://%s%s%s%s\r\n", aurora.BgBlue("HTTPS"), userPass, pH.HTTPUrl.Host, httpsPortString, pH.HTTPUrl.Path)
 		log.Printf("%s forwarding started: https://%s%s%s%s -> %s for client: %s\n", aurora.BgBlue("HTTPS"), userPass, pH.HTTPUrl.Host, httpsPortString, pH.HTTPUrl.Path, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 	}
 
