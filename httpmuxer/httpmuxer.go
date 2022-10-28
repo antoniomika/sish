@@ -253,9 +253,11 @@ func Start(state *utils.State) {
 		}
 
 		stripPath := viper.GetBool("strip-http-path")
+		forceHttps := viper.GetBool("force-all-https")
 
 		currentListener.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
 			newHost := sshConn.HostHeader
+			forceHttps = forceHttps || sshConn.ForceHTTPS
 
 			if sshConn.StripPath != viper.GetBool("strip-http-path") {
 				stripPath = sshConn.StripPath
@@ -272,6 +274,16 @@ func Start(state *utils.State) {
 			c.Request.Host = newHost
 			return false
 		})
+
+		if forceHttps && c.Request.TLS == nil && viper.GetBool("https") {
+			c.Request.URL.Scheme = "https"
+			if state.Ports.HTTPSPort != 443 {
+				c.Request.URL.Host = fmt.Sprintf("%s:%d", c.Request.URL.Hostname(), state.Ports.HTTPSPort)
+			}
+
+			c.Redirect(http.StatusFound, c.Request.URL.String())
+			return
+		}
 
 		if viper.GetBool("strip-http-path") && stripPath {
 			c.Request.RequestURI = strings.TrimPrefix(c.Request.RequestURI, currentListener.HTTPUrl.Path)

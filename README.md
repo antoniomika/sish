@@ -351,6 +351,8 @@ Flags:
       --debug                                                   Enable debugging information
       --debug-interval duration                                 Duration to wait between each debug loop output if debug is true (default 2s)
   -d, --domain string                                           The root domain for HTTP(S) multiplexing that will be appended to subdomains (default "ssi.sh")
+      --force-all-https                                         Redirect all requests to the https server
+      --force-https                                             Allow indiviual binds to request for https to be enforced
       --force-requested-aliases                                 Force the aliases used to be the one that is requested. Will fail the bind if it exists already
       --force-requested-ports                                   Force the ports used to be the one that is requested. Will fail the bind if it exists already
       --force-requested-subdomains                              Force the subdomains used to be the one that is requested. Will fail the bind if it exists already

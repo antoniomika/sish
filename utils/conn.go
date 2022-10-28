@@ -31,6 +31,7 @@ type SSHConnection struct {
 	TCPAlias       bool
 	LocalForward   bool
 	AutoClose      bool
+	ForceHTTPS     bool
 	Session        chan bool
 	CleanupHandler bool
 	SetupLock      *sync.Mutex

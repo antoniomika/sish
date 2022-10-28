@@ -32,6 +32,8 @@ config: config.yml
 debug: false
 debug-interval: 2s
 domain: ssi.sh
+force-all-https: false
+force-https: false
 force-requested-aliases: false
 force-requested-ports: false
 force-requested-subdomains: false

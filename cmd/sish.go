@@ -98,6 +98,8 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("proxy-protocol-use-timeout", "", false, "Use a timeout for the proxy-protocol read")
 	rootCmd.PersistentFlags().BoolP("proxy-protocol-listener", "", false, "Use the proxy-protocol to resolve ip addresses from user connections")
 	rootCmd.PersistentFlags().BoolP("https", "", false, "Listen for HTTPS connections. Requires a correct --https-certificate-directory")
+	rootCmd.PersistentFlags().BoolP("force-all-https", "", false, "Redirect all requests to the https server")
+	rootCmd.PersistentFlags().BoolP("force-https", "", false, "Allow indiviual binds to request for https to be enforced")
 	rootCmd.PersistentFlags().BoolP("redirect-root", "", true, "Redirect the root domain to the location defined in --redirect-root-location")
 	rootCmd.PersistentFlags().BoolP("admin-console", "", false, "Enable the admin console accessible at http(s)://domain/_sish/console?x-authorization=admin-console-token")
 	rootCmd.PersistentFlags().BoolP("service-console", "", false, "Enable the service console for each service and send the info to connected clients")

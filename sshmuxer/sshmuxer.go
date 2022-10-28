@@ -20,17 +20,15 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-var (
-	// httpPort is used as a string override for the used HTTP port.
-	httpPort int
-
-	// httpsPort is used as a string override for the used HTTPS port.
-	httpsPort int
-)
-
 // Start initializes the ssh muxer service. It will start necessary components
 // and begin listening for SSH connections.
 func Start() {
+	var (
+		httpPort  int
+		httpsPort int
+		sshPort   int
+	)
+
 	_, httpPortString, err := net.SplitHostPort(viper.GetString("http-address"))
 	if err != nil {
 		log.Fatalln("Error parsing address:", err)
@@ -41,12 +39,22 @@ func Start() {
 		log.Fatalln("Error parsing address:", err)
 	}
 
+	_, sshPortString, err := net.SplitHostPort(viper.GetString("ssh-address"))
+	if err != nil {
+		log.Fatalln("Error parsing address:", err)
+	}
+
 	httpPort, err = strconv.Atoi(httpPortString)
 	if err != nil {
 		log.Fatalln("Error parsing address:", err)
 	}
 
 	httpsPort, err = strconv.Atoi(httpsPortString)
+	if err != nil {
+		log.Fatalln("Error parsing address:", err)
+	}
+
+	sshPort, err = strconv.Atoi(sshPortString)
 	if err != nil {
 		log.Fatalln("Error parsing address:", err)
 	}
@@ -62,6 +70,10 @@ func Start() {
 	utils.WatchKeys()
 
 	state := utils.NewState()
+	state.Ports.HTTPPort = httpPort
+	state.Ports.HTTPSPort = httpsPort
+	state.Ports.SSHPort = sshPort
+
 	state.Console.State = state
 
 	go httpmuxer.Start(state)
