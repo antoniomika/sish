@@ -22,7 +22,6 @@ import (
 	"github.com/caddyserver/certmagic"
 	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
-	"github.com/vulcand/oxy/forward"
 	"github.com/vulcand/oxy/roundrobin"
 
 	"github.com/gin-gonic/gin"
@@ -106,7 +105,6 @@ func Start(state *utils.State) {
 
 		if viper.GetBool("log-to-client") && param.Keys["httpHolder"] != nil {
 			currentListener := param.Keys["httpHolder"].(*utils.HTTPHolder)
-
 			if currentListener != nil {
 				proxySock, _ := param.Keys["proxySocket"].(string)
 				sshConnTmp, ok := currentListener.SSHConnections.Load(proxySock)
@@ -249,10 +247,10 @@ func Start(state *utils.State) {
 		}
 
 		stripPath := viper.GetBool("strip-http-path")
-
+		forceHttps := false
 		currentListener.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
 			newHost := sshConn.HostHeader
-
+			forceHttps = forceHttps || sshConn.ForceHttps
 			if sshConn.StripPath != viper.GetBool("strip-http-path") {
 				stripPath = sshConn.StripPath
 			}
@@ -269,6 +267,10 @@ func Start(state *utils.State) {
 			return false
 		})
 
+		if forceHttps && c.Request.TLS == nil {
+			c.Redirect(http.StatusMovedPermanently, "https://"+c.Request.Host+c.Request.URL.String())
+			return
+		}
 		if viper.GetBool("strip-http-path") && stripPath {
 			c.Request.RequestURI = strings.TrimPrefix(c.Request.RequestURI, currentListener.HTTPUrl.Path)
 			c.Request.URL.Path = strings.TrimPrefix(c.Request.URL.Path, currentListener.HTTPUrl.Path)
@@ -313,11 +315,10 @@ func Start(state *utils.State) {
 		} else {
 			reqBody = []byte("{\"_sish_status\": false, \"_sish_message\": \"request body size exceeds limit for service console\"}")
 		}
-
-		err = forward.ResponseModifier(ResponseModifier(state, hostname, reqBody, c, currentListener))(currentListener.Forward)
-		if err != nil {
-			log.Println("Unable to set response modifier:", err)
-		}
+		//err = forward.ResponseModifier(ResponseModifier(state, hostname, reqBody, c, currentListener))(currentListener.Forward)
+		//if err != nil {
+		//	log.Println("Unable to set response modifier:", err)
+		//}
 
 		gin.WrapH(currentListener.Balancer)(c)
 	})

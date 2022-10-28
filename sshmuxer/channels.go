@@ -45,6 +45,9 @@ const localForwardPrefix = "local-forward"
 // autoClosePrefix defines whether or not a connection will close when all forwards are cleaned up.
 const autoClosePrefix = "auto-close"
 
+// forceHttpsPrefix defines whether or not a connection will redirect to https.
+const forceHttpsPrefix = "force-https"
+
 const tcpAddressPrefix = "tcp-address"
 
 // handleSession handles the channel when a user requests a session.
@@ -199,6 +202,13 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						sshConn.AutoClose = autoClose
 
 						sshConn.SendMessage(fmt.Sprintf("Auto close for connection set to: %t", sshConn.AutoClose), true)
+					case forceHttpsPrefix:
+						forceHttps, err := strconv.ParseBool(param)
+						if err != nil {
+							log.Printf("Unable to detect auto close setting. Using false as default: %s", err)
+						}
+						sshConn.ForceHttps = forceHttps
+						sshConn.SendMessage(fmt.Sprintf("Force https for connection set to: %t", sshConn.ForceHttps), true)
 					case localForwardPrefix:
 						localForward, err := strconv.ParseBool(param)
 
