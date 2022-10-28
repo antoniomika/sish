@@ -41,6 +41,9 @@ import (
 const (
 	// sishDNSPrefix is the prefix used for DNS TXT records.
 	sishDNSPrefix = "sish="
+
+	// Prefix used for defining wildcard host matchers.
+	wildcardPrefix = "*."
 )
 
 var (
@@ -923,6 +926,11 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 				host = getRandomHost()
 			}
 
+			if !viper.GetBool("bind-wildcards") && strings.HasPrefix(host, wildcardPrefix) {
+				reportUnavailable(true)
+				host = getRandomHost()
+			}
+
 			var holder *HTTPHolder
 			ok := false
 
@@ -1056,4 +1064,13 @@ func RandStringBytesMaskImprSrc(n int) string {
 	}
 
 	return string(b)
+}
+
+// MatchesWildcardHost checks if the hostname provided would match the potential wildcard
+func MatchesWildcardHost(hostname string, potentialWildcard string) bool {
+	if !strings.Contains(potentialWildcard, wildcardPrefix) {
+		return false
+	}
+
+	return strings.HasPrefix(potentialWildcard, wildcardPrefix) && strings.HasSuffix(hostname, strings.TrimPrefix(potentialWildcard, wildcardPrefix))
 }

@@ -121,6 +121,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("strip-http-path", "", true, "Strip the http path from the forward")
 	rootCmd.PersistentFlags().BoolP("bind-any-host", "", false, "Allow binding any host when accepting an HTTP listener")
 	rootCmd.PersistentFlags().BoolP("bind-root-domain", "", false, "Allow binding the root domain when accepting an HTTP listener")
+	rootCmd.PersistentFlags().BoolP("bind-wildcards", "", false, "Allow binding wildcards when accepting an HTTP listener")
 	rootCmd.PersistentFlags().BoolP("load-templates", "", true, "Load HTML templates. This is required for admin/service consoles")
 	rootCmd.PersistentFlags().BoolP("rewrite-host-header", "", true, "Force rewrite the host header if the user provides host-header=host.com")
 

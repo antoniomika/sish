@@ -23,6 +23,7 @@ bind-random-ports: true
 bind-random-subdomains: true
 bind-random-subdomains-length: 3
 bind-root-domain: false
+bind-wildcards: false
 cleanup-unauthed: true
 cleanup-unauthed-timeout: 5s
 cleanup-unbound: false
