@@ -193,6 +193,17 @@ func Start(state *utils.State) {
 
 		if currentListener == nil {
 			state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
+				checkHost := locationListener.HTTPUrl.Host
+				wildcard := false
+				if strings.HasPrefix(locationListener.HTTPUrl.Host, "*.") {
+					checkHost = checkHost[1:]
+					wildcard = true
+				}
+				if wildcard && strings.HasSuffix(hostname, checkHost) {
+					currentListener = locationListener
+					authNeeded = false
+					return false
+				}
 				if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
 					currentListener = locationListener
 					authNeeded = false
@@ -339,6 +350,16 @@ func Start(state *utils.State) {
 				ok := false
 
 				state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
+					checkHost := locationListener.HTTPUrl.Host
+					wildcard := false
+					if strings.HasPrefix(locationListener.HTTPUrl.Host, "*.") {
+						checkHost = checkHost[1:]
+						wildcard = true
+					}
+					if wildcard && strings.HasSuffix(name, checkHost) {
+						ok = true
+						return false
+					}
 					if name == locationListener.HTTPUrl.Host {
 						ok = true
 						return false
