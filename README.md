@@ -8,7 +8,7 @@ Builds are made automatically for each commit to the repo and are pushed to Dock
 branch name, tag, latest if released on main. You can find a list [here](https://hub.docker.com/r/antoniomika/sish/tags).
 Each release builds separate `sish` binaries that can be downloaded from [here](https://github.com/antoniomika/sish/releases) for various OS/archs. Feel free to either use the automated binaries or to build your own. If you submit a PR, images are
 not built by default and will require a retag from a maintainer to be built.
-
+ 
 1. Pull the Docker image
     - `docker pull antoniomika/sish:latest`
 2. Run the image
