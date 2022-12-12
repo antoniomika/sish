@@ -21,7 +21,7 @@ env:
     type=ref,event=branch
     type=ref,event=tag
     type=ref,event=pr
-    type=sha
+    type=sha,prefix=,suffix=,format=long
 
 jobs:
   test:
@@ -89,7 +89,7 @@ jobs:
         cache-to: |
           type=registry,ref=${{ github.repository }}-cache,mode=max
         platforms: ${{ env.PLATFORMS }}
-        build=args: |
+        build-args: |
           DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
           VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
           COMMIT=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
@@ -108,7 +108,7 @@ jobs:
         cache-to: |
           type=registry,ref=${{ github.repository }}-cache,mode=max
         platforms: ${{ env.PLATFORMS }}
-        build=args: |
+        build-args: |
           DATE=${{ fromJSON(steps.buildmeta.outputs.json).labels['org.opencontainers.image.created'] }}
           VERSION=${{ fromJSON(steps.buildmeta.outputs.json).labels['org.opencontainers.image.version'] }}
           COMMIT=${{ fromJSON(steps.buildmeta.outputs.json).labels['org.opencontainers.image.revision'] }}
