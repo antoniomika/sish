@@ -250,6 +250,8 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 		return
 	}
 
+	check.Addr = strings.ToLower(check.Addr)
+
 	tcpAliasToConnect := fmt.Sprintf("%s:%d", check.Addr, check.Port)
 	loc, ok := state.AliasListeners.Load(tcpAliasToConnect)
 	if !ok {

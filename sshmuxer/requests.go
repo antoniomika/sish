@@ -57,6 +57,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		log.Println("Error unmarshaling remote forward payload:", err)
 	}
 
+	originalAddress := check.Addr
 	check.Addr = strings.ToLower(check.Addr)
 
 	bindPort := check.Rport
@@ -299,9 +300,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			}
 
 			resp := &forwardedTCPPayload{
-				Addr:       check.Addr,
+				Addr:       originalAddress,
 				Port:       portChannelForwardReplyPayload.Rport,
-				OriginAddr: check.Addr,
+				OriginAddr: originalAddress,
 				OriginPort: portChannelForwardReplyPayload.Rport,
 			}
 
