@@ -63,6 +63,81 @@ var (
 	multiWriter io.Writer
 )
 
+// retry feature to prevent bruteforce ssh connections
+const MAX_RETRY = 24 * 60 * 60 // allowed to retry
+
+type CumtomCounter struct {
+	timestamp int64
+	counter   int64
+}
+
+type RetryTimer map[string]CumtomCounter
+
+func (t *RetryTimer) get(client string) (int64, int64) {
+	lasttimestamp, ok := (*t)[client]
+	if ok {
+		return lasttimestamp.timestamp, lasttimestamp.counter
+	}
+	return time.Now().Unix(), 1
+}
+
+func (t *RetryTimer) Find(client string) bool {
+	_, ok := (*t)[client]
+	if ok {
+		return true
+	}
+	return false
+}
+
+func (t *RetryTimer) set(client string, currtimestamp int64, counter int64) {
+	var timestamp CumtomCounter
+	timestamp.timestamp = currtimestamp
+	timestamp.counter = counter
+	(*t)[client] = timestamp
+}
+
+func (t *RetryTimer) Reset(client string) {
+	t.set(client, time.Now().Unix(), 1)
+}
+
+func (t *RetryTimer) getCounter(client string) int64 {
+	_, counter := t.get(client)
+	if counter <= 0 {
+		counter = 1
+	}
+	return counter
+}
+
+func (t *RetryTimer) TryLater(client string) {
+	now := time.Now().Unix()
+	counter := t.getCounter(client)
+	if counter <= 0 {
+		counter = 1
+	}
+	if counter < MAX_RETRY {
+		counter = counter << 1
+		t.set(client, now, counter)
+	}
+	// increase counter by max a day
+	log.Printf("Pls retry client: %s after %d seconds.\n", client, counter)
+}
+
+func (t *RetryTimer) Blocked(client string) bool {
+	// client has retried and failed for more than 16/17 times already
+	if t.getCounter(client) > MAX_RETRY {
+		timestamp, counter := t.get(client)
+		if timestamp+counter < time.Now().Unix() {
+			// MAX_RETRY hrs already passed, we can reset
+			t.Reset(client)
+			return false
+		}
+		log.Printf("client blocked: %s\n", client)
+		t.TryLater(client)
+		return true
+	}
+	return false
+}
+
 // Setup main utils. This initializes, whitelists, blacklists,
 // and log writers.
 func Setup(logWriter io.Writer) {

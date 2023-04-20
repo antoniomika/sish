@@ -182,6 +182,8 @@ func Start() {
 		}
 	}()
 
+	// retry timer to prevent bruteforce ssh connections(failed connections)
+	rt := make(utils.RetryTimer)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -191,7 +193,7 @@ func Start() {
 
 		clientRemote, _, err := net.SplitHostPort(conn.RemoteAddr().String())
 
-		if err != nil || state.IPFilter.Blocked(clientRemote) {
+		if err != nil || state.IPFilter.Blocked(clientRemote) || rt.Blocked(clientRemote) {
 			conn.Close()
 			continue
 		}
@@ -223,7 +225,12 @@ func Start() {
 			if err != nil {
 				conn.Close()
 				log.Println(err)
+				rt.TryLater(clientRemote)
 				return
+			}
+
+			if rt.Find(clientRemote) == true {
+				rt.Reset(clientRemote)
 			}
 
 			holderConn := &utils.SSHConnection{
@@ -297,8 +304,11 @@ func Start() {
 						case <-ticker.C:
 							_, _, err := sshConn.SendRequest("keepalive@sish", true, nil)
 							if err != nil {
-								log.Println("Error retrieving keepalive response:", err)
+								log.Println("Error retrieving keepalive response: from ", clientRemote, err.Error())
 								return
+							}
+							if viper.GetBool("debug") {
+								log.Println("ticker expired for : ", clientRemote)
 							}
 						case <-holderConn.Close:
 							return

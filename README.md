@@ -1,6 +1,7 @@
 # sish
 
 An open source serveo/ngrok alternative.
++ Added 'bruteforce ssh connections' from https://github.com/vickeykumar/sish-lb
 
 ## Deploy
 
