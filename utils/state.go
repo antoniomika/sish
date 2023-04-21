@@ -69,6 +69,11 @@ type AliasHolder struct {
 	Balancer       *roundrobin.RoundRobin
 }
 
+type HistoryHolder struct {
+	ConnectsCount int
+	Connects      []*ConnectionHistory
+}
+
 // TCPHolder holds proxy and connection info.
 type TCPHolder struct {
 	TCPHost        string
@@ -184,6 +189,8 @@ type State struct {
 	TCPListeners   *syncmap.Map[string, *TCPHolder]
 	IPFilter       *ipfilter.IPFilter
 	LogWriter      io.Writer
+	RetryTimer     RetryTimer
+	History        *syncmap.Map[string, *HistoryHolder]
 }
 
 // NewState returns a new State struct.
@@ -197,5 +204,7 @@ func NewState() *State {
 		IPFilter:       Filter,
 		Console:        NewWebConsole(),
 		LogWriter:      multiWriter,
+		RetryTimer:     Retry,
+		History:        syncmap.New[string, *HistoryHolder](),
 	}
 }

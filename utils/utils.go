@@ -47,8 +47,10 @@ var (
 	// Filter is the IPFilter used to block connections.
 	Filter *ipfilter.IPFilter
 
+	Retry = make(RetryTimer)
+
 	// certHolder is a slice of publickeys for auth.
-	certHolder = make([]ssh.PublicKey, 0)
+	certHolder = make(map[string]ssh.PublicKey, 0)
 
 	// holderLock is the mutex used to update the certHolder slice.
 	holderLock = sync.Mutex{}
@@ -63,8 +65,14 @@ var (
 	multiWriter io.Writer
 )
 
+type ConnectionHistory struct {
+	Started  int64
+	Finished int64
+	Duration int64
+}
+
 // retry feature to prevent bruteforce ssh connections
-const MAX_RETRY = 24 * 60 * 60 // allowed to retry
+const MAX_RETRY = 2048 // allowed to retry
 
 type CumtomCounter struct {
 	timestamp int64
@@ -121,7 +129,7 @@ func (t *RetryTimer) TryLater(client string) {
 
 func (t *RetryTimer) Blocked(client string) bool {
 	// client has retried and failed for more than 16/17 times already
-	if t.getCounter(client) > MAX_RETRY {
+	if t.getCounter(client) >= MAX_RETRY {
 		timestamp, counter := t.get(client)
 		if timestamp+counter < time.Now().Unix() {
 			// MAX_RETRY hrs already passed, we can reset
@@ -464,7 +472,7 @@ func WatchKeys() {
 // loadKeys loads public keys from the keys directory into a slice that is used
 // authenticating a user.
 func loadKeys() {
-	tmpCertHolder := make([]ssh.PublicKey, 0)
+	tmpCertHolder := make(map[string]ssh.PublicKey, 0)
 
 	parseKey := func(keyBytes []byte, d fs.DirEntry) {
 		keyHandle := func(keyBytes []byte, d fs.DirEntry) []byte {
@@ -476,7 +484,8 @@ func loadKeys() {
 			}
 
 			if key != nil {
-				tmpCertHolder = append(tmpCertHolder, key)
+				tmpCertHolder[d.Name()] = key
+				log.Println("Loaded pubKey for", d.Name())
 			}
 			return rest
 		}
@@ -542,16 +551,40 @@ func GetSSHConfig() *ssh.ServerConfig {
 
 			holderLock.Lock()
 			defer holderLock.Unlock()
-			for _, i := range certHolder {
-				if bytes.Equal(key.Marshal(), i.Marshal()) {
-					permssionsData := &ssh.Permissions{
-						Extensions: map[string]string{
-							"pubKey":            string(authKey),
-							"pubKeyFingerprint": ssh.FingerprintSHA256(key),
-						},
-					}
+			if viper.GetBool("load-keys-by-user") {
+				clientRemote, _, err := net.SplitHostPort(c.RemoteAddr().String())
+				if err == nil {
+					certKey := c.User() + "-" + clientRemote + ".pub"
+					pubKey := certHolder[certKey]
+					if pubKey != nil {
+						if bytes.Equal(key.Marshal(), pubKey.Marshal()) {
+							permssionsData := &ssh.Permissions{
+								Extensions: map[string]string{
+									"pubKey":            string(authKey),
+									"pubKeyFingerprint": ssh.FingerprintSHA256(key),
+								},
+							}
 
-					return permssionsData, nil
+							return permssionsData, nil
+						}
+					} else {
+						log.Println("Unable to find pubKey:", certKey)
+					}
+				} else {
+					log.Println("Error while parse remote address", err)
+				}
+			} else {
+				for _, i := range certHolder {
+					if bytes.Equal(key.Marshal(), i.Marshal()) {
+						permssionsData := &ssh.Permissions{
+							Extensions: map[string]string{
+								"pubKey":            string(authKey),
+								"pubKeyFingerprint": ssh.FingerprintSHA256(key),
+							},
+						}
+
+						return permssionsData, nil
+					}
 				}
 			}
 

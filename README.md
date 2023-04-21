@@ -1,5 +1,16 @@
 # sish
 
+Http urls:
+```
+   GET: /_sish/api/clients - json representation
+   GET: /_sish/api/filter/block/ip/<1.1.1.1> - block ip
+   GET: /_sish/api/filter/allow/ip/<1.1.1.1> - allow ip
+   GET: /_sish/api/filter/block/country/<CN> - block country
+   GET: /_sish/api/filter/allow/country/<CN> - allow country
+   GET: /_sish/api/disconnectclient/<client> - disconnect client 
+   GET: /_sish/api/disconnectroute/<client>  - disconnect route 
+```
+
 An open source serveo/ngrok alternative.
 + Added 'bruteforce ssh connections' from https://github.com/vickeykumar/sish-lb
 
@@ -418,4 +429,5 @@ Flags:
   -v, --version                                                 version for sish
   -y, --whitelisted-countries string                            A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections
   -w, --whitelisted-ips string                                  A comma separated list of whitelisted ips. Applies to HTTP, TCP, and SSH connections
+  --load-keys-by-user                                           Load public keys by user name + ip address. I.e.: if income request went from user 'ruslan.masuk@gmail.com' and ip address '172.17.52.209' then try to find public key: 'ruslan.masuk@gmail.com-172.17.52.209.pub'
 ```

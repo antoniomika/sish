@@ -6,7 +6,10 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"reflect"
 	"strings"
+	"time"
+	"unsafe"
 
 	"github.com/antoniomika/syncmap"
 	"github.com/gin-gonic/gin"
@@ -69,21 +72,35 @@ func (c *WebConsole) HandleRequest(proxyUrl string, hostIsRoot bool, g *gin.Cont
 		}
 	}
 
-	if strings.HasPrefix(g.Request.URL.Path, "/_sish/console/ws") && userAuthed {
-		c.HandleWebSocket(proxyUrl, g)
-		return
-	} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/console") && userAuthed {
-		c.HandleTemplate(proxyUrl, hostIsRoot, userIsAdmin, g)
-		return
-	} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/disconnectclient/") && userIsAdmin {
-		c.HandleDisconnectClient(proxyUrl, g)
-		return
-	} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/disconnectroute/") && userIsAdmin {
-		c.HandleDisconnectRoute(proxyUrl, g)
-		return
-	} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/clients") && hostIsRoot && userIsAdmin {
-		c.HandleClients(proxyUrl, g)
-		return
+	if userAuthed && hostIsRoot && userIsAdmin {
+		if strings.HasPrefix(g.Request.URL.Path, "/_sish/console/ws") {
+			c.HandleWebSocket(proxyUrl, g)
+			return
+		} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/console") {
+			c.HandleTemplate(proxyUrl, hostIsRoot, userIsAdmin, g)
+			return
+		} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/disconnectclient/") {
+			c.HandleDisconnectClient(proxyUrl, g)
+			return
+		} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/disconnectroute/") {
+			c.HandleDisconnectRoute(proxyUrl, g)
+			return
+		} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/filter/") {
+			path := strings.Split(strings.TrimPrefix(g.Request.URL.Path, "/_sish/api/filter/"), "/")
+			if len(path) != 3 || (path[0] != "block" && path[0] != "allow") || (path[1] != "ip" && path[1] != "code") {
+				g.String(http.StatusBadRequest, "wrong path")
+				return
+			}
+			if path[0] == "block" {
+				c.blockIpOrCountry(path[1] == "ip", path[2], g)
+			} else if path[0] == "allow" {
+				c.allowIpOrCountry(path[1] == "ip", path[2], g)
+			}
+			return
+		} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/clients") {
+			c.HandleClients(proxyUrl, g)
+			return
+		}
 	}
 }
 
@@ -303,6 +320,7 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 			"pubKeyFingerprint": pubKeyFingerprint,
 			"listeners":         listeners,
 			"routeListeners":    routeListeners,
+			"created":           sshConn.Created.UnixMilli(),
 		}
 
 		return true
@@ -310,7 +328,34 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 
 	data["clients"] = clients
 
+	retry := map[string]any{}
+	for k, v := range c.State.RetryTimer {
+		retry[k] = map[string]any{
+			"counter":   v.counter,
+			"timestamp": v.timestamp,
+			"blocked":   v.counter >= MAX_RETRY,
+			"unBlockIn": v.timestamp + v.counter - time.Now().Unix(),
+		}
+	}
+	data["retry"] = retry
+
+	data["ipFilter"] = map[string]any{
+		"ips":   GetUnexportedField(reflect.ValueOf(c.State.IPFilter).Elem().FieldByName("ips")),
+		"codes": GetUnexportedField(reflect.ValueOf(c.State.IPFilter).Elem().FieldByName("codes")),
+	}
+
+	history := map[string]*HistoryHolder{}
+	c.State.History.Range(func(key string, val *HistoryHolder) bool {
+		history[key] = val
+		return true
+	})
+	data["history"] = history
+
 	g.JSON(http.StatusOK, data)
+}
+
+func GetUnexportedField(field reflect.Value) interface{} {
+	return reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Interface()
 }
 
 // RouteToken returns the route token for a specific route.
@@ -400,6 +445,35 @@ func (c *WebConsole) BroadcastRoute(route string, message []byte) {
 
 	for _, client := range clients {
 		client.Send <- message
+	}
+}
+
+func (c *WebConsole) blockIpOrCountry(filterByIp bool, ipOrCountryCode string, g *gin.Context) {
+	if filterByIp {
+		if ipOrCountryCode != "127.0.0.1" && !c.State.IPFilter.Blocked(ipOrCountryCode) {
+			log.Println("Block ip address:", ipOrCountryCode)
+			g.String(http.StatusOK, fmt.Sprint(c.State.IPFilter.BlockIP(ipOrCountryCode)))
+			return
+		}
+		g.String(http.StatusBadRequest, "false")
+	} else {
+		log.Println("Block country code:", ipOrCountryCode)
+		c.State.IPFilter.BlockCountry(ipOrCountryCode)
+		g.String(http.StatusOK, "true")
+	}
+}
+
+func (c *WebConsole) allowIpOrCountry(filterByIp bool, ipOrCountryCode string, g *gin.Context) {
+	if filterByIp {
+		if c.State.IPFilter.Blocked(ipOrCountryCode) {
+			log.Println("Allow ip address:", ipOrCountryCode)
+			g.String(http.StatusOK, fmt.Sprint(c.State.IPFilter.AllowIP(ipOrCountryCode)))
+			return
+		}
+		g.String(http.StatusBadRequest, "false")
+	} else {
+		log.Println("Allow country code:", ipOrCountryCode)
+		g.String(http.StatusOK, "true")
 	}
 }
 

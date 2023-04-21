@@ -88,7 +88,8 @@ func Start() {
 					})
 
 					log.Println(key, value.SSHConn.User(), listeners)
-					log.Println("Metrics:", value.Created.String(), "Duration:", time.Since(value.Created))
+					log.Println("Metrics:", value.Created.Format(time.RFC3339),
+						"Duration:", time.Since(value.Created).Round(time.Second))
 					return true
 				})
 				log.Println("===HTTP Listeners===")
@@ -183,8 +184,6 @@ func Start() {
 		}
 	}()
 
-	// retry timer to prevent bruteforce ssh connections(failed connections)
-	rt := make(utils.RetryTimer)
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -194,7 +193,7 @@ func Start() {
 
 		clientRemote, _, err := net.SplitHostPort(conn.RemoteAddr().String())
 
-		if err != nil || state.IPFilter.Blocked(clientRemote) || rt.Blocked(clientRemote) {
+		if err != nil || state.IPFilter.Blocked(clientRemote) || state.RetryTimer.Blocked(clientRemote) {
 			conn.Close()
 			continue
 		}
@@ -226,12 +225,12 @@ func Start() {
 			if err != nil {
 				conn.Close()
 				log.Println(err)
-				rt.TryLater(clientRemote)
+				state.RetryTimer.TryLater(clientRemote)
 				return
 			}
 
-			if rt.Find(clientRemote) {
-				rt.Reset(clientRemote)
+			if state.RetryTimer.Find(clientRemote) {
+				state.RetryTimer.Reset(clientRemote)
 			}
 
 			holderConn := &utils.SSHConnection{
@@ -248,11 +247,16 @@ func Start() {
 
 			state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)
 
+			// History
+			histConnect := updateHistory(sshConn, clientRemote, state)
+
 			go func() {
 				err := sshConn.Wait()
 				if err != nil && viper.GetBool("debug") {
 					log.Println("Closing SSH connection:", err)
 				}
+				histConnect.Finished = time.Now().Unix()
+				histConnect.Duration = histConnect.Finished - histConnect.Started
 
 				select {
 				case <-holderConn.Close:
@@ -320,4 +324,22 @@ func Start() {
 			}
 		}()
 	}
+}
+
+func updateHistory(sshConn *ssh.ServerConn, clientRemote string, state *utils.State) *utils.ConnectionHistory {
+	histKey := sshConn.User() + "-" + clientRemote
+	hist, _ := state.History.Load(histKey)
+	if hist == nil {
+		hist = &utils.HistoryHolder{
+			ConnectsCount: 0,
+			Connects:      []*utils.ConnectionHistory{},
+		}
+		state.History.Store(histKey, hist)
+	}
+	hist.ConnectsCount++
+	histConnect := &utils.ConnectionHistory{
+		Started: time.Now().Unix(),
+	}
+	hist.Connects = append(hist.Connects, histConnect)
+	return histConnect
 }
