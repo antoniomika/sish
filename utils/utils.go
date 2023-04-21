@@ -83,10 +83,7 @@ func (t *RetryTimer) get(client string) (int64, int64) {
 
 func (t *RetryTimer) Find(client string) bool {
 	_, ok := (*t)[client]
-	if ok {
-		return true
-	}
-	return false
+	return ok
 }
 
 func (t *RetryTimer) set(client string, currtimestamp int64, counter int64) {

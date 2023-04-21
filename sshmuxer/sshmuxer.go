@@ -88,7 +88,7 @@ func Start() {
 					})
 
 					log.Println(key, value.SSHConn.User(), listeners)
-					log.Println("Metrics:", value.Created.String(), "Duration:", time.Now().Sub(value.Created))
+					log.Println("Metrics:", value.Created.String(), "Duration:", time.Since(value.Created))
 					return true
 				})
 				log.Println("===HTTP Listeners===")
