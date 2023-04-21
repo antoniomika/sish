@@ -230,7 +230,7 @@ func Start() {
 				return
 			}
 
-			if rt.Find(clientRemote) == true {
+			if rt.Find(clientRemote) {
 				rt.Reset(clientRemote)
 			}
 
