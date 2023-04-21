@@ -162,7 +162,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	} else if !tcpAliasForced && stringPort == strconv.FormatUint(uint64(comparePortHTTPS), 10) {
 		connType = "https"
 	}
-
+	if viper.GetBool("debug") {
+		log.Println("listenerType", listenerType, "connType:", connType, "stringPort:", stringPort, "comparePortHTTP:", comparePortHTTP, "comparePortHTTPS:", comparePortHTTPS)
+	}
 	portChannelForwardReplyPayload := channelForwardReply{bindPort}
 
 	mainRequestMessages := fmt.Sprintf("Starting SSH Forwarding service for %s. Forwarded connections can be accessed via the following methods:\r\n", aurora.Sprintf(aurora.Green("%s:%s"), connType, stringPort))
