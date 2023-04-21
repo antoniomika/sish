@@ -88,6 +88,7 @@ func Start() {
 					})
 
 					log.Println(key, value.SSHConn.User(), listeners)
+					log.Println("Metrics:", value.Created.String(), "Duration:", time.Now().Sub(value.Created))
 					return true
 				})
 				log.Println("===HTTP Listeners===")
@@ -242,6 +243,7 @@ func Start() {
 				Messages:  make(chan string),
 				Session:   make(chan bool),
 				SetupLock: &sync.Mutex{},
+				Created:   time.Now(),
 			}
 
 			state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)

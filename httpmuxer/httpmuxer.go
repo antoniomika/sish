@@ -58,7 +58,7 @@ func Start(state *utils.State) {
 			status := http.StatusForbidden
 			c.AbortWithStatus(status)
 			if viper.GetBool("debug") {
-				log.Println("Aborting with status", status)
+				log.Println("Aborting Forbidden:", c.Request.RemoteAddr, " with status", status)
 				if clientIPAddrBlocked {
 					log.Println("Blocked:", clientIPAddr)
 				}
@@ -212,7 +212,7 @@ func Start(state *utils.State) {
 			status := http.StatusNotFound
 			c.AbortWithStatus(status)
 			if viper.GetBool("debug") {
-				log.Println("Aborting with status", status)
+				log.Println("Aborting NotFound:", c.Request.URL.Path, " with status", status)
 			}
 			return
 		}
@@ -232,7 +232,7 @@ func Start(state *utils.State) {
 			status := http.StatusUnauthorized
 			c.AbortWithStatus(status)
 			if viper.GetBool("debug") {
-				log.Println("Aborting with status", status)
+				log.Println("Aborting unauthorized with status", status)
 			}
 			return
 		}
