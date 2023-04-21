@@ -147,7 +147,7 @@ func Start() {
 		}()
 	}
 
-	log.Println("Starting SSH service on address:", viper.GetString("ssh-address"))
+	log.Println("Starting SSH service on address:", viper.GetString("ssh-address"), "httpPort:", httpPort, "httpsPort", httpsPort)
 
 	sshConfig := utils.GetSSHConfig()
 
@@ -266,6 +266,7 @@ func Start() {
 				}
 			}()
 
+			log.Println("444444", len(reqs))
 			go handleRequests(reqs, holderConn, state)
 			go handleChannels(chans, holderConn, state)
 
