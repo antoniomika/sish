@@ -552,26 +552,21 @@ func GetSSHConfig() *ssh.ServerConfig {
 			holderLock.Lock()
 			defer holderLock.Unlock()
 			if viper.GetBool("load-keys-by-user") {
-				clientRemote, _, err := net.SplitHostPort(c.RemoteAddr().String())
-				if err == nil {
-					certKey := c.User() + "-" + clientRemote + ".pub"
-					pubKey := certHolder[certKey]
-					if pubKey != nil {
-						if bytes.Equal(key.Marshal(), pubKey.Marshal()) {
-							permssionsData := &ssh.Permissions{
-								Extensions: map[string]string{
-									"pubKey":            string(authKey),
-									"pubKeyFingerprint": ssh.FingerprintSHA256(key),
-								},
-							}
-
-							return permssionsData, nil
+				certKey := c.User() + ".pub"
+				pubKey := certHolder[certKey]
+				if pubKey != nil {
+					if bytes.Equal(key.Marshal(), pubKey.Marshal()) {
+						permssionsData := &ssh.Permissions{
+							Extensions: map[string]string{
+								"pubKey":            string(authKey),
+								"pubKeyFingerprint": ssh.FingerprintSHA256(key),
+							},
 						}
-					} else {
-						log.Println("Unable to find pubKey:", certKey)
+
+						return permssionsData, nil
 					}
 				} else {
-					log.Println("Error while parse remote address", err)
+					log.Println("Unable to find pubKey:", certKey)
 				}
 			} else {
 				for _, i := range certHolder {
