@@ -79,6 +79,7 @@ redirect-root-location: https://github.com/antoniomika/sish
 rewrite-host-header: true
 service-console: false
 service-console-max-content-length: -1
+authentication-max-auth-tries: 0
 service-console-token: ""
 sni-load-balancer: false
 sni-proxy: false

@@ -432,4 +432,5 @@ Flags:
   --load-keys-by-user                                           Load public keys by user name + ip address. I.e.: if income request went from user 'ruslan.masuk@gmail.com' and ip address '172.17.52.209' then try to find public key: 'ruslan.masuk@gmail.com-172.17.52.209.pub'
   --single-connection-per-device                                Allow only one connection per device
   --tcp-disabled                                                Disable tcp connections
+  --authentication-max-auth-tries int                           Specifies the maximum number of authentication attempts permitted per connection. 0 mean 6 by default
 ```
