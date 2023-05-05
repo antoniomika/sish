@@ -305,7 +305,7 @@ argument if it was changed from the default.
 There are numerous breaking changes in sish between pre-1.0 and post-1.0 versions. The largest changes are
 found in the mapping of command flags and configuration params. Those have changed drastically, but it should be easy
 to find the new counterpart. The other change is SSH keys that are supported for host key auth. sish
-continues to support most modern keys, but by default if a host key is not found, it will create an OpenSSH
+continues to support` most modern keys, but by default if a host key is not found, it will create an OpenSSH
 ED25519 key to use. Previous versions of sish would aes encrypt the pem block of this private key, but we
 have since moved to using the native
 [OpenSSH private key format](https://github.com/openssh/openssh-portable/blob/master/sshkey.c) to allow for

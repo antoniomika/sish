@@ -102,6 +102,7 @@ func (t *RetryTimer) set(client string, currtimestamp int64, counter int64) {
 }
 
 func (t *RetryTimer) Reset(client string) {
+	log.Printf("client reset: %s\n", client)
 	t.set(client, time.Now().Unix(), 1)
 }
 
@@ -532,6 +533,7 @@ func loadKeys() {
 // It handles auth and storing user connection information.
 func GetSSHConfig() *ssh.ServerConfig {
 	sshConfig := &ssh.ServerConfig{
+		MaxAuthTries:  1,
 		ServerVersion: "SSH-2.0-sish",
 		NoClientAuth:  !viper.GetBool("authentication"),
 		PasswordCallback: func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
@@ -542,6 +544,11 @@ func GetSSHConfig() *ssh.ServerConfig {
 			}
 
 			return nil, fmt.Errorf("password doesn't match")
+		},
+		AuthLogCallback: func(c ssh.ConnMetadata, method string, err error) {
+			if err != nil {
+				log.Printf("Auth log failed: %s; User %s; Method: %s. Error: %s", c.RemoteAddr(), c.User(), method, err)
+			}
 		},
 		PublicKeyCallback: func(c ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			authKey := ssh.MarshalAuthorizedKey(key)
@@ -556,29 +563,27 @@ func GetSSHConfig() *ssh.ServerConfig {
 				pubKey := certHolder[certKey]
 				if pubKey != nil {
 					if bytes.Equal(key.Marshal(), pubKey.Marshal()) {
-						permssionsData := &ssh.Permissions{
+						permissionsData := &ssh.Permissions{
 							Extensions: map[string]string{
 								"pubKey":            string(authKey),
 								"pubKeyFingerprint": ssh.FingerprintSHA256(key),
 							},
 						}
 
-						return permssionsData, nil
+						return permissionsData, nil
 					}
-				} else {
-					log.Println("Unable to find pubKey:", certKey)
 				}
 			} else {
 				for _, i := range certHolder {
 					if bytes.Equal(key.Marshal(), i.Marshal()) {
-						permssionsData := &ssh.Permissions{
+						permissionsData := &ssh.Permissions{
 							Extensions: map[string]string{
 								"pubKey":            string(authKey),
 								"pubKeyFingerprint": ssh.FingerprintSHA256(key),
 							},
 						}
 
-						return permssionsData, nil
+						return permissionsData, nil
 					}
 				}
 			}
