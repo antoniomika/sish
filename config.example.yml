@@ -94,3 +94,4 @@ verify-ssl: true
 whitelisted-countries: ""
 whitelisted-ips: ""
 load-keys-by-user: false
+single-connection-per-device: false

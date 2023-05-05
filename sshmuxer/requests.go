@@ -87,6 +87,11 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		comparePortHTTPS = 443
 	}
 
+	if viper.GetBool("tcp-disabled") && bindPort != comparePortHTTP {
+		log.Println("Tcp listeners are disabled for requested port: ", bindPort, ". User: ", sshConn.SSHConn.User())
+		sshConn.SSHConn.Close()
+	}
+
 	tcpAliasForced := viper.GetBool("tcp-aliases") && sshConn.TCPAlias
 	sniProxyForced := viper.GetBool("sni-proxy") && sshConn.SNIProxy
 

@@ -124,6 +124,8 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("load-templates", "", true, "Load HTML templates. This is required for admin/service consoles")
 	rootCmd.PersistentFlags().BoolP("rewrite-host-header", "", true, "Force rewrite the host header if the user provides host-header=host.com")
 	rootCmd.PersistentFlags().BoolP("load-keys-by-user", "", false, "Load public keys by user name + ip address. I.e.: if income request went from user 'ruslan.masuk@gmail.com' and ip address '172.17.52.209' then try to find public key: 'ruslan.masuk@gmail.com-172.17.52.209.pub'")
+	rootCmd.PersistentFlags().BoolP("single-connection-per-device", "", false, "Allow single connection per device")
+	rootCmd.PersistentFlags().BoolP("tcp-disabled", "", false, "Disable tcp alias")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not affect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for https command output. This does not affect ports used for connecting, it's for cosmetic use only")

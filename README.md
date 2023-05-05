@@ -430,4 +430,6 @@ Flags:
   -y, --whitelisted-countries string                            A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections
   -w, --whitelisted-ips string                                  A comma separated list of whitelisted ips. Applies to HTTP, TCP, and SSH connections
   --load-keys-by-user                                           Load public keys by user name + ip address. I.e.: if income request went from user 'ruslan.masuk@gmail.com' and ip address '172.17.52.209' then try to find public key: 'ruslan.masuk@gmail.com-172.17.52.209.pub'
+  --single-connection-per-device                                Allow only one connection per device
+  --tcp-disabled                                                Disable tcp connections
 ```

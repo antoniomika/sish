@@ -80,7 +80,12 @@ func (s *SSHConnection) CleanUp(state *State) {
 	s.Closed.Do(func() {
 		close(s.Close)
 		s.SSHConn.Close()
-		state.SSHConnections.Delete(s.SSHConn.RemoteAddr().String())
+		singleDevice := viper.GetBool("single-connection-per-device")
+		if singleDevice {
+			state.SSHConnections.Delete(s.SSHConn.User())
+		} else {
+			state.SSHConnections.Delete(s.SSHConn.RemoteAddr().String())
+		}
 		log.Println("Closed SSH connection for:", s.SSHConn.RemoteAddr().String(), "user:", s.SSHConn.User())
 	})
 }

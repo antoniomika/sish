@@ -218,6 +218,7 @@ func Start() {
 		log.Println("Accepted SSH connection for:", conn.RemoteAddr())
 
 		go func() {
+			singleDevice := viper.GetBool("single-connection-per-device")
 			sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
 			clientLoggedInMutex.Lock()
 			clientLoggedIn = true
@@ -233,6 +234,15 @@ func Start() {
 				state.RetryTimer.Reset(clientRemote)
 			}
 
+			if singleDevice {
+				_, exists := state.SSHConnections.Load(sshConn.User())
+				if exists {
+					conn.Close()
+					log.Println("Connection already exists")
+					return
+				}
+			}
+
 			holderConn := &utils.SSHConnection{
 				SSHConn:   sshConn,
 				Listeners: syncmap.New[string, net.Listener](),
@@ -245,7 +255,11 @@ func Start() {
 				Created:   time.Now(),
 			}
 
-			state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)
+			if singleDevice {
+				state.SSHConnections.Store(holderConn.SSHConn.User(), holderConn)
+			} else {
+				state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)
+			}
 
 			// History
 			histConnect := updateHistory(sshConn, clientRemote, state)
