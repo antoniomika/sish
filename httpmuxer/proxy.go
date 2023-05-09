@@ -55,6 +55,8 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 			}
 
 			if resBody != nil {
+				contentLength := int64(len(resBody))
+				currentListener.History.ResponseContentLength += contentLength
 				response.Body = io.NopCloser(bytes.NewBuffer(resBody))
 
 				if response.Header.Get("Content-Encoding") == "gzip" {

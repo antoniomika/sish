@@ -77,7 +77,9 @@ func init() {
 	rootCmd.PersistentFlags().StringP("log-to-file-path", "", "/tmp/sish.log", "The file to write log output to")
 	rootCmd.PersistentFlags().StringP("bind-hosts", "", "", "A comma separated list of other hosts a user can bind. Requested hosts should be subdomains of a host in this list")
 	rootCmd.PersistentFlags().StringP("load-templates-directory", "", "templates/*", "The directory and glob parameter for templates that should be loaded")
+	rootCmd.PersistentFlags().StringP("replace-host", "", "", "Replace host header")
 
+	rootCmd.PersistentFlags().BoolP("bind-verbose", "", true, "Print verbose info to client about assigned subdomain, etc...")
 	rootCmd.PersistentFlags().BoolP("force-requested-ports", "", false, "Force the ports used to be the one that is requested. Will fail the bind if it exists already")
 	rootCmd.PersistentFlags().BoolP("force-requested-aliases", "", false, "Force the aliases used to be the one that is requested. Will fail the bind if it exists already")
 	rootCmd.PersistentFlags().BoolP("force-requested-subdomains", "", false, "Force the subdomains used to be the one that is requested. Will fail the bind if it exists already")
@@ -126,6 +128,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("load-keys-by-user", "", false, "Load public keys by user name + ip address. I.e.: if income request went from user 'ruslan.masuk@gmail.com' and ip address '172.17.52.209' then try to find public key: 'ruslan.masuk@gmail.com-172.17.52.209.pub'")
 	rootCmd.PersistentFlags().BoolP("single-connection-per-device", "", false, "Allow single connection per device")
 	rootCmd.PersistentFlags().BoolP("tcp-disabled", "", false, "Disable tcp alias")
+	rootCmd.PersistentFlags().BoolP("allow-password-auth", "", true, "Is allow password authentication")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not affect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for https command output. This does not affect ports used for connecting, it's for cosmetic use only")

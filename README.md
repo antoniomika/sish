@@ -433,4 +433,7 @@ Flags:
   --single-connection-per-device                                Allow only one connection per device
   --tcp-disabled                                                Disable tcp connections
   --authentication-max-auth-tries int                           Specifies the maximum number of authentication attempts permitted per connection. 0 mean 6 by default
+  --replace-host                                                Replace host header before send to client
+  --bind-verbose                                                Print verbose data to client about assigned domain, etc...
+  --allow-password-auth                                         Is allow password authentication
 ```

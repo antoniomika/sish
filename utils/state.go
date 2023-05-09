@@ -57,6 +57,7 @@ type ListenerHolder struct {
 // HTTPHolder holds proxy and connection info.
 type HTTPHolder struct {
 	HTTPUrl        *url.URL
+	History        *ConnectionHistory
 	SSHConnections *syncmap.Map[string, *SSHConnection]
 	Forward        *forward.Forwarder
 	Balancer       *roundrobin.RoundRobin
@@ -70,8 +71,13 @@ type AliasHolder struct {
 }
 
 type HistoryHolder struct {
-	ConnectsCount int
-	Connects      []*ConnectionHistory
+	TotalConnects         int
+	Duration              int64
+	Requests              int64
+	RequestContentLength  int64
+	ResponseContentLength int64
+	TotalContentLength    int64
+	Connects              []*ConnectionHistory // last 100 connections
 }
 
 // TCPHolder holds proxy and connection info.
@@ -187,6 +193,7 @@ type State struct {
 	HTTPListeners  *syncmap.Map[string, *HTTPHolder]
 	AliasListeners *syncmap.Map[string, *AliasHolder]
 	TCPListeners   *syncmap.Map[string, *TCPHolder]
+	UserFilter     map[string]int
 	IPFilter       *ipfilter.IPFilter
 	LogWriter      io.Writer
 	RetryTimer     RetryTimer
@@ -202,6 +209,7 @@ func NewState() *State {
 		AliasListeners: syncmap.New[string, *AliasHolder](),
 		TCPListeners:   syncmap.New[string, *TCPHolder](),
 		IPFilter:       Filter,
+		UserFilter:     UserFilter,
 		Console:        NewWebConsole(),
 		LogWriter:      multiWriter,
 		RetryTimer:     Retry,

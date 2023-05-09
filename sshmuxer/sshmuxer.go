@@ -220,6 +220,17 @@ func Start() {
 		go func() {
 			singleDevice := viper.GetBool("single-connection-per-device")
 			sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
+
+			if err == nil {
+				blockCount, blocked := state.UserFilter[sshConn.User()]
+				if blocked {
+					state.UserFilter[sshConn.User()] = blockCount + 1
+					log.Println("User ", sshConn.User(), " blocked")
+					conn.Close()
+					return
+				}
+			}
+
 			clientLoggedInMutex.Lock()
 			clientLoggedIn = true
 			clientLoggedInMutex.Unlock()
@@ -262,7 +273,7 @@ func Start() {
 			}
 
 			// History
-			histConnect := updateHistory(sshConn, clientRemote, state)
+			histConnect := updateHistory(sshConn, state)
 
 			go func() {
 				err := sshConn.Wait()
@@ -270,7 +281,12 @@ func Start() {
 					log.Println("Closing SSH connection:", err)
 				}
 				histConnect.Finished = time.Now().Unix()
-				histConnect.Duration = histConnect.Finished - histConnect.Started
+				hist, _ := state.History.Load(sshConn.User())
+				hist.Duration += histConnect.Finished - histConnect.Started
+				hist.Requests += histConnect.Requests
+				hist.RequestContentLength += histConnect.RequestContentLength
+				hist.ResponseContentLength += histConnect.ResponseContentLength
+				hist.TotalContentLength += histConnect.RequestContentLength + histConnect.ResponseContentLength
 
 				select {
 				case <-holderConn.Close:
@@ -280,7 +296,7 @@ func Start() {
 				}
 			}()
 
-			go handleRequests(reqs, holderConn, state)
+			go handleRequests(reqs, holderConn, state, histConnect)
 			go handleChannels(chans, holderConn, state)
 
 			go func() {
@@ -340,17 +356,17 @@ func Start() {
 	}
 }
 
-func updateHistory(sshConn *ssh.ServerConn, clientRemote string, state *utils.State) *utils.ConnectionHistory {
-	histKey := sshConn.User() + "-" + clientRemote
+func updateHistory(sshConn *ssh.ServerConn, state *utils.State) *utils.ConnectionHistory {
+	histKey := sshConn.User()
 	hist, _ := state.History.Load(histKey)
 	if hist == nil {
 		hist = &utils.HistoryHolder{
-			ConnectsCount: 0,
+			TotalConnects: 0,
 			Connects:      []*utils.ConnectionHistory{},
 		}
 		state.History.Store(histKey, hist)
 	}
-	hist.ConnectsCount++
+	hist.TotalConnects++
 	histConnect := &utils.ConnectionHistory{
 		Started: time.Now().Unix(),
 	}

@@ -49,6 +49,8 @@ var (
 
 	Retry = make(RetryTimer)
 
+	UserFilter = make(map[string]int)
+
 	// certHolder is a slice of publickeys for auth.
 	certHolder = make(map[string]ssh.PublicKey, 0)
 
@@ -66,9 +68,11 @@ var (
 )
 
 type ConnectionHistory struct {
-	Started  int64
-	Finished int64
-	Duration int64
+	Started               int64
+	Finished              int64
+	Requests              int64
+	RequestContentLength  int64
+	ResponseContentLength int64
 }
 
 // retry feature to prevent bruteforce ssh connections
@@ -536,15 +540,6 @@ func GetSSHConfig() *ssh.ServerConfig {
 		MaxAuthTries:  viper.GetInt("authentication-max-auth-tries"),
 		ServerVersion: "SSH-2.0-sish",
 		NoClientAuth:  !viper.GetBool("authentication"),
-		PasswordCallback: func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-			log.Printf("Login attempt: %s, user %s", c.RemoteAddr(), c.User())
-
-			if string(password) == viper.GetString("authentication-password") && viper.GetString("authentication-password") != "" {
-				return nil, nil
-			}
-
-			return nil, fmt.Errorf("password doesn't match")
-		},
 		AuthLogCallback: func(c ssh.ConnMetadata, method string, err error) {
 			if err != nil {
 				log.Printf("Auth log failed: %s; User %s; Method: %s. Error: %s", c.RemoteAddr(), c.User(), method, err)
@@ -608,6 +603,18 @@ func GetSSHConfig() *ssh.ServerConfig {
 
 			return nil, fmt.Errorf("public key doesn't match")
 		},
+	}
+
+	if viper.GetBool("allow-password-auth") {
+		sshConfig.PasswordCallback = func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+			log.Printf("Login attempt: %s, user %s", c.RemoteAddr(), c.User())
+
+			if string(password) == viper.GetString("authentication-password") && viper.GetString("authentication-password") != "" {
+				return nil, nil
+			}
+
+			return nil, fmt.Errorf("password doesn't match")
+		}
 	}
 
 	loadPrivateKeys(sshConfig)
@@ -899,7 +906,9 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 			}
 
 			if viper.GetBool("bind-random-subdomains") || !first || inList(host, bannedSubdomainList) {
-				reportUnavailable(true)
+				if viper.GetBool("bind-verbose") {
+					reportUnavailable(true)
+				}
 				host = getRandomHost()
 			}
 
@@ -1024,7 +1033,9 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			}
 
 			if viper.GetBool("bind-random-subdomains") || !first || inList(host, bannedSubdomainList) {
-				reportUnavailable(true)
+				if viper.GetBool("bind-verbose") {
+					reportUnavailable(true)
+				}
 				host = getRandomHost()
 			}
 
