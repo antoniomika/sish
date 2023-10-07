@@ -278,7 +278,7 @@ func Start(state *utils.State) {
 		if forceHttps && c.Request.TLS == nil && viper.GetBool("https") {
 			c.Request.URL.Scheme = "https"
 			if state.Ports.HTTPSPort != 443 {
-				c.Request.URL.Host = fmt.Sprintf("%s:%d", c.Request.URL.Hostname(), state.Ports.HTTPSPort)
+				c.Request.URL.Host = fmt.Sprintf("%s:%d", hostname, state.Ports.HTTPSPort)
 			}
 
 			c.Redirect(http.StatusFound, c.Request.URL.String())
