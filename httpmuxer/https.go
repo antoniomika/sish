@@ -8,6 +8,7 @@ import (
 
 	"github.com/antoniomika/sish/utils"
 	"github.com/spf13/viper"
+	"github.com/vulcand/oxy/roundrobin"
 )
 
 type proxyListener struct {
@@ -36,9 +37,23 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 		}
 
 		balancerName := tlsHello.ServerName
-		balancer, ok := pL.Holder.Balancers.Load(balancerName)
-		if balancerName == "" || !ok {
+		if balancerName == "" {
 			return teeConn, nil
+		}
+
+		balancer, ok := pL.Holder.Balancers.Load(balancerName)
+		if !ok {
+			pL.Holder.Balancers.Range(func(n string, b *roundrobin.RoundRobin) bool {
+				if utils.MatchesWildcardHost(balancerName, n) {
+					balancer = b
+					return false
+				}
+				return true
+			})
+
+			if balancer == nil {
+				return teeConn, nil
+			}
 		}
 
 		connectionLocation, err := balancer.NextServer()

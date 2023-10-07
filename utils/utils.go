@@ -1076,5 +1076,5 @@ func MatchesWildcardHost(hostname string, potentialWildcard string) bool {
 		return false
 	}
 
-	return strings.HasPrefix(potentialWildcard, wildcardPrefix) && strings.HasSuffix(hostname, strings.TrimPrefix(potentialWildcard, wildcardPrefix))
+	return strings.HasPrefix(potentialWildcard, wildcardPrefix) && strings.HasSuffix(hostname, fmt.Sprintf(".%s", strings.TrimPrefix(potentialWildcard, wildcardPrefix)))
 }

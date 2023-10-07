@@ -111,9 +111,19 @@ func (tH *TCPHolder) Handle(state *State) {
 
 		pB, ok := tH.Balancers.Load(balancerName)
 		if !ok {
-			log.Printf("Unable to load connection location: %s not found on TCP listener %s", balancerName, tH.TCPHost)
-			cl.Close()
-			continue
+			tH.Balancers.Range(func(n string, b *roundrobin.RoundRobin) bool {
+				if MatchesWildcardHost(balancerName, n) {
+					pB = b
+					return false
+				}
+				return true
+			})
+
+			if pB == nil {
+				log.Printf("Unable to load connection location: %s not found on TCP listener %s", balancerName, tH.TCPHost)
+				cl.Close()
+				continue
+			}
 		}
 
 		balancer := pB

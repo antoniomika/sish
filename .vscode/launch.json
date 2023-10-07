@@ -38,7 +38,9 @@
         "--http-load-balancer=true",
         "--tcp-load-balancer=true",
         "--alias-load-balancer=true",
-        "--sni-load-balancer=true"
+        "--sni-load-balancer=true",
+        "--force-https",
+        "--bind-wildcards"
       ]
     }
   ]
