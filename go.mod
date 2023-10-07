@@ -1,6 +1,6 @@
 module github.com/antoniomika/sish
 
-go 1.19
+go 1.21
 
 require (
 	github.com/ScaleFT/sshkeys v1.2.0
