@@ -165,7 +165,6 @@ func GetRandomPortInRange(portRange string) uint32 {
 		}
 	}
 
-	mathrand.Seed(time.Now().UnixNano())
 	locHolder := mathrand.Intn(len(possible))
 
 	if len(possible[locHolder]) == 1 {
@@ -1066,7 +1065,7 @@ func RandStringBytesMaskImprSrc(n int) string {
 	return string(b)
 }
 
-// MatchesWildcardHost checks if the hostname provided would match the potential wildcard
+// MatchesWildcardHost checks if the hostname provided would match the potential wildcard.
 func MatchesWildcardHost(hostname string, potentialWildcard string) bool {
 	if !strings.Contains(potentialWildcard, wildcardPrefix) {
 		return false
