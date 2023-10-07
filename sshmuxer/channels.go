@@ -16,40 +16,42 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// commandSplitter is the character that terminates a prefix.
-const commandSplitter = "="
+const (
+	// commandSplitter is the character that terminates a prefix.
+	commandSplitter = "="
 
-// proxyProtocolPrefix is used when deciding what proxy protocol
-// version to use.
-const proxyProtocolPrefix = "proxy-protocol"
+	// proxyProtocolPrefix is used when deciding what proxy protocol
+	// version to use.
+	proxyProtocolPrefix = "proxy-protocol"
 
-// proxyProtoPrefixLegacy is used when deciding what proxy protocol
-// version to use.
-const proxyProtoPrefixLegacy = "proxyproto"
+	// proxyProtoPrefixLegacy is used when deciding what proxy protocol
+	// version to use.
+	proxyProtoPrefixLegacy = "proxyproto"
 
-// hostHeaderPrefix is the host-header for a specific session.
-const hostHeaderPrefix = "host-header"
+	// hostHeaderPrefix is the host-header for a specific session.
+	hostHeaderPrefix = "host-header"
 
-// stripPathPrefix defines whether or not to strip the path (if enabled globally).
-const stripPathPrefix = "strip-path"
+	// stripPathPrefix defines whether or not to strip the path (if enabled globally).
+	stripPathPrefix = "strip-path"
 
-// sniProxyPrefix defines whether or not to enable SNI Proxying (if enabled globally).
-const sniProxyPrefix = "sni-proxy"
+	// sniProxyPrefix defines whether or not to enable SNI Proxying (if enabled globally).
+	sniProxyPrefix = "sni-proxy"
 
-// tcpAliasPrefix defines whether or not to enable TCP Aliasing (if enabled globally).
-const tcpAliasPrefix = "tcp-alias"
+	// tcpAliasPrefix defines whether or not to enable TCP Aliasing (if enabled globally).
+	tcpAliasPrefix = "tcp-alias"
 
-// localForwardPrefix defines whether or not a local forward is being used (allows for logging).
-const localForwardPrefix = "local-forward"
+	// localForwardPrefix defines whether or not a local forward is being used (allows for logging).
+	localForwardPrefix = "local-forward"
 
-// autoClosePrefix defines whether or not a connection will close when all forwards are cleaned up.
-const autoClosePrefix = "auto-close"
+	// autoClosePrefix defines whether or not a connection will close when all forwards are cleaned up.
+	autoClosePrefix = "auto-close"
 
-// forceHttpsPrefix defines whether or not a connection will redirect to https.
-const forceHttpsPrefix = "force-https"
+	// forceHTTPSPrefix defines whether or not a connection will redirect to https.
+	forceHTTPSPrefix = "force-https"
 
-// tcpAddressPrefix defines whether or not to set the tcp address for a tcp forward.
-const tcpAddressPrefix = "tcp-address"
+	// tcpAddressPrefix defines whether or not to set the tcp address for a tcp forward.
+	tcpAddressPrefix = "tcp-address"
+)
 
 // handleSession handles the channel when a user requests a session.
 // This is how we send console messages.
@@ -203,16 +205,16 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						sshConn.AutoClose = autoClose
 
 						sshConn.SendMessage(fmt.Sprintf("Auto close for connection set to: %t", sshConn.AutoClose), true)
-					case forceHttpsPrefix:
+					case forceHTTPSPrefix:
 						if !viper.GetBool("force-https") {
 							break
 						}
 
-						forceHttps, err := strconv.ParseBool(param)
+						forceHTTPS, err := strconv.ParseBool(param)
 						if err != nil {
 							log.Printf("Unable to detect force https setting. Using false as default: %s", err)
 						}
-						sshConn.ForceHTTPS = forceHttps
+						sshConn.ForceHTTPS = forceHTTPS
 						sshConn.SendMessage(fmt.Sprintf("Force https for connection set to: %t", sshConn.ForceHTTPS), true)
 					case localForwardPrefix:
 						localForward, err := strconv.ParseBool(param)
