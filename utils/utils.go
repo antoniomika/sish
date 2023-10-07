@@ -234,7 +234,7 @@ func loadCerts(certManager *certmagic.Config) {
 	ctx := context.TODO()
 
 	for _, v := range certFiles {
-		err := certManager.CacheUnmanagedCertificatePEMFile(ctx, v, fmt.Sprintf("%s.key", strings.TrimSuffix(v, ".crt")), []string{})
+		_, err := certManager.CacheUnmanagedCertificatePEMFile(ctx, v, fmt.Sprintf("%s.key", strings.TrimSuffix(v, ".crt")), []string{})
 		if err != nil {
 			log.Println("Error loading unmanaged certificate:", err)
 		}
