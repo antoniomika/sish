@@ -800,6 +800,11 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 				host = getRandomHost()
 			}
 
+			if !viper.GetBool("bind-wildcards") && strings.HasPrefix(host, wildcardPrefix) {
+				reportUnavailable(true)
+				host = getRandomHost()
+			}
+
 			ok := false
 
 			tH.Balancers.Range(func(strKey string, value *roundrobin.RoundRobin) bool {

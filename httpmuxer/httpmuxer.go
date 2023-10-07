@@ -277,6 +277,7 @@ func Start(state *utils.State) {
 
 		if forceHttps && c.Request.TLS == nil && viper.GetBool("https") {
 			c.Request.URL.Scheme = "https"
+			c.Request.URL.Host = hostname
 			if state.Ports.HTTPSPort != 443 {
 				c.Request.URL.Host = fmt.Sprintf("%s:%d", hostname, state.Ports.HTTPSPort)
 			}
