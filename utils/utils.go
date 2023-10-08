@@ -41,6 +41,9 @@ import (
 const (
 	// sishDNSPrefix is the prefix used for DNS TXT records.
 	sishDNSPrefix = "sish="
+
+	// Prefix used for defining wildcard host matchers.
+	wildcardPrefix = "*."
 )
 
 var (
@@ -162,7 +165,6 @@ func GetRandomPortInRange(portRange string) uint32 {
 		}
 	}
 
-	mathrand.Seed(time.Now().UnixNano())
 	locHolder := mathrand.Intn(len(possible))
 
 	if len(possible[locHolder]) == 1 {
@@ -234,7 +236,7 @@ func loadCerts(certManager *certmagic.Config) {
 	ctx := context.TODO()
 
 	for _, v := range certFiles {
-		err := certManager.CacheUnmanagedCertificatePEMFile(ctx, v, fmt.Sprintf("%s.key", strings.TrimSuffix(v, ".crt")), []string{})
+		_, err := certManager.CacheUnmanagedCertificatePEMFile(ctx, v, fmt.Sprintf("%s.key", strings.TrimSuffix(v, ".crt")), []string{})
 		if err != nil {
 			log.Println("Error loading unmanaged certificate:", err)
 		}
@@ -798,6 +800,11 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 				host = getRandomHost()
 			}
 
+			if !viper.GetBool("bind-wildcards") && strings.HasPrefix(host, wildcardPrefix) {
+				reportUnavailable(true)
+				host = getRandomHost()
+			}
+
 			ok := false
 
 			tH.Balancers.Range(func(strKey string, value *roundrobin.RoundRobin) bool {
@@ -919,6 +926,11 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			}
 
 			if viper.GetBool("bind-random-subdomains") || !first || inList(host, bannedSubdomainList) {
+				reportUnavailable(true)
+				host = getRandomHost()
+			}
+
+			if !viper.GetBool("bind-wildcards") && strings.HasPrefix(host, wildcardPrefix) {
 				reportUnavailable(true)
 				host = getRandomHost()
 			}
@@ -1056,4 +1068,13 @@ func RandStringBytesMaskImprSrc(n int) string {
 	}
 
 	return string(b)
+}
+
+// MatchesWildcardHost checks if the hostname provided would match the potential wildcard.
+func MatchesWildcardHost(hostname string, potentialWildcard string) bool {
+	if !strings.Contains(potentialWildcard, wildcardPrefix) {
+		return false
+	}
+
+	return strings.HasPrefix(potentialWildcard, wildcardPrefix) && strings.HasSuffix(hostname, fmt.Sprintf(".%s", strings.TrimPrefix(potentialWildcard, wildcardPrefix)))
 }

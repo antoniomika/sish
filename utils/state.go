@@ -111,9 +111,19 @@ func (tH *TCPHolder) Handle(state *State) {
 
 		pB, ok := tH.Balancers.Load(balancerName)
 		if !ok {
-			log.Printf("Unable to load connection location: %s not found on TCP listener %s", balancerName, tH.TCPHost)
-			cl.Close()
-			continue
+			tH.Balancers.Range(func(n string, b *roundrobin.RoundRobin) bool {
+				if MatchesWildcardHost(balancerName, n) {
+					pB = b
+					return false
+				}
+				return true
+			})
+
+			if pB == nil {
+				log.Printf("Unable to load connection location: %s not found on TCP listener %s", balancerName, tH.TCPHost)
+				cl.Close()
+				continue
+			}
 		}
 
 		balancer := pB
@@ -173,6 +183,17 @@ func (tH *TCPHolder) Handle(state *State) {
 	}
 }
 
+type Ports struct {
+	// HTTPPort is used as a string override for the used HTTP port.
+	HTTPPort int
+
+	// HTTPSPort is used as a string override for the used HTTPS port.
+	HTTPSPort int
+
+	// SSHPort is used as a string override for the used SSH port.
+	SSHPort int
+}
+
 // State handles overall state. It retains mutexed maps for various
 // datastructures and shared objects.
 type State struct {
@@ -184,6 +205,7 @@ type State struct {
 	TCPListeners   *syncmap.Map[string, *TCPHolder]
 	IPFilter       *ipfilter.IPFilter
 	LogWriter      io.Writer
+	Ports          *Ports
 }
 
 // NewState returns a new State struct.
@@ -197,5 +219,6 @@ func NewState() *State {
 		IPFilter:       Filter,
 		Console:        NewWebConsole(),
 		LogWriter:      multiWriter,
+		Ports:          &Ports{},
 	}
 }

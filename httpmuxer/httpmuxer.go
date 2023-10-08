@@ -171,6 +171,7 @@ func Start(state *utils.State) {
 		requestUsername, requestPassword, _ := c.Request.BasicAuth()
 		authNeeded := true
 
+		// Loop for checking if there's a listener with auth set (most specific)
 		state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
 			parsedPassword, _ := locationListener.HTTPUrl.User.Password()
 
@@ -191,9 +192,23 @@ func Start(state *utils.State) {
 			return true
 		})
 
+		// Loop for checking if there's a listener with the exact host and path prefix set (next most specific)
 		if currentListener == nil {
 			state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
 				if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
+					currentListener = locationListener
+					authNeeded = false
+					return false
+				}
+
+				return true
+			})
+		}
+
+		// Loop for checking if there's a wildcard listener with the host and path prefix set (least most specific)
+		if currentListener == nil {
+			state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
+				if utils.MatchesWildcardHost(hostname, locationListener.HTTPUrl.Host) && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
 					currentListener = locationListener
 					authNeeded = false
 					return false
@@ -238,9 +253,11 @@ func Start(state *utils.State) {
 		}
 
 		stripPath := viper.GetBool("strip-http-path")
+		forceHTTPS := viper.GetBool("force-all-https")
 
 		currentListener.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
 			newHost := sshConn.HostHeader
+			forceHTTPS = forceHTTPS || sshConn.ForceHTTPS
 
 			if sshConn.StripPath != viper.GetBool("strip-http-path") {
 				stripPath = sshConn.StripPath
@@ -257,6 +274,17 @@ func Start(state *utils.State) {
 			c.Request.Host = newHost
 			return false
 		})
+
+		if forceHTTPS && c.Request.TLS == nil && viper.GetBool("https") {
+			c.Request.URL.Scheme = "https"
+			c.Request.URL.Host = hostname
+			if state.Ports.HTTPSPort != 443 {
+				c.Request.URL.Host = fmt.Sprintf("%s:%d", hostname, state.Ports.HTTPSPort)
+			}
+
+			c.Redirect(http.StatusFound, c.Request.URL.String())
+			return
+		}
 
 		if viper.GetBool("strip-http-path") && stripPath {
 			c.Request.RequestURI = strings.TrimPrefix(c.Request.RequestURI, currentListener.HTTPUrl.Path)
@@ -339,7 +367,7 @@ func Start(state *utils.State) {
 				ok := false
 
 				state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
-					if name == locationListener.HTTPUrl.Host {
+					if name == locationListener.HTTPUrl.Host || utils.MatchesWildcardHost(name, locationListener.HTTPUrl.Host) {
 						ok = true
 						return false
 					}

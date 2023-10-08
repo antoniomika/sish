@@ -23,6 +23,7 @@ bind-random-ports: true
 bind-random-subdomains: true
 bind-random-subdomains-length: 3
 bind-root-domain: false
+bind-wildcards: false
 cleanup-unauthed: true
 cleanup-unauthed-timeout: 5s
 cleanup-unbound: false
@@ -31,6 +32,8 @@ config: config.yml
 debug: false
 debug-interval: 2s
 domain: ssi.sh
+force-all-https: false
+force-https: false
 force-requested-aliases: false
 force-requested-ports: false
 force-requested-subdomains: false
