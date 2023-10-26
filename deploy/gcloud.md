@@ -1,20 +1,23 @@
 # sish installation
 
-sish is an open source serveo/ngrok alternative that can be used to open a tunnel
-to localhost that is accessible to the open internet using only SSH. sish implements
-an SSH server that can handle multiplexing of HTTP(S), TCP, and TCP Aliasing
+sish is an open source serveo/ngrok alternative that can be used to open a
+tunnel to localhost that is accessible to the open internet using only SSH. sish
+implements an SSH server that can handle multiplexing of HTTP(S), TCP, and TCP
+Aliasing
 ([more about this can be found in the README](https://github.com/antoniomika/sish/blob/main/README.md))
 
 This tutorial will teach you how to:
 
-* Setup an instance in Google Cloud using the [free tier](https://cloud.google.com/free)
-* Add and modify authentication for users
-* Access sish from a remote computer
+- Setup an instance in Google Cloud using the
+  [free tier](https://cloud.google.com/free)
+- Add and modify authentication for users
+- Access sish from a remote computer
 
 ## Project selection
 
-You first need to select a project to host the resources created in this tutorial.
-I'd suggest creating a new project at this time where your sish instance will live.
+You first need to select a project to host the resources created in this
+tutorial. I'd suggest creating a new project at this time where your sish
+instance will live.
 <walkthrough-project-setup></walkthrough-project-setup>
 
 ## Access Google Cloud Shell
@@ -23,14 +26,18 @@ I'd suggest creating a new project at this time where your sish instance will li
 
 ## Create the instance running the container
 
-Here is a command to create the instance running the sish container. This will start the container
-on a hardened [Container Optimized OS](https://cloud.google.com/container-optimized-os/docs) and start
-the service. This is just a starting command that runs sish on port `2222`, `80`, and `443`. If you
-accept the [Let's Encrypt TOS](https://letsencrypt.org/repository/), you can enable automatic SSL cert loading.
-This command does *NOT* include authentication and it is up to you to properly tune these parameters based on
-the documentation [here](https://github.com/antoniomika/sish#cli-flags). Make sure to update `YOURDOMAIN`
-to the actual domain you own. You will also need to setup the DNS records as described below. Also feel free
-to change the `--zone` used for these commands.
+Here is a command to create the instance running the sish container. This will
+start the container on a hardened
+[Container Optimized OS](https://cloud.google.com/container-optimized-os/docs)
+and start the service. This is just a starting command that runs sish on port
+`2222`, `80`, and `443`. If you accept the
+[Let's Encrypt TOS](https://letsencrypt.org/repository/), you can enable
+automatic SSL cert loading. This command does _NOT_ include authentication and
+it is up to you to properly tune these parameters based on the documentation
+[here](https://github.com/antoniomika/sish#cli-flags). Make sure to update
+`YOURDOMAIN` to the actual domain you own. You will also need to setup the DNS
+records as described below. Also feel free to change the `--zone` used for these
+commands.
 
 ```bash
 gcloud compute instances create-with-container sish \
@@ -82,8 +89,8 @@ gcloud compute firewall-rules create allow-all-tcp-sish \
 
 Get the external IP address of your machine and create two DNS records
 
-* An `A` record for YOURDOMAIN pointing it to the output below
-* An `A` record for *.YOURDOMAIN pointing it to the output below
+- An `A` record for YOURDOMAIN pointing it to the output below
+- An `A` record for *.YOURDOMAIN pointing it to the output below
 
 ```bash
 gcloud compute instances describe sish \
@@ -91,8 +98,9 @@ gcloud compute instances describe sish \
     --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
 ```
 
-To confirm that the DNS records were created appropriately, you can run:  
-`dig @1.1.1.1 abcxyz.YOURDOMAIN` and `dig @1.1.1.1 YOURDOMAIN`. Both should get an answer with `status: NOERROR`. 
+To confirm that the DNS records were created appropriately, you can run:\
+`dig @1.1.1.1 abcxyz.YOURDOMAIN` and `dig @1.1.1.1 YOURDOMAIN`. Both should get
+an answer with `status: NOERROR`.
 
 ## Using sish
 
