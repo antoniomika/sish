@@ -238,7 +238,7 @@ Encrypt certs. To disable verfication, set `--bind-any-host=true`, which will al
 combination to be used. To only allow subdomains of a certain subset of domains, you can set `--bind-hosts`
 to a comma separated list of domains that are allowed to be bound.
 
-To add certficates for sish to use, configure the `--https-certificate-directory` flag to point to a dir
+To add certificates for sish to use, configure the `--https-certificate-directory` flag to point to a dir
 that is accessible by sish. In the directory, sish will look for a combination of files that look like
 `name.crt` and `name.key`. `name` can be arbitrary in either case, it just needs to be unique to the cert
 and key pair to allow them to be loaded into sish.
