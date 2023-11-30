@@ -31,6 +31,7 @@ type SSHConnection struct {
 	TCPAlias       bool
 	LocalForward   bool
 	AutoClose      bool
+	ForceHTTPS     bool
 	Session        chan bool
 	CleanupHandler bool
 	SetupLock      *sync.Mutex
@@ -189,7 +190,7 @@ type IdleTimeoutConn struct {
 
 // Read is needed to implement the reader part.
 func (i IdleTimeoutConn) Read(buf []byte) (int, error) {
-	err := i.Conn.SetReadDeadline(time.Now().Add(viper.GetDuration("idle-connection-timeout")))
+	err := i.Conn.SetDeadline(time.Now().Add(viper.GetDuration("idle-connection-timeout")))
 	if err != nil {
 		return 0, err
 	}
@@ -199,7 +200,7 @@ func (i IdleTimeoutConn) Read(buf []byte) (int, error) {
 
 // Write is needed to implement the writer part.
 func (i IdleTimeoutConn) Write(buf []byte) (int, error) {
-	err := i.Conn.SetWriteDeadline(time.Now().Add(viper.GetDuration("idle-connection-timeout")))
+	err := i.Conn.SetDeadline(time.Now().Add(viper.GetDuration("idle-connection-timeout")))
 	if err != nil {
 		return 0, err
 	}

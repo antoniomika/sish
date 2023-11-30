@@ -354,6 +354,7 @@ Flags:
       --bind-random-subdomains                                  Force bound HTTP tunnels to use random subdomains instead of user provided ones (default true)
       --bind-random-subdomains-length int                       The length of the random subdomain to generate if a subdomain is unavailable or if random subdomains are enforced (default 3)
       --bind-root-domain                                        Allow binding the root domain when accepting an HTTP listener
+      --bind-wildcards                                          Allow binding wildcards when accepting an HTTP listener
       --cleanup-unauthed                                        Cleanup unauthed SSH connections after a set timeout (default true)
       --cleanup-unauthed-timeout duration                       Duration to wait before cleaning up an unauthed connection (default 5s)
       --cleanup-unbound                                         Cleanup unbound (unforwarded) SSH connections after a set timeout
@@ -362,6 +363,8 @@ Flags:
       --debug                                                   Enable debugging information
       --debug-interval duration                                 Duration to wait between each debug loop output if debug is true (default 2s)
   -d, --domain string                                           The root domain for HTTP(S) multiplexing that will be appended to subdomains (default "ssi.sh")
+      --force-all-https                                         Redirect all requests to the https server
+      --force-https                                             Allow indiviual binds to request for https to be enforced
       --force-requested-aliases                                 Force the aliases used to be the one that is requested. Will fail the bind if it exists already
       --force-requested-ports                                   Force the ports used to be the one that is requested. Will fail the bind if it exists already
       --force-requested-subdomains                              Force the subdomains used to be the one that is requested. Will fail the bind if it exists already
