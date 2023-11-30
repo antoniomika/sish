@@ -147,7 +147,7 @@ func Start() {
 		}()
 	}
 
-	log.Println("Starting SSH service on address:", viper.GetString("ssh-address"))
+	log.Println("Starting SSH service on address:", viper.GetString("ssh-address"), "httpPort:", httpPort, "httpsPort:", httpsPort)
 
 	sshConfig := utils.GetSSHConfig()
 
@@ -218,7 +218,19 @@ func Start() {
 		log.Println("Accepted SSH connection for:", conn.RemoteAddr())
 
 		go func() {
+			singleDevice := viper.GetBool("single-connection-per-device")
 			sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
+
+			if err == nil {
+				blockCount, blocked := state.UserFilter[sshConn.User()]
+				if blocked {
+					state.UserFilter[sshConn.User()] = blockCount + 1
+					log.Println("User ", sshConn.User(), " blocked")
+					conn.Close()
+					return
+				}
+			}
+
 			clientLoggedInMutex.Lock()
 			clientLoggedIn = true
 			clientLoggedInMutex.Unlock()
@@ -233,6 +245,15 @@ func Start() {
 				state.RetryTimer.Reset(clientRemote)
 			}
 
+			if singleDevice {
+				_, exists := state.SSHConnections.Load(sshConn.User())
+				if exists {
+					conn.Close()
+					log.Println("Connection already exists")
+					return
+				}
+			}
+
 			holderConn := &utils.SSHConnection{
 				SSHConn:   sshConn,
 				Listeners: syncmap.New[string, net.Listener](),
@@ -245,10 +266,14 @@ func Start() {
 				Created:   time.Now(),
 			}
 
-			state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)
+			if singleDevice {
+				state.SSHConnections.Store(holderConn.SSHConn.User(), holderConn)
+			} else {
+				state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)
+			}
 
 			// History
-			histConnect := updateHistory(sshConn, clientRemote, state)
+			histConnect := updateHistory(sshConn, state)
 
 			go func() {
 				err := sshConn.Wait()
@@ -256,7 +281,12 @@ func Start() {
 					log.Println("Closing SSH connection:", err)
 				}
 				histConnect.Finished = time.Now().Unix()
-				histConnect.Duration = histConnect.Finished - histConnect.Started
+				hist, _ := state.History.Load(sshConn.User())
+				hist.Duration += histConnect.Finished - histConnect.Started
+				hist.Requests += histConnect.Requests
+				hist.RequestContentLength += histConnect.RequestContentLength
+				hist.ResponseContentLength += histConnect.ResponseContentLength
+				hist.TotalContentLength += histConnect.RequestContentLength + histConnect.ResponseContentLength
 
 				select {
 				case <-holderConn.Close:
@@ -266,7 +296,7 @@ func Start() {
 				}
 			}()
 
-			go handleRequests(reqs, holderConn, state)
+			go handleRequests(reqs, holderConn, state, histConnect)
 			go handleChannels(chans, holderConn, state)
 
 			go func() {
@@ -326,17 +356,17 @@ func Start() {
 	}
 }
 
-func updateHistory(sshConn *ssh.ServerConn, clientRemote string, state *utils.State) *utils.ConnectionHistory {
-	histKey := sshConn.User() + "-" + clientRemote
+func updateHistory(sshConn *ssh.ServerConn, state *utils.State) *utils.ConnectionHistory {
+	histKey := sshConn.User()
 	hist, _ := state.History.Load(histKey)
 	if hist == nil {
 		hist = &utils.HistoryHolder{
-			ConnectsCount: 0,
+			TotalConnects: 0,
 			Connects:      []*utils.ConnectionHistory{},
 		}
 		state.History.Store(histKey, hist)
 	}
-	hist.ConnectsCount++
+	hist.TotalConnects++
 	histConnect := &utils.ConnectionHistory{
 		Started: time.Now().Unix(),
 	}

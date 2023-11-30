@@ -11,21 +11,21 @@ import (
 )
 
 // handleRequests handles incoming requests from an SSH connection.
-func handleRequests(reqs <-chan *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
+func handleRequests(reqs <-chan *ssh.Request, sshConn *utils.SSHConnection, state *utils.State, history *utils.ConnectionHistory) {
 	for req := range reqs {
 		if viper.GetBool("debug") {
 			log.Println("Main Request Info", req.Type, req.WantReply, string(req.Payload))
 		}
-		handleRequest(req, sshConn, state)
+		handleRequest(req, sshConn, state, history)
 	}
 }
 
 // handleRequest handles a incoming request from a SSH connection.
-func handleRequest(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
+func handleRequest(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State, history *utils.ConnectionHistory) {
 	switch req := newRequest.Type; req {
 	case "tcpip-forward":
 		go checkSession(newRequest, sshConn, state)
-		handleRemoteForward(newRequest, sshConn, state)
+		handleRemoteForward(newRequest, sshConn, state, history)
 	case "keepalive@openssh.com":
 		err := newRequest.Reply(true, nil)
 		if err != nil {

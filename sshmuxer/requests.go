@@ -42,7 +42,7 @@ type forwardedTCPPayload struct {
 
 // handleRemoteForward will handle a remote forward request
 // and stand up the relevant listeners.
-func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
+func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State, history *utils.ConnectionHistory) {
 	select {
 	case <-sshConn.Exec:
 	case <-time.After(1 * time.Second):
@@ -85,6 +85,11 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	if comparePortHTTPS == 0 {
 		comparePortHTTPS = 443
+	}
+
+	if viper.GetBool("tcp-disabled") && bindPort != comparePortHTTP {
+		log.Println("Tcp listeners are disabled for requested port: ", bindPort, ". User: ", sshConn.SSHConn.User())
+		sshConn.SSHConn.Close()
 	}
 
 	tcpAliasForced := viper.GetBool("tcp-aliases") && sshConn.TCPAlias
@@ -171,7 +176,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	switch listenerType {
 	case utils.HTTPListener:
-		pH, serverURL, requestMessages, err := handleHTTPListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn, connType)
+		pH, serverURL, requestMessages, err := handleHTTPListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn, connType, history)
 		if err != nil {
 			log.Println("Error setting up HTTPListener:", err)
 
@@ -291,6 +296,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		return
 	}
 
+	if !viper.GetBool("bind-verbose") {
+		mainRequestMessages = "Connection started"
+	}
 	sshConn.SendMessage(mainRequestMessages, true)
 
 	go func() {

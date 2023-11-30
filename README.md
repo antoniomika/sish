@@ -305,7 +305,7 @@ argument if it was changed from the default.
 There are numerous breaking changes in sish between pre-1.0 and post-1.0 versions. The largest changes are
 found in the mapping of command flags and configuration params. Those have changed drastically, but it should be easy
 to find the new counterpart. The other change is SSH keys that are supported for host key auth. sish
-continues to support most modern keys, but by default if a host key is not found, it will create an OpenSSH
+continues to support` most modern keys, but by default if a host key is not found, it will create an OpenSSH
 ED25519 key to use. Previous versions of sish would aes encrypt the pem block of this private key, but we
 have since moved to using the native
 [OpenSSH private key format](https://github.com/openssh/openssh-portable/blob/master/sshkey.c) to allow for
@@ -430,4 +430,10 @@ Flags:
   -y, --whitelisted-countries string                            A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections
   -w, --whitelisted-ips string                                  A comma separated list of whitelisted ips. Applies to HTTP, TCP, and SSH connections
   --load-keys-by-user                                           Load public keys by user name + ip address. I.e.: if income request went from user 'ruslan.masuk@gmail.com' and ip address '172.17.52.209' then try to find public key: 'ruslan.masuk@gmail.com-172.17.52.209.pub'
+  --single-connection-per-device                                Allow only one connection per device
+  --tcp-disabled                                                Disable tcp connections
+  --authentication-max-auth-tries int                           Specifies the maximum number of authentication attempts permitted per connection. 0 mean 6 by default
+  --replace-host                                                Replace host header before send to client
+  --bind-verbose                                                Print verbose data to client about assigned domain, etc...
+  --allow-password-auth                                         Is allow password authentication
 ```

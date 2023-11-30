@@ -85,16 +85,21 @@ func (c *WebConsole) HandleRequest(proxyUrl string, hostIsRoot bool, g *gin.Cont
 		} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/disconnectroute/") {
 			c.HandleDisconnectRoute(proxyUrl, g)
 			return
+		} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/retry/") {
+			client := strings.Split(strings.TrimPrefix(g.Request.URL.Path, "/_sish/api/retry/"), "/")
+			c.State.RetryTimer.Reset(client[0])
+			return
 		} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/filter/") {
+			// /_sish/api/filter/[block|allow]/[ip|code|user]/[realIpAddress|realCode|realUser]
 			path := strings.Split(strings.TrimPrefix(g.Request.URL.Path, "/_sish/api/filter/"), "/")
-			if len(path) != 3 || (path[0] != "block" && path[0] != "allow") || (path[1] != "ip" && path[1] != "code") {
+			if len(path) != 3 || (path[0] != "block" && path[0] != "allow") || (path[1] != "ip" && path[1] != "code" && path[1] != "user") {
 				g.String(http.StatusBadRequest, "wrong path")
 				return
 			}
 			if path[0] == "block" {
-				c.blockIpOrCountry(path[1] == "ip", path[2], g)
+				c.blockEntity(path[1], path[2], g)
 			} else if path[0] == "allow" {
-				c.allowIpOrCountry(path[1] == "ip", path[2], g)
+				c.allowEntity(path[1], path[2], g)
 			}
 			return
 		} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/clients") {
@@ -146,6 +151,16 @@ func (c *WebConsole) HandleWebSocket(proxyUrl string, g *gin.Context) {
 func (c *WebConsole) HandleDisconnectClient(proxyUrl string, g *gin.Context) {
 	client := strings.TrimPrefix(g.Request.URL.Path, "/_sish/api/disconnectclient/")
 
+	disconnectClient(c, client)
+
+	data := map[string]any{
+		"status": true,
+	}
+
+	g.JSON(http.StatusOK, data)
+}
+
+func disconnectClient(c *WebConsole, client string) {
 	c.State.SSHConnections.Range(func(clientName string, holderConn *SSHConnection) bool {
 		if clientName == client {
 			holderConn.CleanUp(c.State)
@@ -155,12 +170,6 @@ func (c *WebConsole) HandleDisconnectClient(proxyUrl string, g *gin.Context) {
 
 		return true
 	})
-
-	data := map[string]any{
-		"status": true,
-	}
-
-	g.JSON(http.StatusOK, data)
 }
 
 // HandleDisconnectRoute handles the disconnection request for a forwarded route.
@@ -339,9 +348,10 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 	}
 	data["retry"] = retry
 
-	data["ipFilter"] = map[string]any{
+	data["filter"] = map[string]any{
 		"ips":   GetUnexportedField(reflect.ValueOf(c.State.IPFilter).Elem().FieldByName("ips")),
 		"codes": GetUnexportedField(reflect.ValueOf(c.State.IPFilter).Elem().FieldByName("codes")),
+		"users": c.State.UserFilter,
 	}
 
 	history := map[string]*HistoryHolder{}
@@ -448,31 +458,40 @@ func (c *WebConsole) BroadcastRoute(route string, message []byte) {
 	}
 }
 
-func (c *WebConsole) blockIpOrCountry(filterByIp bool, ipOrCountryCode string, g *gin.Context) {
-	if filterByIp {
-		if ipOrCountryCode != "127.0.0.1" && !c.State.IPFilter.Blocked(ipOrCountryCode) {
-			log.Println("Block ip address:", ipOrCountryCode)
-			g.String(http.StatusOK, fmt.Sprint(c.State.IPFilter.BlockIP(ipOrCountryCode)))
+func (c *WebConsole) blockEntity(key string, value string, g *gin.Context) {
+	switch {
+	case key == "ip":
+		if value != "127.0.0.1" && value != "::1" && !c.State.IPFilter.Blocked(value) {
+			log.Println("Block ip address:", value)
+			g.String(http.StatusOK, fmt.Sprint(c.State.IPFilter.BlockIP(value)))
 			return
 		}
 		g.String(http.StatusBadRequest, "false")
-	} else {
-		log.Println("Block country code:", ipOrCountryCode)
-		c.State.IPFilter.BlockCountry(ipOrCountryCode)
+	case key == "code":
+		log.Println("Block country code:", value)
+		c.State.IPFilter.BlockCountry(value)
+		g.String(http.StatusOK, "true")
+	case key == "user":
+		c.State.UserFilter[value] = 0
+		disconnectClient(c, value)
 		g.String(http.StatusOK, "true")
 	}
 }
 
-func (c *WebConsole) allowIpOrCountry(filterByIp bool, ipOrCountryCode string, g *gin.Context) {
-	if filterByIp {
-		if c.State.IPFilter.Blocked(ipOrCountryCode) {
-			log.Println("Allow ip address:", ipOrCountryCode)
-			g.String(http.StatusOK, fmt.Sprint(c.State.IPFilter.AllowIP(ipOrCountryCode)))
+func (c *WebConsole) allowEntity(key string, value string, g *gin.Context) {
+	switch {
+	case key == "ip":
+		if c.State.IPFilter.Blocked(value) {
+			log.Println("Allow ip address:", value)
+			g.String(http.StatusOK, fmt.Sprint(c.State.IPFilter.AllowIP(value)))
 			return
 		}
 		g.String(http.StatusBadRequest, "false")
-	} else {
-		log.Println("Allow country code:", ipOrCountryCode)
+	case key == "code":
+		log.Println("Allow country code:", value)
+		g.String(http.StatusOK, "true")
+	case key == "user":
+		delete(c.State.UserFilter, value)
 		g.String(http.StatusOK, "true")
 	}
 }

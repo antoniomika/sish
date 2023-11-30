@@ -42,6 +42,8 @@ func Start(state *utils.State) {
 
 	if viper.GetBool("load-templates") {
 		r.LoadHTMLGlob(viper.GetString("load-templates-directory"))
+		r.Static("/_sish/static", "./static")
+		r.StaticFile("/favicon.ico", "./static/favicon.ico")
 	}
 
 	r.Use(func(c *gin.Context) {
@@ -159,7 +161,7 @@ func Start(state *utils.State) {
 		}
 
 		hostname := hostSplit[0]
-		hostIsRoot := hostname == viper.GetString("domain")
+		hostIsRoot := hostname == viper.GetString("domain") || hostname == "localhost"
 
 		if viper.GetBool("admin-console") && hostIsRoot && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
 			state.Console.HandleRequest("", hostIsRoot, c)
@@ -175,6 +177,8 @@ func Start(state *utils.State) {
 			parsedPassword, _ := locationListener.HTTPUrl.User.Password()
 
 			if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
+				currentListener = locationListener
+
 				credsNeeded := locationListener.HTTPUrl.User.Username() != "" && parsedPassword != ""
 				credsMatch := requestUsername == locationListener.HTTPUrl.User.Username() && requestPassword == parsedPassword
 
@@ -183,25 +187,15 @@ func Start(state *utils.State) {
 
 					if credsMatch {
 						authNeeded = false
-						return false
 					}
+				} else {
+					authNeeded = false
 				}
+				return false
 			}
 
 			return true
 		})
-
-		if currentListener == nil {
-			state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
-				if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
-					currentListener = locationListener
-					authNeeded = false
-					return false
-				}
-
-				return true
-			})
-		}
 
 		if currentListener == nil && hostIsRoot {
 			if viper.GetBool("redirect-root") && !strings.HasPrefix(c.Request.URL.Path, "/favicon.ico") {
@@ -237,36 +231,21 @@ func Start(state *utils.State) {
 			return
 		}
 
-		stripPath := viper.GetBool("strip-http-path")
+		currentListener.History.Requests++
+		currentListener.History.RequestContentLength += c.Request.ContentLength
 
-		currentListener.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
-			newHost := sshConn.HostHeader
+		passHostName := viper.GetString("replace-host")
+		if passHostName != "" {
+			c.Request.Host = passHostName
+		} else {
+			stripPath := viper.GetBool("strip-http-path")
 
-			if sshConn.StripPath != viper.GetBool("strip-http-path") {
-				stripPath = sshConn.StripPath
-			}
-
-			if newHost == "" {
-				return true
-			}
-
-			if len(hostSplit) > 1 {
-				newHost = fmt.Sprintf("%s:%s", newHost, hostSplit[1])
-			}
-
-			c.Request.Host = newHost
-			return false
-		})
-
-		if viper.GetBool("strip-http-path") && stripPath {
-			c.Request.RequestURI = strings.TrimPrefix(c.Request.RequestURI, currentListener.HTTPUrl.Path)
-			c.Request.URL.Path = strings.TrimPrefix(c.Request.URL.Path, currentListener.HTTPUrl.Path)
-			c.Request.URL.RawPath = strings.TrimPrefix(c.Request.URL.RawPath, currentListener.HTTPUrl.Path)
-		}
-
-		if viper.GetBool("rewrite-host-header") {
 			currentListener.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
 				newHost := sshConn.HostHeader
+
+				if sshConn.StripPath != viper.GetBool("strip-http-path") {
+					stripPath = sshConn.StripPath
+				}
 
 				if newHost == "" {
 					return true
@@ -279,6 +258,29 @@ func Start(state *utils.State) {
 				c.Request.Host = newHost
 				return false
 			})
+
+			if viper.GetBool("strip-http-path") && stripPath {
+				c.Request.RequestURI = strings.TrimPrefix(c.Request.RequestURI, currentListener.HTTPUrl.Path)
+				c.Request.URL.Path = strings.TrimPrefix(c.Request.URL.Path, currentListener.HTTPUrl.Path)
+				c.Request.URL.RawPath = strings.TrimPrefix(c.Request.URL.RawPath, currentListener.HTTPUrl.Path)
+			}
+
+			if viper.GetBool("rewrite-host-header") {
+				currentListener.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
+					newHost := sshConn.HostHeader
+
+					if newHost == "" {
+						return true
+					}
+
+					if len(hostSplit) > 1 {
+						newHost = fmt.Sprintf("%s:%s", newHost, hostSplit[1])
+					}
+
+					c.Request.Host = newHost
+					return false
+				})
+			}
 		}
 
 		if (viper.GetBool("admin-console") || viper.GetBool("service-console")) && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {

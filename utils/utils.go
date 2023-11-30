@@ -49,6 +49,8 @@ var (
 
 	Retry = make(RetryTimer)
 
+	UserFilter = make(map[string]int)
+
 	// certHolder is a slice of publickeys for auth.
 	certHolder = make(map[string]ssh.PublicKey, 0)
 
@@ -66,9 +68,11 @@ var (
 )
 
 type ConnectionHistory struct {
-	Started  int64
-	Finished int64
-	Duration int64
+	Started               int64
+	Finished              int64
+	Requests              int64
+	RequestContentLength  int64
+	ResponseContentLength int64
 }
 
 // retry feature to prevent bruteforce ssh connections
@@ -102,6 +106,7 @@ func (t *RetryTimer) set(client string, currtimestamp int64, counter int64) {
 }
 
 func (t *RetryTimer) Reset(client string) {
+	log.Printf("client reset: %s\n", client)
 	t.set(client, time.Now().Unix(), 1)
 }
 
@@ -532,16 +537,13 @@ func loadKeys() {
 // It handles auth and storing user connection information.
 func GetSSHConfig() *ssh.ServerConfig {
 	sshConfig := &ssh.ServerConfig{
+		MaxAuthTries:  viper.GetInt("authentication-max-auth-tries"),
 		ServerVersion: "SSH-2.0-sish",
 		NoClientAuth:  !viper.GetBool("authentication"),
-		PasswordCallback: func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-			log.Printf("Login attempt: %s, user %s", c.RemoteAddr(), c.User())
-
-			if string(password) == viper.GetString("authentication-password") && viper.GetString("authentication-password") != "" {
-				return nil, nil
+		AuthLogCallback: func(c ssh.ConnMetadata, method string, err error) {
+			if err != nil {
+				log.Printf("Auth log failed: %s; User %s; Method: %s. Error: %s", c.RemoteAddr(), c.User(), method, err)
 			}
-
-			return nil, fmt.Errorf("password doesn't match")
 		},
 		PublicKeyCallback: func(c ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			authKey := ssh.MarshalAuthorizedKey(key)
@@ -552,38 +554,31 @@ func GetSSHConfig() *ssh.ServerConfig {
 			holderLock.Lock()
 			defer holderLock.Unlock()
 			if viper.GetBool("load-keys-by-user") {
-				clientRemote, _, err := net.SplitHostPort(c.RemoteAddr().String())
-				if err == nil {
-					certKey := c.User() + "-" + clientRemote + ".pub"
-					pubKey := certHolder[certKey]
-					if pubKey != nil {
-						if bytes.Equal(key.Marshal(), pubKey.Marshal()) {
-							permssionsData := &ssh.Permissions{
-								Extensions: map[string]string{
-									"pubKey":            string(authKey),
-									"pubKeyFingerprint": ssh.FingerprintSHA256(key),
-								},
-							}
-
-							return permssionsData, nil
-						}
-					} else {
-						log.Println("Unable to find pubKey:", certKey)
-					}
-				} else {
-					log.Println("Error while parse remote address", err)
-				}
-			} else {
-				for _, i := range certHolder {
-					if bytes.Equal(key.Marshal(), i.Marshal()) {
-						permssionsData := &ssh.Permissions{
+				certKey := c.User() + ".pub"
+				pubKey := certHolder[certKey]
+				if pubKey != nil {
+					if bytes.Equal(key.Marshal(), pubKey.Marshal()) {
+						permissionsData := &ssh.Permissions{
 							Extensions: map[string]string{
 								"pubKey":            string(authKey),
 								"pubKeyFingerprint": ssh.FingerprintSHA256(key),
 							},
 						}
 
-						return permssionsData, nil
+						return permissionsData, nil
+					}
+				}
+			} else {
+				for _, i := range certHolder {
+					if bytes.Equal(key.Marshal(), i.Marshal()) {
+						permissionsData := &ssh.Permissions{
+							Extensions: map[string]string{
+								"pubKey":            string(authKey),
+								"pubKeyFingerprint": ssh.FingerprintSHA256(key),
+							},
+						}
+
+						return permissionsData, nil
 					}
 				}
 			}
@@ -608,6 +603,18 @@ func GetSSHConfig() *ssh.ServerConfig {
 
 			return nil, fmt.Errorf("public key doesn't match")
 		},
+	}
+
+	if viper.GetBool("allow-password-auth") {
+		sshConfig.PasswordCallback = func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+			log.Printf("Login attempt: %s, user %s", c.RemoteAddr(), c.User())
+
+			if string(password) == viper.GetString("authentication-password") && viper.GetString("authentication-password") != "" {
+				return nil, nil
+			}
+
+			return nil, fmt.Errorf("password doesn't match")
+		}
 	}
 
 	loadPrivateKeys(sshConfig)
@@ -899,7 +906,9 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 			}
 
 			if viper.GetBool("bind-random-subdomains") || !first || inList(host, bannedSubdomainList) {
-				reportUnavailable(true)
+				if viper.GetBool("bind-verbose") {
+					reportUnavailable(true)
+				}
 				host = getRandomHost()
 			}
 
@@ -1024,7 +1033,9 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			}
 
 			if viper.GetBool("bind-random-subdomains") || !first || inList(host, bannedSubdomainList) {
-				reportUnavailable(true)
+				if viper.GetBool("bind-verbose") {
+					reportUnavailable(true)
+				}
 				host = getRandomHost()
 			}
 

@@ -1,4 +1,5 @@
 admin-console: false
+replace-host: ""
 admin-console-token: ""
 alias-load-balancer: false
 append-user-to-subdomain: false
@@ -21,6 +22,7 @@ bind-random-aliases: true
 bind-random-aliases-length: 3
 bind-random-ports: true
 bind-random-subdomains: true
+bind-verbose: true
 bind-random-subdomains-length: 3
 bind-root-domain: false
 cleanup-unauthed: true
@@ -50,6 +52,7 @@ https-ondemand-certificate-email: ""
 https-port-override: 0
 https-request-port-override: 0
 idle-connection: true
+allow-password-auth: true
 idle-connection-timeout: 5s
 load-templates: true
 load-templates-directory: templates/*
@@ -79,6 +82,7 @@ redirect-root-location: https://github.com/antoniomika/sish
 rewrite-host-header: true
 service-console: false
 service-console-max-content-length: -1
+authentication-max-auth-tries: 0
 service-console-token: ""
 sni-load-balancer: false
 sni-proxy: false
@@ -94,3 +98,4 @@ verify-ssl: true
 whitelisted-countries: ""
 whitelisted-ips: ""
 load-keys-by-user: false
+single-connection-per-device: false

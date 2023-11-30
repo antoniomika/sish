@@ -3,27 +3,33 @@
 <div class="row">
     <div class="col table-responsive">
         <h2>Clients</h2>
-        <table id="client-table" class="table table-hover">
+        <table class="table table-hover">
             <thead class="thead-dark">
                 <tr>
-                    <th scope="col">Client Remote Address</th>
-                    <th scope="col">Username</th>
-                    <th scope="col">SSH Version</th>
-                    <th scope="col">SSH Session ID</th>
-                    <th scope="col">SSH Pubkey Fingerprint</th>
-                    <th scope="col">Listeners</th>
-                    <th scope="col">Disconnect</th>
+                    <th>Client Remote Address</th>
+                    <th>Created</th>
+                    <th>Duration</th>
+                    <th>Content Length</th>
+                    <th>Username</th>
+                    <th>SSH Version</th>
+                    <th>SSH Session ID</th>
+                    <th>SSH Pubkey Fingerprint</th>
+                    <th>Listeners</th>
+                    <th>Disconnect</th>
                 </tr>
             </thead>
-            <tbody id="client-list" data-bind="foreach: clients">
+            <tbody data-bind="foreach: clients">
                 <tr class="client-row" data-bind="click: showRoutes, css: {'table-active' : active}">
-                    <th scope="row" data-bind="text: remoteAddr"></th>
-                    <td data-bind="text: user"></td>
-                    <td data-bind="text: version"></td>
-                    <td data-bind="text: session"></td>
-                    <td data-bind="text: pubKeyFingerprint"></td>
-                    <td data-bind="text: listeners.length"></td>
-                    <td><a style="text-transform: none; color: white;" class="btn btn-danger" data-bind="click: disconnectClient">Disconnect</a></td>
+                    <th scope="row" data-bind="text: client.remoteAddr"></th>
+                    <td data-bind="text: created"></td>
+                    <td data-bind="text: duration"></td>
+                    <td data-bind="text: contentLength"></td>
+                    <td data-bind="text: client.user"></td>
+                    <td data-bind="text: client.version"></td>
+                    <td data-bind="text: client.session"></td>
+                    <td data-bind="text: client.pubKeyFingerprint"></td>
+                    <td data-bind="text: client.listeners.length"></td>
+                    <td><a class="btn btn-danger" data-bind="click: disconnectClient">Disconnect</a></td>
                 </tr>
             </tbody>
         </table>
@@ -32,36 +38,197 @@
 <div class="row">
     <div class="col table-responsive">
         <h2>Routes</h2>
-        <table id="route-table" class="table table-hover">
+        <table class="table table-hover">
             <thead class="thead-dark">
                 <tr>
-                    <th scope="col">Type</th>
-                    <th scope="col">Address</th>
-                    <th scope="col">File Address</th>
-                    <th scope="col">Client Remote Address</th>
-                    <th scope="col">Disconnect</th>
+                    <th>Type</th>
+                    <th>Address</th>
+                    <th>File Address</th>
+                    <th>Client Remote Address</th>
+                    <th>Disconnect</th>
                 </tr>
             </thead>
-            <tbody id="route-list" data-bind="foreach: routes">
+            <tbody  data-bind="foreach: routes">
                 <tr>
                     <th scope="row" data-bind="text: type"></th>
                     <td>
-                        <span data-bind="if: type == 'HTTP'"><a style="text-transform: none; color: white;" class="btn btn-primary" data-bind="click: forwardToConsole, text: fullName"></a></span>
+                        <span data-bind="if: type == 'HTTP'"><a class="btn btn-primary" data-bind="click: forwardToConsole, text: fullName"></a></span>
                         <span data-bind="ifnot: type == 'HTTP'"><span data-bind="text: fullName"></span></span>
                     </td>
                     <td data-bind="text: data"></td>
                     <td data-bind="text: clientData.remoteAddr"></td>
-                    <td><a style="text-transform: none; color: white;" class="btn btn-danger" data-bind="click: disconnectRoute">Disconnect</a></td>
+                    <td><a class="btn btn-danger" data-bind="click: disconnectRoute">Disconnect</a></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="row">
+    <div class="col table-responsive">
+        <h2>History</h2>
+        <table  class="table table-hover">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Username</th>
+                    <th>Connects</th>
+                    <th>Duration</th>
+                    <th>Request ContentLength</th>
+                    <th>Response ContentLength</th>
+                    <th>Total ContentLength</th>
+                </tr>
+            </thead>
+            <tbody data-bind="foreach: history">
+                <tr class="client-row" data-bind="click: showHistory, css: {'table-active' : active}">
+                    <td data-bind="text: user"></td>
+                    <td data-bind="text: history.TotalConnects"></td>
+                    <td data-bind="text: history.Duration"></td>
+                    <td data-bind="text: history.RequestContentLength"></td>
+                    <td data-bind="text: history.ResponseContentLength"></td>
+                    <td data-bind="text: history.TotalContentLength"></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<div class="row">
+    <div class="col table-responsive">
+        <h2>History Details</h2>
+        <table class="table table-hover">
+            <thead class="thead-dark">
+                <tr>
+                    <th>Started</th>
+                    <th>Finished</th>
+                    <th>Duration</th>
+                    <th>Requests</th>
+                    <th>Total ContentLength</th>
+                    <th>Request ContentLength</th>
+                    <th>Response ContentLength</th>
+                </tr>
+            </thead>
+            <tbody  data-bind="foreach: historyDetails">
+                <tr>
+                    <td data-bind="text: StartedDate"></th>
+                    <td data-bind="text: FinishedDate"></th>
+                    <td data-bind="text: Duration"></th>
+                    <td data-bind="text: Requests"></th>
+                    <td data-bind="text: TotalContentLength"></th>
+                    <td data-bind="text: RequestContentLength"></th>
+                    <td data-bind="text: ResponseContentLength"></th>
                 </tr>
             </tbody>
         </table>
     </div>
 </div>
 
+<div class="row">
+    <div class="col table-responsive">
+        <div class="filter">
+           <h2>User Filters</h2>
+           <a class="btn btn-info" onclick="addFilter('user')">Add User Filter</a>
+        </div>
+        <table class="table table-hover">
+            <thead class="thead-dark">
+                <tr>
+                    <th>User</th>
+                    <th style="width: 20%">Block counts</th>
+                    <th style="width: 1%">Remove</th>
+                </tr>
+            </thead>
+            <tbody data-bind="foreach: userFilters">
+                <tr>
+                    <td data-bind="text: value"></td>
+                    <td data-bind="text: blockCount"></td>
+                    <td><a class="btn btn-danger" data-bind="click: remove">Remove</a></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col table-responsive">
+        <div class="filter">
+            <h2>IP Filters</h2>
+            <a class="btn btn-info" onclick="addFilter('ip')">Add IP Filter</a>
+        </div>
+        <table class="table table-hover">
+            <thead class="thead-dark">
+            <tr>
+                <th>IP Address</th>
+                <th style="width: 1%">Remove</th>
+            </tr>
+            </thead>
+            <tbody data-bind="foreach: ipFilters">
+            <tr>
+                <td data-bind="text: value"></td>
+                <td><a class="btn btn-danger" data-bind="click: remove">Remove</a></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col table-responsive">
+        <div class="filter">
+            <h2>Country Code Filters</h2>
+            <a class="btn btn-info" onclick="addFilter('code')">Add Country Code Filter</a>
+        </div>
+        <table class="table table-hover">
+            <thead class="thead-dark">
+            <tr>
+                <th>Country Code</th>
+                <th style="width: 1%">Remove</th>
+            </tr>
+            </thead>
+            <tbody data-bind="foreach: codeFilters">
+            <tr>
+                <td data-bind="text: value"></td>
+                <td><a class="btn btn-danger" data-bind="click: remove">Remove</a></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row">
+<div class="col table-responsive">
+    <h2>Retries</h2>
+    <table class="table table-hover">
+        <thead class="thead-dark">
+        <tr>
+            <th>Client Remote Address</th>
+            <th>Blocked</th>
+            <th>Counter</th>
+            <th>Timestamp</th>
+            <th>UnBlockIn</th>
+            <th style="width: 1%">Action</th>
+        </tr>
+        </thead>
+        <tbody data-bind="foreach: retries">
+        <tr>
+            <td data-bind="text: retry.address"></td>
+            <td data-bind="text: retry.blocked"></td>
+            <td data-bind="text: retry.counter"></td>
+            <td data-bind="text: retry.date"></td>
+            <td data-bind="text: retry.unBlockIn"></td>
+            <td><a class="btn btn-danger" data-bind="click: remove">Unblock</a></td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+</div>
+
 <script type="text/javascript">
     var clients = {
         clients: ko.observableArray([]),
-        routes: ko.observableArray([])
+        history: ko.observableArray([]),
+        routes: ko.observableArray([]),
+        historyDetails: ko.observableArray([]),
+        userFilters: ko.observableArray([]),
+        codeFilters: ko.observableArray([]),
+        ipFilters: ko.observableArray([]),
+        retries: ko.observableArray([])
     };
 
     var Route = function(clientData, routeType, routeName, routeData, disconnectType) {
@@ -80,7 +247,7 @@
         this.disconnectType = disconnectType;
 
         this.disconnectRoute = function() {
-            $.get(window.location.href.replace("console", `api/disconnectroute/${this.disconnectType}/${btoa(this.data)}`), function(data) {
+            $.get(window.location.href.replace("console", `api/disconnectroute/${this.disconnectType}/${btoa(this.data)}`), function() {
                 window.location.reload();
             });
         }.bind(this);
@@ -90,20 +257,18 @@
         }.bind(this);
     };
 
-    var Client = function(clientData) {
-        this.data = clientData;
+    var Client = function(clientData, historyData) {
+        this.client = clientData;
 
-        this.pubKeyFingerprint = clientData.pubKeyFingerprint;
-        this.remoteAddr = clientData.remoteAddr;
-        this.user =clientData.user;
-        this.version = clientData.version;
-        this.session = clientData.session;
-        this.listeners = clientData.listeners;
+        this.created = new Date(clientData.created).toISOString();
+        this.duration = ((new Date().getTime() - clientData.created) / 360000).toFixed(2) + 'h';
+        const currHistory = historyData.Connects.find(c=>c.Finished == 0);
+        this.contentLength = currHistory.RequestContentLength + currHistory.ResponseContentLength;
 
         this.active = ko.observable(false);
 
         this.disconnectClient = function() {
-            $.get(window.location.href.replace("console", `api/disconnectclient/${this.remoteAddr}`), function(data) {
+            $.get(window.location.href.replace("console", `api/disconnectclient/${this.client.user}`), function(client) {
                 window.location.reload();
             });
         }.bind(this);
@@ -119,17 +284,97 @@
 
             var routeTypes = {HTTP: ["httpListeners", "httplistener"], TCPAlias: ["tcpAliases", "tcpalias"], NET: ["listeners", "listener"]};
             for (var routeType in routeTypes) {
-                for (var route in this.data.routeListeners[routeTypes[routeType][0]]) {
-                    clients.routes.push(new Route(this.data, routeType, route, this.data.routeListeners[routeTypes[routeType][0]][route], routeTypes[routeType][1]));
+                for (var route in this.client.routeListeners[routeTypes[routeType][0]]) {
+                    clients.routes.push(new Route(this.client, routeType, route, this.client.routeListeners[routeTypes[routeType][0]][route], routeTypes[routeType][1]));
                 }
             }
         }.bind(this);
     };
 
+    var History = function(user, data) {
+        this.user = user;
+        this.history = data;
+        this.history.Duration = (this.history.Duration / 3600).toFixed(2) + 'h';
+        this.active = ko.observable(false);
+
+        this.showHistory = function() {
+            clients.historyDetails.removeAll();
+
+            for(var hist of clients.history()) {
+                hist.active(false);
+            }
+
+            this.active(true);
+            this.history.Connects.sort((a, b) => b.Started - a.Started);
+
+            for(let conn of this.history.Connects) {
+               conn.StartedDate = new Date(conn.Started*1000).toISOString();
+               conn.FinishedDate = conn.Finished == 0 ? '-' : new Date(conn.Finished*1000).toISOString();
+               if (conn.Finished > 0) {
+                  conn.Duration = ((conn.Finished - conn.Started) / 3600).toFixed(2) + 'h';
+               } else {
+                  conn.Duration = ((new Date().getTime() / 1000 - conn.Started) / 3600).toFixed(2) + 'h';
+               }
+               conn.TotalContentLength = conn.RequestContentLength + conn.ResponseContentLength;
+               clients.historyDetails.push(conn);
+            }
+        }.bind(this);
+    };
+
+    var Filter = function(value, blockCount, type) {
+        this.value = value;
+        this.blockCount = blockCount;
+
+        this.remove = function() {
+            $.get(window.location.href.replace("console", `api/filter/allow/${type}/${value}`), function() {
+                window.location.reload();
+            });
+        }.bind(this);
+    };
+
+    var Retry = function(key, value) {
+        this.retry = value;
+        this.retry.address = key;
+        this.retry.date = new Date(value.timestamp*1000).toISOString();
+
+        this.remove = function() {
+            $.get(window.location.href.replace("console", `api/retry/${key}`), function() {
+                window.location.reload();
+            });
+        }.bind(this);
+    };
+
+    function addFilter(type) {
+        let filterValue = prompt("Please enter " + type + " to block", "");
+        if(!filterValue) return;
+        $.get(window.location.href.replace("console", `api/filter/block/${type}/${filterValue}`), function() {
+            window.location.reload();
+        });
+    }
+
     $(function() {
         $.getJSON(window.location.href.replace("console", "api/clients"), function(data) {
             for (var client in data.clients) {
-                clients.clients.push(new Client(data.clients[client]));
+               clients.clients.push(new Client(data.clients[client], data.history[client]));
+            }
+            for (var hist in data.history) {
+               clients.history.push(new History(hist, data.history[hist]));
+            }
+            for (var val in data.filter.users) {
+               clients.userFilters.push(new Filter(val, data.filter.users[val], "user"));
+            }
+            for (var val in data.filter.codes) {
+                if(!data.filter.codes[val]) {
+                    clients.codeFilters.push(new Filter(val, 0, "code"));
+                }
+            }
+            for (var val in data.filter.ips) {
+                if(!data.filter.ips[val]) {
+                    clients.ipFilters.push(new Filter(val, 0, "ip"));
+                }
+            }
+            for (const [key, value] of Object.entries(data.retry)) {
+                clients.retries.push(new Retry(key, value));
             }
 
             ko.applyBindings(clients);
