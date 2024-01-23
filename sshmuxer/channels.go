@@ -311,16 +311,16 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 	aH := loc
 
+	pubKeyFingerprint := ""
+
+	if sshConn.SSHConn.Permissions != nil {
+		if _, ok := sshConn.SSHConn.Permissions.Extensions["pubKey"]; ok {
+			pubKeyFingerprint = sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"]
+		}
+	}
+
 	if viper.GetBool("tcp-aliases-allowed-users") {
 		connAllowed := false
-
-		pubKeyFingerprint := ""
-
-		if sshConn.SSHConn.Permissions != nil {
-			if _, ok := sshConn.SSHConn.Permissions.Extensions["pubKey"]; ok {
-				pubKeyFingerprint = sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"]
-			}
-		}
 
 		aH.SSHConnections.Range(func(name string, conn *utils.SSHConnection) bool {
 			for _, fingerprint := range conn.TCPAliasesAllowedUsers {
@@ -355,7 +355,12 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 	aliasAddr := string(host)
 
-	logLine := fmt.Sprintf("Accepted connection from %s -> %s", sshConn.SSHConn.RemoteAddr().String(), tcpAliasToConnect)
+	connString := sshConn.SSHConn.RemoteAddr().String()
+	if pubKeyFingerprint != "" {
+		connString = fmt.Sprintf("%s (%s)", connString, pubKeyFingerprint)
+	}
+
+	logLine := fmt.Sprintf("Accepted connection from %s -> %s", connString, tcpAliasToConnect)
 	log.Println(logLine)
 
 	if viper.GetBool("log-to-client") {
