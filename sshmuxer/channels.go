@@ -257,7 +257,6 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						}
 
 						sshConn.SendMessage(fmt.Sprintf("Allowed users for TCP Aliases set to: %s", strings.Join(printKeys, ", ")), true)
-
 					}
 				}
 
