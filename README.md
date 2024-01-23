@@ -413,6 +413,9 @@ Flags:
       --strip-http-path                                         Strip the http path from the forward (default true)
       --tcp-address string                                      The address to listen for TCP connections
       --tcp-aliases                                             Enable the use of TCP aliasing
+      --tcp-aliases-allowed-users any                           Enable setting allowed users to access tcp aliases.
+                                                                Can provide tcp-aliases-allowed-users in the ssh command set to a comma separated list of ssh fingerprints that can access an alias.
+                                                                Provide any for all.
       --tcp-load-balancer                                       Enable the TCP load balancer (multiple clients can bind the same port)
       --time-format string                                      The time format to use for both HTTP and general log messages (default "2006/01/02 - 15:04:05")
       --verify-dns                                              Verify DNS information for hosts and ensure it matches a connecting users sha256 key fingerprint (default true)

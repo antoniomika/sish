@@ -17,24 +17,25 @@ import (
 // SSHConnection handles state for a SSHConnection. It wraps an ssh.ServerConn
 // and allows us to pass other state around the application.
 type SSHConnection struct {
-	SSHConn        *ssh.ServerConn
-	Listeners      *syncmap.Map[string, net.Listener]
-	Closed         *sync.Once
-	Close          chan bool
-	Exec           chan bool
-	Messages       chan string
-	ProxyProto     byte
-	HostHeader     string
-	StripPath      bool
-	SNIProxy       bool
-	TCPAddress     string
-	TCPAlias       bool
-	LocalForward   bool
-	AutoClose      bool
-	ForceHTTPS     bool
-	Session        chan bool
-	CleanupHandler bool
-	SetupLock      *sync.Mutex
+	SSHConn                *ssh.ServerConn
+	Listeners              *syncmap.Map[string, net.Listener]
+	Closed                 *sync.Once
+	Close                  chan bool
+	Exec                   chan bool
+	Messages               chan string
+	ProxyProto             byte
+	HostHeader             string
+	StripPath              bool
+	SNIProxy               bool
+	TCPAddress             string
+	TCPAlias               bool
+	LocalForward           bool
+	TCPAliasesAllowedUsers []string
+	AutoClose              bool
+	ForceHTTPS             bool
+	Session                chan bool
+	CleanupHandler         bool
+	SetupLock              *sync.Mutex
 }
 
 // SendMessage sends a console message to the connection. If block is true, it

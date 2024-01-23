@@ -51,6 +51,9 @@ const (
 
 	// tcpAddressPrefix defines whether or not to set the tcp address for a tcp forward.
 	tcpAddressPrefix = "tcp-address"
+
+	// tcpAliasesAllowedUsersPrefix defines a comma separated list of allowed key fingerprints to access TCP aliases.
+	tcpAliasesAllowedUsersPrefix = "tcp-aliases-allowed-users"
 )
 
 // handleSession handles the channel when a user requests a session.
@@ -226,6 +229,20 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						sshConn.LocalForward = localForward
 
 						sshConn.SendMessage(fmt.Sprintf("Connection used for local forwards set to: %t", sshConn.LocalForward), true)
+					case tcpAliasesAllowedUsersPrefix:
+						if !viper.GetBool("tcp-aliases-allowed-users") {
+							break
+						}
+
+						fingerPrints := strings.Split(param, ",")
+
+						for i, fingerPrint := range fingerPrints {
+							fingerPrints[i] = strings.TrimSpace(fingerPrint)
+						}
+
+						sshConn.TCPAliasesAllowedUsers = fingerPrints
+
+						sshConn.SendMessage(fmt.Sprintf("Allowed users for TCP Aliases set to : %s", strings.Join(sshConn.TCPAliasesAllowedUsers, ", ")), true)
 					}
 				}
 
@@ -278,6 +295,34 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 	}
 
 	aH := loc
+
+	if viper.GetBool("tcp-aliases-allowed-users") {
+		connAllowed := false
+
+		pubKeyFingerprint := ""
+
+		if sshConn.SSHConn.Permissions != nil {
+			if _, ok := sshConn.SSHConn.Permissions.Extensions["pubKey"]; ok {
+				pubKeyFingerprint = sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"]
+			}
+		}
+
+		aH.SSHConnections.Range(func(name string, conn *utils.SSHConnection) bool {
+			for _, fingerprint := range conn.TCPAliasesAllowedUsers {
+				if fingerprint == "any" || (fingerprint != "" && pubKeyFingerprint != "" && fingerprint == pubKeyFingerprint) {
+					connAllowed = true
+					return false
+				}
+			}
+			return true
+		})
+
+		if !connAllowed {
+			log.Println("Connection not allowed because fingerprint is not found in allowed list")
+			sshConn.CleanUp(state)
+			return
+		}
+	}
 
 	connectionLocation, err := aH.Balancer.NextServer()
 	if err != nil {
