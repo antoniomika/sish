@@ -242,7 +242,13 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 
 						sshConn.TCPAliasesAllowedUsers = fingerPrints
 
-						sshConn.SendMessage(fmt.Sprintf("Allowed users for TCP Aliases set to : %s", strings.Join(sshConn.TCPAliasesAllowedUsers, ", ")), true)
+						sshConn.SendMessage(fmt.Sprintf("Allowed users for TCP Aliases set to: %s", strings.Join(sshConn.TCPAliasesAllowedUsers, ", ")), true)
+
+						if sshConn.SSHConn.Permissions != nil {
+							if _, ok := sshConn.SSHConn.Permissions.Extensions["pubKey"]; ok {
+								sshConn.TCPAliasesAllowedUsers = append(sshConn.TCPAliasesAllowedUsers, sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"])
+							}
+						}
 					}
 				}
 
