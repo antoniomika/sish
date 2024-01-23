@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -240,15 +241,23 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 							fingerPrints[i] = strings.TrimSpace(fingerPrint)
 						}
 
-						sshConn.TCPAliasesAllowedUsers = fingerPrints
-
-						sshConn.SendMessage(fmt.Sprintf("Allowed users for TCP Aliases set to: %s", strings.Join(sshConn.TCPAliasesAllowedUsers, ", ")), true)
-
+						connPubKey := ""
 						if sshConn.SSHConn.Permissions != nil {
 							if _, ok := sshConn.SSHConn.Permissions.Extensions["pubKey"]; ok {
-								sshConn.TCPAliasesAllowedUsers = append(sshConn.TCPAliasesAllowedUsers, sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"])
+								connPubKey = sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"]
 							}
 						}
+
+						sshConn.TCPAliasesAllowedUsers = fingerPrints
+
+						printKeys := fingerPrints
+						if connPubKey != "" {
+							sshConn.TCPAliasesAllowedUsers = append(sshConn.TCPAliasesAllowedUsers, connPubKey)
+							printKeys = slices.Insert(printKeys, 0, fmt.Sprintf("%s (self)", connPubKey))
+						}
+
+						sshConn.SendMessage(fmt.Sprintf("Allowed users for TCP Aliases set to: %s", strings.Join(printKeys, ", ")), true)
+
 					}
 				}
 
