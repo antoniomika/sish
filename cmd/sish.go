@@ -126,6 +126,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("bind-wildcards", "", false, "Allow binding wildcards when accepting an HTTP listener")
 	rootCmd.PersistentFlags().BoolP("load-templates", "", true, "Load HTML templates. This is required for admin/service consoles")
 	rootCmd.PersistentFlags().BoolP("rewrite-host-header", "", true, "Force rewrite the host header if the user provides host-header=host.com")
+	rootCmd.PersistentFlags().BoolP("tcp-aliases-allowed-users", "", false, "Enable setting allowed users to access tcp aliases.\nCan provide tcp-aliases-allowed-users in the ssh command set to a comma separated list of ssh fingerprints that can access an alias.\nProvide `any` for all.")
 
 	rootCmd.PersistentFlags().IntP("http-port-override", "", 0, "The port to use for http command output. This does not affect ports used for connecting, it's for cosmetic use only")
 	rootCmd.PersistentFlags().IntP("https-port-override", "", 0, "The port to use for https command output. This does not affect ports used for connecting, it's for cosmetic use only")

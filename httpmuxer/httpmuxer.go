@@ -5,6 +5,7 @@ package httpmuxer
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -359,7 +360,7 @@ func Start(state *utils.State) {
 		certManager.Issuers = []certmagic.Issuer{acmeIssuer}
 
 		certManager.OnDemand = &certmagic.OnDemandConfig{
-			DecisionFunc: func(name string) error {
+			DecisionFunc: func(ctx context.Context, name string) error {
 				if !viper.GetBool("https-ondemand-certificate") {
 					return fmt.Errorf("ondemand certificate retrieval is not enabled")
 				}

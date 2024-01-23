@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -51,6 +52,9 @@ const (
 
 	// tcpAddressPrefix defines whether or not to set the tcp address for a tcp forward.
 	tcpAddressPrefix = "tcp-address"
+
+	// tcpAliasesAllowedUsersPrefix defines a comma separated list of allowed key fingerprints to access TCP aliases.
+	tcpAliasesAllowedUsersPrefix = "tcp-aliases-allowed-users"
 )
 
 // handleSession handles the channel when a user requests a session.
@@ -226,6 +230,33 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						sshConn.LocalForward = localForward
 
 						sshConn.SendMessage(fmt.Sprintf("Connection used for local forwards set to: %t", sshConn.LocalForward), true)
+					case tcpAliasesAllowedUsersPrefix:
+						if !viper.GetBool("tcp-aliases-allowed-users") {
+							break
+						}
+
+						fingerPrints := strings.Split(param, ",")
+
+						for i, fingerPrint := range fingerPrints {
+							fingerPrints[i] = strings.TrimSpace(fingerPrint)
+						}
+
+						connPubKey := ""
+						if sshConn.SSHConn.Permissions != nil {
+							if _, ok := sshConn.SSHConn.Permissions.Extensions["pubKey"]; ok {
+								connPubKey = sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"]
+							}
+						}
+
+						sshConn.TCPAliasesAllowedUsers = fingerPrints
+
+						printKeys := fingerPrints
+						if connPubKey != "" {
+							sshConn.TCPAliasesAllowedUsers = append(sshConn.TCPAliasesAllowedUsers, connPubKey)
+							printKeys = slices.Insert(printKeys, 0, fmt.Sprintf("%s (self)", connPubKey))
+						}
+
+						sshConn.SendMessage(fmt.Sprintf("Allowed users for TCP Aliases set to: %s", strings.Join(printKeys, ", ")), true)
 					}
 				}
 
@@ -279,6 +310,34 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 	aH := loc
 
+	pubKeyFingerprint := ""
+
+	if sshConn.SSHConn.Permissions != nil {
+		if _, ok := sshConn.SSHConn.Permissions.Extensions["pubKey"]; ok {
+			pubKeyFingerprint = sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"]
+		}
+	}
+
+	if viper.GetBool("tcp-aliases-allowed-users") {
+		connAllowed := false
+
+		aH.SSHConnections.Range(func(name string, conn *utils.SSHConnection) bool {
+			for _, fingerprint := range conn.TCPAliasesAllowedUsers {
+				if fingerprint == "any" || (fingerprint != "" && pubKeyFingerprint != "" && fingerprint == pubKeyFingerprint) {
+					connAllowed = true
+					return false
+				}
+			}
+			return true
+		})
+
+		if !connAllowed {
+			log.Println("Connection not allowed because fingerprint is not found in allowed list")
+			sshConn.CleanUp(state)
+			return
+		}
+	}
+
 	connectionLocation, err := aH.Balancer.NextServer()
 	if err != nil {
 		log.Println("Unable to load connection location:", err)
@@ -295,7 +354,12 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 	aliasAddr := string(host)
 
-	logLine := fmt.Sprintf("Accepted connection from %s -> %s", sshConn.SSHConn.RemoteAddr().String(), tcpAliasToConnect)
+	connString := sshConn.SSHConn.RemoteAddr().String()
+	if pubKeyFingerprint != "" {
+		connString = fmt.Sprintf("%s (%s)", connString, pubKeyFingerprint)
+	}
+
+	logLine := fmt.Sprintf("Accepted connection from %s -> %s", connString, tcpAliasToConnect)
 	log.Println(logLine)
 
 	if viper.GetBool("log-to-client") {

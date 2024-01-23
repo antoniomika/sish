@@ -90,6 +90,7 @@ ssh-address: localhost:2222
 strip-http-path: true
 tcp-address: ""
 tcp-aliases: false
+tcp-aliases-allowed-users: false
 tcp-load-balancer: false
 time-format: 2006/01/02 - 15:04:05
 verify-dns: true
