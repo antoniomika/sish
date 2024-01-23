@@ -238,15 +238,24 @@ func Start() {
 				return
 			}
 
+			pubKeyFingerprint := ""
+
+			if sshConn.Permissions != nil {
+				if _, ok := sshConn.Permissions.Extensions["pubKey"]; ok {
+					pubKeyFingerprint = sshConn.Permissions.Extensions["pubKeyFingerprint"]
+				}
+			}
+
 			holderConn := &utils.SSHConnection{
-				SSHConn:   sshConn,
-				Listeners: syncmap.New[string, net.Listener](),
-				Closed:    &sync.Once{},
-				Close:     make(chan bool),
-				Exec:      make(chan bool),
-				Messages:  make(chan string),
-				Session:   make(chan bool),
-				SetupLock: &sync.Mutex{},
+				SSHConn:                sshConn,
+				Listeners:              syncmap.New[string, net.Listener](),
+				Closed:                 &sync.Once{},
+				Close:                  make(chan bool),
+				Exec:                   make(chan bool),
+				Messages:               make(chan string),
+				Session:                make(chan bool),
+				SetupLock:              &sync.Mutex{},
+				TCPAliasesAllowedUsers: []string{pubKeyFingerprint},
 			}
 
 			state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)
