@@ -65,7 +65,7 @@ In this example both Eric and Tony setup an SSH tunnel to `sish`:
   <img src="./hiw-sish-private.png" alt="hiw-sish-private" />
 </div>
 
-> NOTE: The remote tunnel command needs to include `tcp-aliases-allowed` with
+> NOTE: The remote tunnel command needs to include `tcp-aliases-allowed-users` with
 > Tony's pubkey fingerprint
 
 ```bash
