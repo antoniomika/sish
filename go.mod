@@ -12,7 +12,7 @@ require (
 	github.com/jpillora/ipfilter v1.2.9
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/mikesmitty/edkey v0.0.0-20170222072505-3356ea4e686a
-	github.com/picosh/pdocs v0.0.0-20240122053603-749f8ca95244
+	github.com/picosh/pdocs v0.0.0-20240129152315-9f5b0c177ce9
 	github.com/pires/go-proxyproto v0.7.0
 	github.com/radovskyb/watcher v1.0.7
 	github.com/sirupsen/logrus v1.9.3
@@ -30,7 +30,7 @@ require (
 	github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d // indirect
 	github.com/chenzhuoyu/iasm v0.9.1 // indirect
 	github.com/dchest/bcrypt_pbkdf v0.0.0-20150205184540-83f37f9c154a // indirect
-	github.com/dlclark/regexp2 v1.4.0 // indirect
+	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
@@ -41,7 +41,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
-	github.com/leodido/go-urn v1.2.4 // indirect
+	github.com/leodido/go-urn v1.3.0 // indirect
 	github.com/libdns/libdns v0.2.1 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailgun/timetools v0.0.0-20170619190023-f3a7b8ffff47 // indirect
