@@ -21,7 +21,7 @@ jobs:
         with:
           user: hey
           key: ${{ secrets.PRIVATE_KEY }}
-          src: './public/'
+          src: './docs/public/'
           project: "sish-${{ steps.vars.outputs.sha_short }}"
           promote: "sish-prod"
           retain: "sish-"
