@@ -1,8 +1,6 @@
 module github.com/antoniomika/sish
 
-go 1.21.5
-
-toolchain go1.21.6
+go 1.21
 
 require (
 	github.com/ScaleFT/sshkeys v1.2.0
@@ -14,7 +12,6 @@ require (
 	github.com/jpillora/ipfilter v1.2.9
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/mikesmitty/edkey v0.0.0-20170222072505-3356ea4e686a
-	github.com/picosh/pdocs v0.0.0-20240122053603-749f8ca95244
 	github.com/pires/go-proxyproto v0.7.0
 	github.com/radovskyb/watcher v1.0.7
 	github.com/sirupsen/logrus v1.9.3
@@ -27,12 +24,10 @@ require (
 
 require (
 	github.com/HdrHistogram/hdrhistogram-go v1.1.2 // indirect
-	github.com/alecthomas/chroma v0.10.0 // indirect
 	github.com/bytedance/sonic v1.10.2 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d // indirect
 	github.com/chenzhuoyu/iasm v0.9.1 // indirect
 	github.com/dchest/bcrypt_pbkdf v0.0.0-20150205184540-83f37f9c154a // indirect
-	github.com/dlclark/regexp2 v1.4.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
@@ -66,11 +61,7 @@ require (
 	github.com/tomasen/realip v0.0.0-20180522021738-f0c99a92ddce // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
-	github.com/yuin/goldmark v1.6.0 // indirect
-	github.com/yuin/goldmark-highlighting v0.0.0-20220208100518-594be1970594 // indirect
-	github.com/yuin/goldmark-meta v1.1.0 // indirect
 	github.com/zeebo/blake3 v0.2.3 // indirect
-	go.abhg.dev/goldmark/anchor v0.1.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/arch v0.7.0 // indirect
