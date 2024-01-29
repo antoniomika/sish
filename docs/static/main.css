@@ -1,0 +1,90 @@
+.sitemap {
+  column-count: 2;
+}
+
+.hiw {
+  background-color: #282a36;
+}
+
+.link-alt-adj,
+.link-alt-adj:visited,
+.link-alt-adj:visited:hover,
+.link-alt-adj:hover {
+  color: var(--link-color);
+  text-decoration: none;
+}
+
+.link-alt-adj:visited:hover,
+.link-alt-adj:hover {
+  text-decoration: underline;
+}
+
+.link-alt-hover,
+.link-alt-hover:visited,
+.link-alt-hover:visited:hover,
+.link-alt-hover:hover {
+  color: var(--hover);
+  text-decoration: none;
+}
+
+.link-alt-hover:visited:hover,
+.link-alt-hover:hover {
+  text-decoration: underline;
+}
+
+.link-alt,
+.link-alt:visited,
+.link-alt:visited:hover,
+.link-alt:hover {
+  color: var(--white);
+  text-decoration: none;
+}
+
+.link-alt:visited:hover,
+.link-alt:hover {
+  text-decoration: underline;
+}
+
+.hero {
+  padding: 5rem 0;
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
+  gap: 1rem;
+}
+
+.features h3 {
+  border: none;
+}
+
+.mk-nav {
+  padding: 1rem;
+}
+
+.text-hdr {
+  color: var(--hover);
+}
+
+.text-underline-hdr {
+  border-bottom: 3px solid var(--hover);
+  padding-bottom: 3px;
+}
+
+.current {
+  background-color: var(--blockquote-bg) !important;
+  border-right: 5px solid var(--blockquote);
+}
+
+.current a {
+  color: var(--white);
+}
+
+.current-page a {
+  color: var(--white);
+}
+
+.pager {
+  min-width: 150px;
+}

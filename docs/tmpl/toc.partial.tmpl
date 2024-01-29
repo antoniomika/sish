@@ -1,0 +1,14 @@
+{{define "toc"}}
+<div>
+  {{range $key, $value := .SitemapByTag}}
+    <div class="box my">
+      <h2 class="text-xl">{{$key}}</h2>
+      <ul>
+        {{range $value}}
+          <li><a href="{{.GenHref}}">{{.Text}}</a></li>
+        {{end}}
+      </ul>
+    </div>
+  {{end}}
+</div>
+{{end}}

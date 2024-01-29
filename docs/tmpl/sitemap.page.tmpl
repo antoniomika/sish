@@ -1,0 +1,22 @@
+{{template "base" .}}
+
+{{define "title"}}{{.Data.Title}}{{end}}
+
+{{define "meta"}}{{end}}
+
+{{define "attrs"}}class="container-sm"{{end}}
+
+{{define "body"}}
+{{template "nav" .}}
+
+<main>
+  <h1 class="text-2xl text-underline-hdr text-hdr inline-block">{{.Data.Title}}</h1>
+  <h2 class="text-xl">{{.Data.Description}}</h2>
+
+  <hr />
+
+  {{template "toc" .}}
+</main>
+
+{{template "footer" .}}
+{{end}}

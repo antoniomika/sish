@@ -1,0 +1,21 @@
+{{define "base"}}
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>{{template "title" .}}</title>
+    <meta charset='utf-8'>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="keywords" content="ngrok, sish, ssh, tunnel, self-hosted" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="stylesheet" href="https://pico.sh/syntax.css" />
+    <link rel="stylesheet" href="https://pico.sh/smol.css" />
+    <link rel="stylesheet" href="/main.css" />
+    {{template "meta" .}}
+  </head>
+
+  <body {{template "attrs" .}}>
+    {{template "body" .}}
+  </body>
+</html>
+{{end}}
