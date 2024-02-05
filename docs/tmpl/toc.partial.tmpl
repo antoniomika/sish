@@ -5,7 +5,16 @@
       <h2 class="text-xl">{{$key}}</h2>
       <ul>
         {{range $value}}
-          <li><a href="{{.GenHref}}">{{.Text}}</a></li>
+          <li>
+            <a href="{{.GenHref}}">{{.Text}}</a>
+            {{if .Children}}
+              <ul>
+              {{range .Children}}
+                <li><a href="{{.ParentHref}}{{.GenHref}}">{{.Text}}</a></li>
+              {{end}}
+              </ul>
+            {{end}}
+          </li>
         {{end}}
       </ul>
     </div>
