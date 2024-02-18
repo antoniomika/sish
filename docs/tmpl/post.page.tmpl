@@ -43,7 +43,7 @@
 </main>
 
 <div class="sitemap text-sm mb-4 text-center">
-{{range .Sitemap -}}
+{{range .Sitemap.Children -}}
   <div>
   {{- if (and $.Prev (eq $.Prev.GenHref .GenHref)) -}}
   <a href="{{.GenHref}}" class="link-alt-adj">{{.Text}}</a>
