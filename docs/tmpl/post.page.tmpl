@@ -4,58 +4,46 @@
 
 {{define "meta"}}{{end}}
 
-{{define "attrs"}}class="container-sm"{{end}}
+{{define "attrs"}}class="container"{{end}}
 
 {{define "body"}}
 {{template "nav" .}}
 
-<main class="post">
-  <h1 class="text-2xl text-underline-hdr text-hdr inline-block">{{.Data.Title}}</h1>
-  <h2 class="text-xl">{{.Data.Description}}</h2>
+<div class="post-container">
+  <main class="post flex-1">
+    <h1 class="text-2xl text-underline-hdr text-hdr inline-block">{{.Data.Title}}</h1>
+    <h2 class="text-xl">{{.Data.Description}}</h2>
 
-  <hr />
+    <hr />
 
-  <article class="md">
-    {{.Data.Html}}
-  </article>
+    <article class="md">
+      {{.Data.Html}}
+    </article>
 
-  <div class="flex justify-between gap-2 my-4">
-    {{if .Prev}}
-      <div class="pager max-w-half flex items-center">
-        <div class="flex flex-col items-start">
-          <div class="text-sm font-grey-light">&lt;&lt; PREV</div>
-          <a href="{{.Prev.GenHref}}" class="text-xl link-alt-adj">{{.Prev.Text}}</a>
-        </div>
-      </div>
-    {{end}}
-
-    {{if .Next}}
-      <div class="pager max-w-half flex items-center justify-end">
-        <div class="flex flex-col items-end">
-          <div class="text-sm font-grey-light">
-            NEXT &gt;&gt;
+    <div class="flex justify-between gap-2 my-4">
+      {{if .Prev}}
+        <div class="pager max-w-half flex items-center">
+          <div class="flex flex-col items-start">
+            <div class="text-sm font-grey-light">&lt;&lt; PREV</div>
+            <a href="{{.Prev.GenHref}}" class="text-xl link-alt-adj">{{.Prev.Text}}</a>
           </div>
-          <a href="{{.Next.GenHref}}" class="text-xl align-right link-alt-adj">{{.Next.Text}}</a>
         </div>
-      </div>
-    {{end}}
-  </div>
-</main>
+      {{end}}
 
-<div class="sitemap text-sm mb-4 text-center">
-{{range .Sitemap.Children -}}
-  <div>
-  {{- if (and $.Prev (eq $.Prev.GenHref .GenHref)) -}}
-  <a href="{{.GenHref}}" class="link-alt-adj">{{.Text}}</a>
-  {{- else if (and $.Next (eq $.Next.GenHref .GenHref)) -}}
-  <a href="{{.GenHref}}" class="link-alt-adj">{{.Text}}</a>
-  {{- else if (eq $.Href .GenHref) -}}
-  <a href="{{.GenHref}}" class="link-alt-hover">{{.Text}}</a>
-  {{- else -}}
-  <a href="{{.GenHref}}" class="link-alt">{{.Text}}</a>
-  {{- end -}}
-  </div>
-{{- end}}
+      {{if .Next}}
+        <div class="pager max-w-half flex items-center justify-end">
+          <div class="flex flex-col items-end">
+            <div class="text-sm font-grey-light">
+              NEXT &gt;&gt;
+            </div>
+            <a href="{{.Next.GenHref}}" class="text-xl align-right link-alt-adj">{{.Next.Text}}</a>
+          </div>
+        </div>
+      {{end}}
+    </div>
+  </main>
+
+  {{template "sitemap-footer" .}}
 </div>
 
 {{template "footer" .}}
