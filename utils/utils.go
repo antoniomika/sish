@@ -173,10 +173,7 @@ func GetRandomPortInRange(listenAddr string, portRange string) uint32 {
 		bindPort = uint32(mathrand.Intn(int(possible[locHolder][1]-possible[locHolder][0])) + int(possible[locHolder][0]))
 	}
 
-	genedAddr := GenerateAddress(listenAddr, bindPort)
-	log.Println(genedAddr)
-
-	ln, err := Listen(genedAddr)
+	ln, err := Listen(GenerateAddress(listenAddr, bindPort))
 	if err != nil {
 		return GetRandomPortInRange(listenAddr, portRange)
 	}
