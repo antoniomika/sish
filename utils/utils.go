@@ -687,7 +687,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 					bindErr = fmt.Errorf("unable to bind requested port")
 				}
 
-				sshConn.SendMessage(aurora.Sprintf("The TCP port %s is unavailable.%s", aurora.Red(bindPort), extra), true)
+				sshConn.SendMessage(aurora.Sprintf("The TCP port %d is unavailable.%s", aurora.Red(bindPort), extra), true)
 			}
 		}
 
