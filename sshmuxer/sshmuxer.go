@@ -29,17 +29,17 @@ func Start() {
 		sshPort   int
 	)
 
-	_, httpPortString, err := net.SplitHostPort(viper.GetString("http-address"))
+	_, httpPortString, err := utils.ParseAddress(viper.GetString("http-address"))
 	if err != nil {
 		log.Fatalln("Error parsing address:", err)
 	}
 
-	_, httpsPortString, err := net.SplitHostPort(viper.GetString("https-address"))
+	_, httpsPortString, err := utils.ParseAddress(viper.GetString("https-address"))
 	if err != nil {
 		log.Fatalln("Error parsing address:", err)
 	}
 
-	_, sshPortString, err := net.SplitHostPort(viper.GetString("ssh-address"))
+	_, sshPortString, err := utils.ParseAddress(viper.GetString("ssh-address"))
 	if err != nil {
 		log.Fatalln("Error parsing address:", err)
 	}
