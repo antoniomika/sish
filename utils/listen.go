@@ -8,13 +8,21 @@ import (
 	"github.com/antoniomika/multilistener"
 )
 
+const (
+	// AddressSeparator is the separtor when providing multiple addresses.
+	AddressSeparator = ","
+
+	// NetworkSeparator is the sepator between a network and address.
+	NetworkSeparator = "://"
+)
+
 // Listen uses the multilistener package to generate a net.Listener that uses multiple addresses.
 func Listen(addresses string) (net.Listener, error) {
 	listeners := map[string][]string{}
-	addressList := strings.Split(addresses, ",")
+	addressList := strings.Split(addresses, AddressSeparator)
 
 	for _, address := range addressList {
-		addressSplit := strings.Split(address, "://")
+		addressSplit := strings.Split(address, NetworkSeparator)
 		if len(addressSplit) != 2 {
 			if _, ok := listeners["tcp"]; !ok {
 				listeners["tcp"] = []string{}
@@ -34,8 +42,8 @@ func Listen(addresses string) (net.Listener, error) {
 
 // ParseAddress parse a list of addresses into a host, port, err split.
 func ParseAddress(addresses string) (string, string, error) {
-	addressList := strings.Split(addresses, ",")
-	addressSplit := strings.Split(addressList[0], "://")
+	addressList := strings.Split(addresses, AddressSeparator)
+	addressSplit := strings.Split(addressList[0], NetworkSeparator)
 
 	address := addressSplit[0]
 	if len(addressList) == 2 {
@@ -47,10 +55,10 @@ func ParseAddress(addresses string) (string, string, error) {
 // GenerateAddress generates an address string with ports set.
 func GenerateAddress(addresses string, port uint32) string {
 	newAddressList := []string{}
-	addressList := strings.Split(addresses, ";")
+	addressList := strings.Split(addresses, AddressSeparator)
 
 	for _, address := range addressList {
 		newAddressList = append(newAddressList, fmt.Sprintf("%s:%d", address, port))
 	}
-	return strings.Join(newAddressList, ";")
+	return strings.Join(newAddressList, AddressSeparator)
 }
