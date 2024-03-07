@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/antoniomika/multilistener"
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
 	"github.com/pires/go-proxyproto"
@@ -245,7 +246,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			return
 		}
 
-		portChannelForwardReplyPayload.Rport = uint32(tH.Listener.Addr().(*net.TCPAddr).Port)
+		portChannelForwardReplyPayload.Rport = uint32(tH.Listener.(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port)
 
 		mainRequestMessages = requestMessages
 

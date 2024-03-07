@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"net"
 	"strings"
 
@@ -41,4 +42,15 @@ func ParseAddress(addresses string) (string, string, error) {
 		address = addressSplit[1]
 	}
 	return net.SplitHostPort(address)
+}
+
+// GenerateAddress generates an address string with ports set.
+func GenerateAddress(addresses string, port uint32) string {
+	newAddressList := []string{}
+	addressList := strings.Split(addresses, ";")
+
+	for _, address := range addressList {
+		newAddressList = append(newAddressList, fmt.Sprintf("%s:%d", address, port))
+	}
+	return strings.Join(newAddressList, ";")
 }
