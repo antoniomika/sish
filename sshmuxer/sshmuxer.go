@@ -163,7 +163,7 @@ func Start() {
 
 	var listener net.Listener
 
-	l, err := net.Listen("tcp", viper.GetString("ssh-address"))
+	l, err := utils.Listen(viper.GetString("ssh-address"))
 	if err != nil {
 		log.Fatal(err)
 	}

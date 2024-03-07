@@ -1,9 +1,10 @@
 module github.com/antoniomika/sish
 
-go 1.21
+go 1.22
 
 require (
 	github.com/ScaleFT/sshkeys v1.2.0
+	github.com/antoniomika/multilistener v0.0.0-20240307165040-3803b1d655e2
 	github.com/antoniomika/syncmap v1.0.0
 	github.com/caddyserver/certmagic v0.20.0
 	github.com/fsnotify/fsnotify v1.7.0

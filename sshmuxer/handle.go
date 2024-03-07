@@ -40,7 +40,7 @@ func handleRequest(newRequest *ssh.Request, sshConn *utils.SSHConnection, state 
 }
 
 // checkSession will check a session to see that it has a session.
-func checkSession(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
+func checkSession(_ *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
 	sshConn.SetupLock.Lock()
 	if sshConn.CleanupHandler {
 		sshConn.SetupLock.Unlock()

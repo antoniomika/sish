@@ -33,7 +33,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 	}
 
 	if tH == nil {
-		lis, err := net.Listen("tcp", tcpAddr)
+		lis, err := utils.Listen(tcpAddr)
 		if err != nil {
 			log.Println("Error listening on addr:", err)
 			return nil, nil, "", nil, "", "", err

@@ -688,7 +688,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 			}
 		}
 
-		checkPort := func(checkerAddr string, checkerPort uint32) bool {
+		checkPort := func(checkerPort uint32) bool {
 			if bindErr != nil {
 				return false
 			}
@@ -731,7 +731,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 			return ok
 		}
 
-		for checkPort(bindAddr, bindPort) {
+		for checkPort(bindPort) {
 		}
 
 		return listenAddr, bindPort, tH
@@ -790,7 +790,7 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 			}
 		}
 
-		checkHost := func(checkHost string) bool {
+		checkHost := func() bool {
 			if bindErr != nil {
 				return false
 			}
@@ -826,7 +826,7 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 			return ok
 		}
 
-		for checkHost(host) {
+		for checkHost() {
 		}
 
 		return host, bindErr
@@ -920,7 +920,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			}
 		}
 
-		checkHost := func(checkHost string) bool {
+		checkHost := func() bool {
 			if bindErr != nil {
 				return false
 			}
@@ -961,7 +961,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			return ok
 		}
 
-		for checkHost(host) {
+		for checkHost() {
 		}
 
 		if bindErr != nil {
@@ -1007,7 +1007,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 			}
 		}
 
-		checkAlias := func(checkAlias string) bool {
+		checkAlias := func() bool {
 			if bindErr != nil {
 				return false
 			}
@@ -1029,7 +1029,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 			return ok
 		}
 
-		for checkAlias(alias) {
+		for checkAlias() {
 		}
 
 		if bindErr != nil {
