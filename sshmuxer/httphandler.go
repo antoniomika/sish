@@ -18,7 +18,7 @@ import (
 
 // handleHTTPListener handles the creation of the httpHandler
 // (or addition for load balancing) and set's up the underlying listeners.
-func handleHTTPListener(check *channelForwardMsg, stringPort string, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection, scheme string) (*utils.HTTPHolder, *url.URL, string, error) {
+func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection, scheme string) (*utils.HTTPHolder, *url.URL, string, error) {
 	hostUrl, pH := utils.GetOpenHost(check.Addr, state, sshConn)
 
 	if (hostUrl == nil || !strings.HasPrefix(hostUrl.Host, check.Addr)) && viper.GetBool("force-requested-subdomains") {

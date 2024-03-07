@@ -13,7 +13,7 @@ jobs:
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
       - uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '1.22'
       - name: build docs site
         run: make ssg
       - name: publish to pgs

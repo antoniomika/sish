@@ -399,7 +399,7 @@ func Start(state *utils.State) {
 		go func() {
 			// We'll replace this with a custom listener
 			// That listener will then check the hostname of the request and choose the connection to send it to
-			portListener, err := net.Listen("tcp", httpsServer.Addr)
+			portListener, err := utils.Listen(httpsServer.Addr)
 			if err != nil {
 				log.Fatalf("couldn't listen to %q: %q\n", httpsServer.Addr, err.Error())
 			}
@@ -473,7 +473,7 @@ func Start(state *utils.State) {
 
 	var httpListener net.Listener
 
-	l, err := net.Listen("tcp", httpServer.Addr)
+	l, err := utils.Listen(httpServer.Addr)
 	if err != nil {
 		log.Fatalf("couldn't listen to %q: %q\n", httpServer.Addr, err.Error())
 	}

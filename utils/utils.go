@@ -135,7 +135,7 @@ func LoadProxyProtoConfig(l *proxyproto.Listener) {
 
 // GetRandomPortInRange returns a random port in the provided range.
 // The port range is a comma separated list of ranges or ports.
-func GetRandomPortInRange(portRange string) uint32 {
+func GetRandomPortInRange(listenAddr string, portRange string) uint32 {
 	var bindPort uint32
 
 	ranges := strings.Split(strings.TrimSpace(portRange), ",")
@@ -173,9 +173,9 @@ func GetRandomPortInRange(portRange string) uint32 {
 		bindPort = uint32(mathrand.Intn(int(possible[locHolder][1]-possible[locHolder][0])) + int(possible[locHolder][0]))
 	}
 
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", bindPort))
+	ln, err := Listen(GenerateAddress(listenAddr, bindPort))
 	if err != nil {
-		return GetRandomPortInRange(portRange)
+		return GetRandomPortInRange(listenAddr, portRange)
 	}
 
 	ln.Close()
@@ -684,21 +684,21 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 					bindErr = fmt.Errorf("unable to bind requested port")
 				}
 
-				sshConn.SendMessage(aurora.Sprintf("The TCP port %s is unavailable.%s", aurora.Red(listenAddr), extra), true)
+				sshConn.SendMessage(aurora.Sprintf("The TCP port %d is unavailable.%s", aurora.Red(bindPort), extra), true)
 			}
 		}
 
-		checkPort := func(checkerAddr string, checkerPort uint32) bool {
+		checkPort := func(checkerPort uint32) bool {
 			if bindErr != nil {
 				return false
 			}
 
-			listenAddr = fmt.Sprintf("%s:%d", bindAddr, bindPort)
+			listenAddr = GenerateAddress(bindAddr, bindPort)
 			checkedPort, err := CheckPort(checkerPort, viper.GetString("port-bind-range"))
 			_, ok := state.TCPListeners.Load(listenAddr)
 
 			if err == nil && (!viper.GetBool("tcp-load-balancer") || (viper.GetBool("tcp-load-balancer") && !ok) || (sniProxyEnabled && !ok)) {
-				ln, listenErr := net.Listen("tcp", listenAddr)
+				ln, listenErr := Listen(listenAddr)
 				if listenErr != nil {
 					err = listenErr
 				} else {
@@ -710,7 +710,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 				reportUnavailable(true)
 
 				if viper.GetString("port-bind-range") != "" {
-					bindPort = GetRandomPortInRange(viper.GetString("port-bind-range"))
+					bindPort = GetRandomPortInRange(bindAddr, viper.GetString("port-bind-range"))
 				} else {
 					bindPort = 0
 				}
@@ -718,7 +718,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 				bindPort = checkedPort
 			}
 
-			listenAddr = fmt.Sprintf("%s:%d", bindAddr, bindPort)
+			listenAddr = GenerateAddress(bindAddr, bindPort)
 			holder, ok := state.TCPListeners.Load(listenAddr)
 			if ok && (!sniProxyEnabled && viper.GetBool("tcp-load-balancer") || (sniProxyEnabled && viper.GetBool("sni-load-balancer"))) {
 				tH = holder
@@ -731,7 +731,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 			return ok
 		}
 
-		for checkPort(bindAddr, bindPort) {
+		for checkPort(bindPort) {
 		}
 
 		return listenAddr, bindPort, tH
@@ -790,7 +790,7 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 			}
 		}
 
-		checkHost := func(checkHost string) bool {
+		checkHost := func() bool {
 			if bindErr != nil {
 				return false
 			}
@@ -826,7 +826,7 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 			return ok
 		}
 
-		for checkHost(host) {
+		for checkHost() {
 		}
 
 		return host, bindErr
@@ -920,7 +920,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			}
 		}
 
-		checkHost := func(checkHost string) bool {
+		checkHost := func() bool {
 			if bindErr != nil {
 				return false
 			}
@@ -961,7 +961,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			return ok
 		}
 
-		for checkHost(host) {
+		for checkHost() {
 		}
 
 		if bindErr != nil {
@@ -1007,7 +1007,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 			}
 		}
 
-		checkAlias := func(checkAlias string) bool {
+		checkAlias := func() bool {
 			if bindErr != nil {
 				return false
 			}
@@ -1029,7 +1029,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 			return ok
 		}
 
-		for checkAlias(alias) {
+		for checkAlias() {
 		}
 
 		if bindErr != nil {
