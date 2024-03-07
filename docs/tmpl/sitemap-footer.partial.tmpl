@@ -1,0 +1,17 @@
+{{define "sitemap-footer"}}
+<div class="sitemap text-sm mb-4">
+{{range .Sitemap.Children -}}
+  <div>
+  {{- if (and $.Prev (eq $.Prev.GenHref .GenHref)) -}}
+  <a href="{{.GenHref}}" class="link-alt-adj">{{.Text}}</a>
+  {{- else if (and $.Next (eq $.Next.GenHref .GenHref)) -}}
+  <a href="{{.GenHref}}" class="link-alt-adj">{{.Text}}</a>
+  {{- else if (eq $.Href .GenHref) -}}
+  <a href="{{.GenHref}}" class="link-alt-hover">{{.Text}}</a>
+  {{- else -}}
+  <a href="{{.GenHref}}" class="link-alt">{{.Text}}</a>
+  {{- end -}}
+  </div>
+{{- end}}
+</div>
+{{end}}

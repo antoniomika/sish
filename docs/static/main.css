@@ -1,5 +1,15 @@
 .sitemap {
-  column-count: 2;
+  width: 150px;
+}
+
+.post {
+  max-width: 700px;
+}
+
+.post-container {
+  display: flex;
+  gap: 1rem;
+  flex-direction: row-reverse;
 }
 
 .hiw {
@@ -87,4 +97,25 @@
 
 .pager {
   min-width: 150px;
+}
+
+@media only screen and (max-width: 800px) {
+  body {
+    padding: 0 1rem;
+  }
+
+  header {
+    margin: 0;
+  }
+
+  .post-container {
+    display: block;
+  }
+
+  .sitemap {
+    text-align: center;
+    -moz-column-count: 2;
+    column-count: 2;
+    width: 100%;
+  }
 }
