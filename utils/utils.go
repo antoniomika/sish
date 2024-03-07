@@ -173,7 +173,10 @@ func GetRandomPortInRange(listenAddr string, portRange string) uint32 {
 		bindPort = uint32(mathrand.Intn(int(possible[locHolder][1]-possible[locHolder][0])) + int(possible[locHolder][0]))
 	}
 
-	ln, err := Listen(GenerateAddress(listenAddr, bindPort))
+	genedAddr := GenerateAddress(listenAddr, bindPort)
+	log.Println(genedAddr)
+
+	ln, err := Listen(genedAddr)
 	if err != nil {
 		return GetRandomPortInRange(listenAddr, portRange)
 	}
@@ -684,7 +687,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 					bindErr = fmt.Errorf("unable to bind requested port")
 				}
 
-				sshConn.SendMessage(aurora.Sprintf("The TCP port %s is unavailable.%s", aurora.Red(listenAddr), extra), true)
+				sshConn.SendMessage(aurora.Sprintf("The TCP port %s is unavailable.%s", aurora.Red(bindPort), extra), true)
 			}
 		}
 
@@ -710,7 +713,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 				reportUnavailable(true)
 
 				if viper.GetString("port-bind-range") != "" {
-					bindPort = GetRandomPortInRange(listenAddr, viper.GetString("port-bind-range"))
+					bindPort = GetRandomPortInRange(bindAddr, viper.GetString("port-bind-range"))
 				} else {
 					bindPort = 0
 				}

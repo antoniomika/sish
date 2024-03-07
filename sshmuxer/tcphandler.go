@@ -117,7 +117,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		connType = "TLS"
 	}
 
-	listenPort := tH.Listener.(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port
+	listenPort := tH.Listener.Addr().(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port
 	requestMessages += fmt.Sprintf("%s: %s:%d\r\n", aurora.BgBlue(connType), domainName, listenPort)
 	log.Printf("%s forwarding started: %s:%d -> %s for client: %s\n", aurora.BgBlue(connType), domainName, listenPort, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 

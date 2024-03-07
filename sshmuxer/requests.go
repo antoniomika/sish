@@ -246,7 +246,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			return
 		}
 
-		portChannelForwardReplyPayload.Rport = uint32(tH.Listener.(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port)
+		portChannelForwardReplyPayload.Rport = uint32(tH.Listener.Addr().(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port)
 
 		mainRequestMessages = requestMessages
 
