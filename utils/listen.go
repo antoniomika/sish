@@ -7,7 +7,7 @@ import (
 	"github.com/antoniomika/multilistener"
 )
 
-// Listen uses the multilistener package to generate a net.Listener that uses multiple addresses
+// Listen uses the multilistener package to generate a net.Listener that uses multiple addresses.
 func Listen(addresses string) (net.Listener, error) {
 	listeners := map[string][]string{}
 	addressList := strings.Split(addresses, ";")
