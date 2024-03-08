@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/antoniomika/sish/sshmuxer"
@@ -161,6 +162,8 @@ func initConfig() {
 		log.Println("Unable to bind pflags:", err)
 	}
 
+	viper.SetEnvPrefix(rootCmd.Use)
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err == nil {
