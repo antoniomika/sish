@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -94,19 +93,27 @@ func (tH *TCPHolder) Handle(state *State) {
 			continue
 		}
 
-		var firstWrite *bytes.Buffer
+		var bufBytes []byte
 
 		balancerName := ""
 		if tH.SNIProxy {
-			tlsHello, buf, _, err := PeekTLSHello(cl)
-			if err != nil && tlsHello == nil {
+			tlsHello, teeConn, err := PeekTLSHello(cl)
+			if tlsHello == nil {
 				log.Printf("Unable to read TLS hello: %s", err)
 				cl.Close()
 				continue
 			}
 
+			bufBytes = make([]byte, teeConn.Buffer.Buffered())
+
+			_, err = io.ReadFull(teeConn, bufBytes)
+			if err != nil {
+				log.Printf("Unable to read buffered data: %s", err)
+				cl.Close()
+				continue
+			}
+
 			balancerName = tlsHello.ServerName
-			firstWrite = buf
 		}
 
 		pB, ok := tH.Balancers.Load(balancerName)
@@ -170,8 +177,8 @@ func (tH *TCPHolder) Handle(state *State) {
 			continue
 		}
 
-		if firstWrite != nil {
-			_, err := conn.Write(firstWrite.Bytes())
+		if bufBytes != nil {
+			_, err := conn.Write(bufBytes)
 			if err != nil {
 				log.Println("Unable to write to conn:", err)
 				cl.Close()
