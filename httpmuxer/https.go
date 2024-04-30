@@ -32,6 +32,7 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 		}
 
 		tlsHello, buf, teeConn, peekErr := utils.PeekTLSHello(cl)
+		log.Printf("PEAKED INFO %+v %+v %+v %+v", tlsHello, buf, teeConn, peekErr)
 		if peekErr != nil && tlsHello == nil {
 			return teeConn, nil
 		}
