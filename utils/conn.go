@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/tls"
 	"io"
@@ -89,22 +88,44 @@ func (s *SSHConnection) CleanUp(state *State) {
 
 // TeeConn represents a simple net.Conn interface for SNI Processing.
 type TeeConn struct {
-	Conn   net.Conn
-	Buffer *bufio.ReadWriter
+	Conn      net.Conn
+	Reader    io.Reader
+	Buffer    *bytes.Buffer
+	FirstRead bool
+	Flushed   bool
 }
 
 // Read implements a reader ontop of the TeeReader.
 func (conn *TeeConn) Read(p []byte) (int, error) {
-	return conn.Buffer.Read(p)
+	if !conn.FirstRead {
+		conn.FirstRead = true
+		return conn.Reader.Read(p)
+	}
+
+	if conn.FirstRead && !conn.Flushed {
+		conn.Flushed = true
+		copy(p[0:conn.Buffer.Len()], conn.Buffer.Bytes())
+		return conn.Buffer.Len(), nil
+	}
+
+	return conn.Conn.Read(p)
 }
 
 // Write is a shim function to fit net.Conn.
 func (conn *TeeConn) Write(p []byte) (int, error) {
-	return conn.Buffer.Write(p)
+	if !conn.Flushed {
+		return 0, io.ErrClosedPipe
+	}
+
+	return conn.Conn.Write(p)
 }
 
 // Close is a shim function to fit net.Conn.
 func (conn *TeeConn) Close() error {
+	if !conn.Flushed {
+		return nil
+	}
+
 	return conn.Conn.Close()
 }
 
@@ -124,19 +145,22 @@ func (conn *TeeConn) SetReadDeadline(t time.Time) error { return conn.Conn.SetRe
 func (conn *TeeConn) SetWriteDeadline(t time.Time) error { return conn.Conn.SetWriteDeadline(t) }
 
 // GetBuffer returns the tee'd buffer.
-func (conn *TeeConn) GetBuffer() *bufio.ReadWriter { return conn.Buffer }
+func (conn *TeeConn) GetBuffer() *bytes.Buffer { return conn.Buffer }
 
 func NewTeeConn(conn net.Conn) *TeeConn {
 	teeConn := &TeeConn{
-		Conn:   conn,
-		Buffer: bufio.NewReadWriter(bufio.NewReaderSize(conn, 8192), bufio.NewWriterSize(conn, 8192)),
+		Conn:    conn,
+		Buffer:  bytes.NewBuffer([]byte{}),
+		Flushed: false,
 	}
+
+	teeConn.Reader = io.TeeReader(conn, teeConn.Buffer)
 
 	return teeConn
 }
 
 // PeekTLSHello peeks the TLS Connection Hello to proxy based on SNI.
-func PeekTLSHello(conn net.Conn) (*tls.ClientHelloInfo, *TeeConn, error) {
+func PeekTLSHello(conn net.Conn) (*tls.ClientHelloInfo, *bytes.Buffer, *TeeConn, error) {
 	var tlsHello *tls.ClientHelloInfo
 
 	tlsConfig := &tls.Config{
@@ -148,32 +172,10 @@ func PeekTLSHello(conn net.Conn) (*tls.ClientHelloInfo, *TeeConn, error) {
 
 	teeConn := NewTeeConn(conn)
 
-	header, err := teeConn.GetBuffer().Peek(5)
-	if err != nil {
-		return tlsHello, teeConn, err
-	}
+	err := tls.Server(teeConn, tlsConfig).Handshake()
 
-	if header[0] != 0x16 {
-		return tlsHello, teeConn, err
-	}
-
-	helloBytes, err := teeConn.GetBuffer().Peek(len(header) + (int(header[3])<<8 | int(header[4])))
-	if err != nil {
-		return tlsHello, teeConn, err
-	}
-
-	err = tls.Server(bufConn{reader: bytes.NewReader(helloBytes)}, tlsConfig).Handshake()
-
-	return tlsHello, teeConn, err
+	return tlsHello, teeConn.GetBuffer(), teeConn, err
 }
-
-type bufConn struct {
-	reader io.Reader
-	net.Conn
-}
-
-func (b bufConn) Read(p []byte) (int, error) { return b.reader.Read(p) }
-func (bufConn) Write(p []byte) (int, error)  { return 0, io.EOF }
 
 // IdleTimeoutConn handles the connection with a context deadline.
 // code adapted from https://qiita.com/kwi/items/b38d6273624ad3f6ae79

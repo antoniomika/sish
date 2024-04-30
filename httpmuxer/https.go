@@ -31,7 +31,7 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 			continue
 		}
 
-		tlsHello, teeConn, peekErr := utils.PeekTLSHello(cl)
+		tlsHello, buf, teeConn, peekErr := utils.PeekTLSHello(cl)
 		if peekErr != nil && tlsHello == nil {
 			return teeConn, nil
 		}
@@ -59,20 +59,20 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 		connectionLocation, err := balancer.NextServer()
 		if err != nil {
 			log.Println("Unable to load connection location:", err)
-			teeConn.Close()
+			cl.Close()
 			continue
 		}
 
 		host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
 		if err != nil {
 			log.Println("Unable to decode connection location:", err)
-			teeConn.Close()
+			cl.Close()
 			continue
 		}
 
 		hostAddr := string(host)
 
-		logLine := fmt.Sprintf("Accepted connection from %s -> %s", teeConn.RemoteAddr().String(), teeConn.LocalAddr().String())
+		logLine := fmt.Sprintf("Accepted connection from %s -> %s", cl.RemoteAddr().String(), cl.LocalAddr().String())
 		log.Println(logLine)
 
 		if viper.GetBool("log-to-client") {
@@ -94,11 +94,18 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 		conn, err := net.Dial("unix", hostAddr)
 		if err != nil {
 			log.Println("Error connecting to tcp balancer:", err)
-			teeConn.Close()
+			cl.Close()
 			continue
 		}
 
-		go utils.CopyBoth(conn, teeConn)
+		_, err = conn.Write(buf.Bytes())
+		if err != nil {
+			log.Println("Unable to write to conn:", err)
+			cl.Close()
+			continue
+		}
+
+		go utils.CopyBoth(conn, cl)
 	}
 }
 
