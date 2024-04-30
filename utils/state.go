@@ -93,14 +93,23 @@ func (tH *TCPHolder) Handle(state *State) {
 			continue
 		}
 
-		realConn := cl
+		var bufBytes []byte
 
 		balancerName := ""
 		if tH.SNIProxy {
-			tlsHello, realConn, err := PeekTLSHello(cl)
-			if err != nil && tlsHello == nil {
+			tlsHello, teeConn, err := PeekTLSHello(cl)
+			if tlsHello == nil {
 				log.Printf("Unable to read TLS hello: %s", err)
-				realConn.Close()
+				cl.Close()
+				continue
+			}
+
+			bufBytes = make([]byte, teeConn.Buffer.Buffered())
+
+			_, err = io.ReadFull(teeConn, bufBytes)
+			if err != nil {
+				log.Printf("Unable to read buffered data: %s", err)
+				cl.Close()
 				continue
 			}
 
@@ -119,7 +128,7 @@ func (tH *TCPHolder) Handle(state *State) {
 
 			if pB == nil {
 				log.Printf("Unable to load connection location: %s not found on TCP listener %s", balancerName, tH.TCPHost)
-				realConn.Close()
+				cl.Close()
 				continue
 			}
 		}
@@ -129,20 +138,20 @@ func (tH *TCPHolder) Handle(state *State) {
 		connectionLocation, err := balancer.NextServer()
 		if err != nil {
 			log.Println("Unable to load connection location:", err)
-			realConn.Close()
+			cl.Close()
 			continue
 		}
 
 		host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
 		if err != nil {
 			log.Println("Unable to decode connection location:", err)
-			realConn.Close()
+			cl.Close()
 			continue
 		}
 
 		hostAddr := string(host)
 
-		logLine := fmt.Sprintf("Accepted connection from %s -> %s", realConn.RemoteAddr().String(), realConn.LocalAddr().String())
+		logLine := fmt.Sprintf("Accepted connection from %s -> %s", cl.RemoteAddr().String(), cl.LocalAddr().String())
 		log.Println(logLine)
 
 		if viper.GetBool("log-to-client") {
@@ -164,11 +173,20 @@ func (tH *TCPHolder) Handle(state *State) {
 		conn, err := net.Dial("unix", hostAddr)
 		if err != nil {
 			log.Println("Error connecting to tcp balancer:", err)
-			realConn.Close()
+			cl.Close()
 			continue
 		}
 
-		go CopyBoth(conn, realConn)
+		if bufBytes != nil {
+			_, err := conn.Write(bufBytes)
+			if err != nil {
+				log.Println("Unable to write to conn:", err)
+				cl.Close()
+				continue
+			}
+		}
+
+		go CopyBoth(conn, cl)
 	}
 }
 
