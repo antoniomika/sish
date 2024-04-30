@@ -89,18 +89,22 @@ func (s *SSHConnection) CleanUp(state *State) {
 
 // TeeConn represents a simple net.Conn interface for SNI Processing.
 type TeeConn struct {
-	Conn   net.Conn
-	Buffer *bufio.ReadWriter
+	Conn     net.Conn
+	Buffer   *bufio.Reader
+	Unbuffer bool
 }
 
 // Read implements a reader ontop of the TeeReader.
 func (conn *TeeConn) Read(p []byte) (int, error) {
-	return conn.Buffer.Read(p)
+	if conn.Unbuffer && conn.Buffer.Buffered() > 0 {
+		return conn.Buffer.Read(p)
+	}
+	return conn.Conn.Read(p)
 }
 
 // Write is a shim function to fit net.Conn.
 func (conn *TeeConn) Write(p []byte) (int, error) {
-	return conn.Buffer.Write(p)
+	return conn.Conn.Write(p)
 }
 
 // Close is a shim function to fit net.Conn.
@@ -123,13 +127,10 @@ func (conn *TeeConn) SetReadDeadline(t time.Time) error { return conn.Conn.SetRe
 // SetWriteDeadline is a shim function to fit net.Conn.
 func (conn *TeeConn) SetWriteDeadline(t time.Time) error { return conn.Conn.SetWriteDeadline(t) }
 
-// GetBuffer returns the tee'd buffer.
-func (conn *TeeConn) GetBuffer() *bufio.ReadWriter { return conn.Buffer }
-
 func NewTeeConn(conn net.Conn) *TeeConn {
 	teeConn := &TeeConn{
 		Conn:   conn,
-		Buffer: bufio.NewReadWriter(bufio.NewReaderSize(conn, 8192), bufio.NewWriterSize(conn, 8192)),
+		Buffer: bufio.NewReaderSize(conn, 65535),
 	}
 
 	return teeConn
@@ -148,7 +149,7 @@ func PeekTLSHello(conn net.Conn) (*tls.ClientHelloInfo, *TeeConn, error) {
 
 	teeConn := NewTeeConn(conn)
 
-	header, err := teeConn.GetBuffer().Peek(5)
+	header, err := teeConn.Buffer.Peek(5)
 	if err != nil {
 		return tlsHello, teeConn, err
 	}
@@ -157,12 +158,14 @@ func PeekTLSHello(conn net.Conn) (*tls.ClientHelloInfo, *TeeConn, error) {
 		return tlsHello, teeConn, err
 	}
 
-	helloBytes, err := teeConn.GetBuffer().Peek(len(header) + (int(header[3])<<8 | int(header[4])))
+	helloBytes, err := teeConn.Buffer.Peek(len(header) + (int(header[3])<<8 | int(header[4])))
 	if err != nil {
 		return tlsHello, teeConn, err
 	}
 
 	err = tls.Server(bufConn{reader: bytes.NewReader(helloBytes)}, tlsConfig).Handshake()
+
+	teeConn.Unbuffer = true
 
 	return tlsHello, teeConn, err
 }

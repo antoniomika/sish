@@ -33,6 +33,7 @@
         "--proxy-protocol-version=userdefined",
         "--log-to-client=true",
         "--admin-console=true",
+        "--admin-console-token=true",
         "--service-console=true",
         "--verify-ssl=false",
         "--http-load-balancer=true",
