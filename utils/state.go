@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -94,19 +93,18 @@ func (tH *TCPHolder) Handle(state *State) {
 			continue
 		}
 
-		var firstWrite *bytes.Buffer
+		realConn := cl
 
 		balancerName := ""
 		if tH.SNIProxy {
-			tlsHello, buf, _, err := PeekTLSHello(cl)
+			tlsHello, realConn, err := PeekTLSHello(cl)
 			if err != nil && tlsHello == nil {
 				log.Printf("Unable to read TLS hello: %s", err)
-				cl.Close()
+				realConn.Close()
 				continue
 			}
 
 			balancerName = tlsHello.ServerName
-			firstWrite = buf
 		}
 
 		pB, ok := tH.Balancers.Load(balancerName)
@@ -121,7 +119,7 @@ func (tH *TCPHolder) Handle(state *State) {
 
 			if pB == nil {
 				log.Printf("Unable to load connection location: %s not found on TCP listener %s", balancerName, tH.TCPHost)
-				cl.Close()
+				realConn.Close()
 				continue
 			}
 		}
@@ -131,20 +129,20 @@ func (tH *TCPHolder) Handle(state *State) {
 		connectionLocation, err := balancer.NextServer()
 		if err != nil {
 			log.Println("Unable to load connection location:", err)
-			cl.Close()
+			realConn.Close()
 			continue
 		}
 
 		host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
 		if err != nil {
 			log.Println("Unable to decode connection location:", err)
-			cl.Close()
+			realConn.Close()
 			continue
 		}
 
 		hostAddr := string(host)
 
-		logLine := fmt.Sprintf("Accepted connection from %s -> %s", cl.RemoteAddr().String(), cl.LocalAddr().String())
+		logLine := fmt.Sprintf("Accepted connection from %s -> %s", realConn.RemoteAddr().String(), realConn.LocalAddr().String())
 		log.Println(logLine)
 
 		if viper.GetBool("log-to-client") {
@@ -166,20 +164,11 @@ func (tH *TCPHolder) Handle(state *State) {
 		conn, err := net.Dial("unix", hostAddr)
 		if err != nil {
 			log.Println("Error connecting to tcp balancer:", err)
-			cl.Close()
+			realConn.Close()
 			continue
 		}
 
-		if firstWrite != nil {
-			_, err := conn.Write(firstWrite.Bytes())
-			if err != nil {
-				log.Println("Unable to write to conn:", err)
-				cl.Close()
-				continue
-			}
-		}
-
-		go CopyBoth(conn, cl)
+		go CopyBoth(conn, realConn)
 	}
 }
 
