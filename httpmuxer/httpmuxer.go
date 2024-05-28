@@ -365,16 +365,18 @@ func Start(state *utils.State) {
 					return fmt.Errorf("ondemand certificate retrieval is not enabled")
 				}
 
-				ok := false
+				ok := name == viper.GetString("domain")
 
-				state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
-					if name == locationListener.HTTPUrl.Host || utils.MatchesWildcardHost(name, locationListener.HTTPUrl.Host) {
-						ok = true
-						return false
-					}
+				if !ok {
+					state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
+						if name == locationListener.HTTPUrl.Host || utils.MatchesWildcardHost(name, locationListener.HTTPUrl.Host) {
+							ok = true
+							return false
+						}
 
-					return true
-				})
+						return true
+					})
+				}
 
 				if !ok {
 					return fmt.Errorf("cannot find connection for host: %s", name)
