@@ -41,6 +41,61 @@ type forwardedTCPPayload struct {
 	OriginPort uint32
 }
 
+// handleCancelRemoteForward will handle a remote forward cancellation
+// request and remove the relevant listeners.
+func handleCancelRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
+	select {
+	case <-sshConn.Exec:
+	case <-time.After(1 * time.Second):
+		break
+	}
+
+	check := &channelForwardMsg{}
+
+	err := ssh.Unmarshal(newRequest.Payload, check)
+	if err != nil {
+		log.Println("Error unmarshaling remote forward payload:", err)
+		err = newRequest.Reply(false, nil)
+		if err != nil {
+			log.Println("Error replying to request:", err)
+		}
+		return
+	}
+
+	closed := false
+
+	sshConn.Listeners.Range(func(remoteAddr string, listener net.Listener) bool {
+		holder, ok := listener.(*utils.ListenerHolder)
+		if !ok {
+			return false
+		}
+
+		if holder.OriginalAddr == check.Addr && holder.OriginalPort == check.Rport {
+			closed = true
+			holder.Close()
+			return false
+		}
+
+		return true
+	})
+
+	if !closed {
+		log.Println("Unable to close tunnel")
+
+		err = newRequest.Reply(false, nil)
+		if err != nil {
+			log.Println("Error replying to request:", err)
+		}
+
+		return
+	}
+
+	err = newRequest.Reply(true, nil)
+	if err != nil {
+		log.Println("Error replying to request:", err)
+	}
+}
+
 // handleRemoteForward will handle a remote forward request
 // and stand up the relevant listeners.
 func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
@@ -56,6 +111,17 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	err := ssh.Unmarshal(newRequest.Payload, check)
 	if err != nil {
 		log.Println("Error unmarshaling remote forward payload:", err)
+
+		err = newRequest.Reply(false, nil)
+		if err != nil {
+			log.Println("Error replying to socket request:", err)
+		}
+		return
+	}
+
+	originalCheck := &channelForwardMsg{
+		Addr:  check.Addr,
+		Rport: check.Rport,
 	}
 
 	originalAddress := check.Addr
@@ -131,10 +197,12 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	}
 
 	listenerHolder := &utils.ListenerHolder{
-		ListenAddr: listenAddr,
-		Listener:   chanListener,
-		Type:       listenerType,
-		SSHConn:    sshConn,
+		ListenAddr:   listenAddr,
+		Listener:     chanListener,
+		Type:         listenerType,
+		SSHConn:      sshConn,
+		OriginalAddr: originalCheck.Addr,
+		OriginalPort: originalCheck.Rport,
 	}
 
 	state.Listeners.Store(listenAddr, listenerHolder)
