@@ -44,12 +44,6 @@ type forwardedTCPPayload struct {
 // handleCancelRemoteForward will handle a remote forward cancellation
 // request and remove the relevant listeners.
 func handleCancelRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
-	select {
-	case <-sshConn.Exec:
-	case <-time.After(1 * time.Second):
-		break
-	}
-
 	check := &channelForwardMsg{}
 
 	err := ssh.Unmarshal(newRequest.Payload, check)

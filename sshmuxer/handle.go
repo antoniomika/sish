@@ -27,7 +27,6 @@ func handleRequest(newRequest *ssh.Request, sshConn *utils.SSHConnection, state 
 		go checkSession(newRequest, sshConn, state)
 		handleRemoteForward(newRequest, sshConn, state)
 	case "cancel-tcpip-forward":
-		go checkSession(newRequest, sshConn, state)
 		handleCancelRemoteForward(newRequest, sshConn, state)
 	case "keepalive@openssh.com":
 		err := newRequest.Reply(true, nil)
