@@ -43,7 +43,7 @@ func main() {
 	}
 
 	config := &pdocs.DocConfig{
-		Logger: slog.Default(),
+		Logger:   slog.Default(),
 		Sitemap:  sitemap,
 		Out:      "./docs/public",
 		Tmpl:     "./docs/tmpl",
