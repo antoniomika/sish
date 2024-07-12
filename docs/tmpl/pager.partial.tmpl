@@ -1,0 +1,23 @@
+{{ define "pager" }}
+<div class="flex justify-between gap-2 my-4">
+    <div class="pager max-w-half flex items-center">
+      {{if .Prev}}
+      <div class="flex flex-col items-start">
+        <div class="text-sm font-grey-light">&lt;&lt; PREV</div>
+        <a href="{{.Prev.GenHref}}" class="text-xl link-alt-adj">{{.Prev.Text}}</a>
+      </div>
+      {{end}}
+    </div>
+
+    <div class="pager max-w-half flex items-center justify-end">
+      {{if .Next}}
+      <div class="flex flex-col items-end">
+        <div class="text-sm font-grey-light">
+          NEXT &gt;&gt;
+        </div>
+        <a href="{{.Next.GenHref}}" class="text-xl align-right link-alt-adj">{{.Next.Text}}</a>
+      </div>
+      {{end}}
+    </div>
+</div>
+{{end}}

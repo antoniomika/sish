@@ -1,23 +1,26 @@
 {{define "toc"}}
-<div>
-  {{range $key, $value := .SitemapByTag}}
-    <div class="box my">
-      <h2 class="text-xl">{{$key}}</h2>
-      <ul>
-        {{range $value}}
+<div class="sitemap-grid">
+{{range .Sitemap.Children -}}
+  {{if .Children}}
+  <div class="box my">
+    <h2 class="text-xl text-underline inline-block">{{.Text}}</h2>
+    <ul class="list-none" style="padding-left: 0;">
+    {{range .Children -}}
+      <li>
+        <a href="{{.GenHref}}">{{.Text}}</a>
+
+        <ul class="list-disc" style="padding-left: 2rem;">
+        {{range .Children}}
           <li>
             <a href="{{.GenHref}}">{{.Text}}</a>
-            {{if .Children}}
-              <ul>
-              {{range .Children}}
-                <li><a href="{{.ParentHref}}{{.GenHref}}">{{.Text}}</a></li>
-              {{end}}
-              </ul>
-            {{end}}
           </li>
         {{end}}
-      </ul>
-    </div>
+        </ul>
+      </li>
+    {{- end}}
+    </ul>
+  </div>
   {{end}}
+{{- end}}
 </div>
 {{end}}
