@@ -77,7 +77,7 @@ ssh -p 2222 -R 80:localhost:8080 tuns.sh
 
 # Docker
 
-[Find our latest releases.](/releases)
+[Find our latest releases.](/faq#where-can-i-find-latest-releases)
 
 Pull the Docker image
 

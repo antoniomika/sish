@@ -1,9 +1,18 @@
+.visited {
+  color: var(--visited);
+}
+
 .sitemap {
-  width: 150px;
+  width: 250px;
 }
 
 .post {
   max-width: 700px;
+}
+
+.container-xs {
+  max-width: 20em;
+  width: 100%;
 }
 
 .post-container {
@@ -99,9 +108,23 @@
   min-width: 150px;
 }
 
+.sitemap-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.sidebar-list {
+  padding: 0 0 0 1rem;
+}
+
+.sidebar-list li {
+  margin: 0 0 0.5rem 0;
+}
+
 @media only screen and (max-width: 800px) {
   body {
-    padding: 0 1rem;
+    padding: 0 0.75rem;
   }
 
   header {
@@ -117,5 +140,18 @@
     -moz-column-count: 2;
     column-count: 2;
     width: 100%;
+  }
+
+  .sitemap-grid {
+    grid-template-columns: repeat(1, 1fr);
+  }
+
+  .mk-nav {
+    padding: 1rem 0;
+  }
+
+  .sidebar-list {
+    padding: 0 0 0 0.6rem;
+    margin: 0;
   }
 }

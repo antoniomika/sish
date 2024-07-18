@@ -13,7 +13,7 @@ require (
 	github.com/jpillora/ipfilter v1.2.9
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/mikesmitty/edkey v0.0.0-20170222072505-3356ea4e686a
-	github.com/picosh/pdocs v0.0.0-20240303160411-1e3ac645dce0
+	github.com/picosh/pdocs v0.0.0-20240626184614-7aff67648d6e
 	github.com/pires/go-proxyproto v0.7.0
 	github.com/radovskyb/watcher v1.0.7
 	github.com/sirupsen/logrus v1.9.3
@@ -29,8 +29,6 @@ require (
 	github.com/alecthomas/chroma v0.10.0 // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect
 	github.com/bytedance/sonic/loader v0.1.1 // indirect
-	github.com/chenzhuoyu/base64x v0.0.0-20230717121745-296ad89f973d // indirect
-	github.com/chenzhuoyu/iasm v0.9.1 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/dchest/bcrypt_pbkdf v0.0.0-20150205184540-83f37f9c154a // indirect
@@ -73,6 +71,7 @@ require (
 	github.com/yuin/goldmark-meta v1.1.0 // indirect
 	github.com/zeebo/blake3 v0.2.3 // indirect
 	go.abhg.dev/goldmark/anchor v0.1.1 // indirect
+	go.abhg.dev/goldmark/toc v0.10.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/arch v0.7.0 // indirect
