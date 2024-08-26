@@ -697,7 +697,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 			checkedPort, err := CheckPort(checkerPort, viper.GetString("port-bind-range"))
 			_, ok := state.TCPListeners.Load(listenAddr)
 
-			if err == nil && (!viper.GetBool("tcp-load-balancer") || (viper.GetBool("tcp-load-balancer") && !ok) || (sniProxyEnabled && !ok)) {
+			if err == nil && !ok && (viper.GetBool("tcp-load-balancer") || viper.GetBool("sni-load-balancer")) {
 				ln, listenErr := Listen(listenAddr)
 				if listenErr != nil {
 					err = listenErr
@@ -720,7 +720,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 
 			listenAddr = GenerateAddress(bindAddr, bindPort)
 			holder, ok := state.TCPListeners.Load(listenAddr)
-			if ok && (!sniProxyEnabled && viper.GetBool("tcp-load-balancer") || (sniProxyEnabled && viper.GetBool("sni-load-balancer"))) {
+			if ok && ((!sniProxyEnabled && viper.GetBool("tcp-load-balancer")) || sniProxyEnabled) {
 				tH = holder
 				ok = false
 			}
