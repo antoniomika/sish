@@ -38,14 +38,10 @@ sish supports allowing users to bring custom domains to the service, but SSH key
 auth is required to be enabled. To use this feature, you must setup TXT and
 CNAME/A records for the domain/subdomain you would like to use for your
 forwarded connection. The CNAME/A record must point to the domain or IP that is
-hosting sish. The TXT record must be be a `key=val` string that looks like:
+hosting sish. The TXT record must be for `_sish.customdomain` and contain an ssh key fingerprint.
 
-```text
-sish=SSHKEYFINGERPRINT
-```
-
-Where `SSHKEYFINGERPRINT` is the fingerprint of the key used for logging into
-the server. You can set multiple TXT records and sish will check all of them to
+You must use the fingerprint of the key used for logging into the server.
+You can set multiple TXT records and sish will check all of them to
 ensure at least one is a match. You can retrieve your key fingerprint by
 running:
 

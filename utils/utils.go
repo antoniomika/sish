@@ -40,7 +40,7 @@ import (
 
 const (
 	// sishDNSPrefix is the prefix used for DNS TXT records.
-	sishDNSPrefix = "sish="
+	sishDNSPrefix = "_sish"
 
 	// Prefix used for defining wildcard host matchers.
 	wildcardPrefix = "*."
@@ -638,16 +638,12 @@ func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
 		return false, "", nil
 	}
 
-	records, err := net.LookupTXT(addr)
+	records, err := net.LookupTXT(fmt.Sprintf("%s.%s", sishDNSPrefix, addr))
 
 	for _, v := range records {
-		if strings.HasPrefix(v, sishDNSPrefix) {
-			dnsPubKeyFingerprint := strings.TrimSpace(strings.TrimPrefix(v, sishDNSPrefix))
-
-			match := sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"] == dnsPubKeyFingerprint
-			if match {
-				return match, dnsPubKeyFingerprint, err
-			}
+		match := sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"] == v
+		if match {
+			return match, v, err
 		}
 	}
 
