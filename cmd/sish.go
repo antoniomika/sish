@@ -150,6 +150,8 @@ func init() {
 	rootCmd.PersistentFlags().DurationP("authentication-keys-directory-watch-interval", "", 200*time.Millisecond, "The interval to poll for filesystem changes for SSH keys")
 	rootCmd.PersistentFlags().DurationP("https-certificate-directory-watch-interval", "", 200*time.Millisecond, "The interval to poll for filesystem changes for HTTPS certificates")
 	rootCmd.PersistentFlags().DurationP("authentication-key-request-timeout", "", 5*time.Second, "Duration to wait for a response from the authentication key request")
+	rootCmd.PersistentFlags().StringP("authentication-password-request-url", "", "", "A url to validate passwords for password-based authentication.\nsish will make an HTTP POST request to this URL with a JSON body containing\nthe provided password, username, and ip address. E.g.:\n{\"password\": string, \"user\": string, \"remote_addr\": string}\nA response with status code 200 indicates approval of the password")
+	rootCmd.PersistentFlags().DurationP("authentication-password-request-timeout", "", 5*time.Second, "Duration to wait for a response from the authentication password request")
 }
 
 // initConfig initializes the configuration and loads needed
