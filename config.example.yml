@@ -9,6 +9,8 @@ authentication-key-request-url: ""
 authentication-keys-directory: deploy/pubkeys/
 authentication-keys-directory-watch-interval: 200ms
 authentication-password: ""
+authentication-password-request-url: ""
+authentication-password-request-timeout: 5s
 banned-aliases: ""
 banned-countries: ""
 banned-ips: ""

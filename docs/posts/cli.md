@@ -5,7 +5,6 @@ keywords: [sish, cli]
 ---
 
 ```text
-```text
 sish is a command line utility that implements an SSH server that can handle HTTP(S)/WS(S)/TCP multiplexing, forwarding and load balancing.
 It can handle multiple vhosting and reverse tunneling endpoints for a large number of clients.
 
@@ -31,6 +30,12 @@ Flags:
                                                                 from the authentication list (default "deploy/pubkeys/")
       --authentication-keys-directory-watch-interval duration   The interval to poll for filesystem changes for SSH keys (default 200ms)
   -u, --authentication-password string                          Password to use for SSH server password authentication
+      --authentication-password-request-timeout duration        Duration to wait for a response from the authentication password request (default 5s)
+      --authentication-password-request-url string              A url to validate passwords for password-based authentication.
+                                                                sish will make an HTTP POST request to this URL with a JSON body containing
+                                                                the provided password, username, and ip address. E.g.:
+                                                                {"password": string, "user": string, "remote_addr": string}
+                                                                A response with status code 200 indicates approval of the password
       --banned-aliases string                                   A comma separated list of banned aliases that users are unable to bind
   -o, --banned-countries string                                 A comma separated list of banned countries. Applies to HTTP, TCP, and SSH connections
   -x, --banned-ips string                                       A comma separated list of banned ips that are unable to access the service. Applies to HTTP, TCP, and SSH connections
@@ -126,5 +131,4 @@ Flags:
   -v, --version                                                 version for sish
   -y, --whitelisted-countries string                            A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections
   -w, --whitelisted-ips string                                  A comma separated list of whitelisted ips. Applies to HTTP, TCP, and SSH connections
-```
 ```

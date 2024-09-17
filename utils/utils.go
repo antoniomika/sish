@@ -462,6 +462,18 @@ func GetSSHConfig() *ssh.ServerConfig {
 				return nil, nil
 			}
 
+			// Allow validation of passwords via a sub-request to another service
+			authUrl := viper.GetString("authentication-password-request-url")
+			if authUrl != "" {
+				validKey, err := checkAuthenticationPasswordRequest(authUrl, password, c.RemoteAddr(), c.User())
+				if err != nil {
+					log.Printf("Error calling authentication password URL %s: %s\n", authUrl, err)
+				}
+				if validKey {
+					return nil, nil
+				}
+			}
+
 			return nil, fmt.Errorf("password doesn't match")
 		},
 		PublicKeyCallback: func(c ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
@@ -490,7 +502,7 @@ func GetSSHConfig() *ssh.ServerConfig {
 			if authUrl != "" {
 				validKey, err := checkAuthenticationKeyRequest(authUrl, authKey, c.RemoteAddr(), c.User())
 				if err != nil {
-					log.Printf("Error calling authentication URL %s: %s\n", authUrl, err)
+					log.Printf("Error calling authentication key URL %s: %s\n", authUrl, err)
 				}
 				if validKey {
 					permssionsData := &ssh.Permissions{
@@ -541,6 +553,40 @@ func checkAuthenticationKeyRequest(authUrl string, authKey []byte, addr net.Addr
 
 	if res.StatusCode != http.StatusOK {
 		log.Printf("Public key rejected by auth service: %s with status %d", urlS, res.StatusCode)
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// checkAuthenticationPasswordRequest makes an HTTP POST request to the specified url with
+// the provided user-password pair to validate whether it should be accepted.
+func checkAuthenticationPasswordRequest(authUrl string, password []byte, addr net.Addr, user string) (bool, error) {
+	parsedUrl, err := url.ParseRequestURI(authUrl)
+	if err != nil {
+		return false, fmt.Errorf("error parsing url %s", err)
+	}
+
+	c := &http.Client{
+		Timeout: viper.GetDuration("authentication-password-request-timeout"),
+	}
+	urlS := parsedUrl.String()
+	reqBodyMap := map[string]string{
+		"password":    string(password),
+		"remote_addr": addr.String(),
+		"user":        user,
+	}
+	reqBody, err := json.Marshal(reqBodyMap)
+	if err != nil {
+		return false, fmt.Errorf("error jsonifying request body")
+	}
+	res, err := c.Post(urlS, "application/json", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return false, err
+	}
+
+	if res.StatusCode != http.StatusOK {
+		log.Printf("Password rejected by auth service: %s with status %d", urlS, res.StatusCode)
 		return false, nil
 	}
 
