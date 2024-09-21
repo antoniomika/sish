@@ -36,6 +36,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/vulcand/oxy/roundrobin"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/net/publicsuffix"
 )
 
 const (
@@ -684,12 +685,37 @@ func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
 		return false, "", nil
 	}
 
-	records, err := net.LookupTXT(fmt.Sprintf("%s.%s", sishDNSPrefix, addr))
+	lookupAddrs := make([]string, 1)
+	lookupAddrs[0] = fmt.Sprintf("%s.%s", sishDNSPrefix, addr)
 
-	for _, v := range records {
-		match := sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"] == v
-		if match {
-			return match, v, err
+	if viper.GetBool("verify-dns-subdomains") {
+		topAddr, err := publicsuffix.EffectiveTLDPlusOne(addr)
+		if err != nil {
+			return false, "", err
+		}
+		if addr != topAddr {
+			for {
+				split := strings.SplitN(addr, ".", 2)
+				if len(split) < 2 {
+					return false, "", fmt.Errorf("Invalid host")
+				}
+				addr = split[1]
+				lookupAddrs = append(lookupAddrs, fmt.Sprintf("%s.%s", sishDNSPrefix, addr))
+				if addr == topAddr {
+					break
+				}
+			}
+		}
+	}
+
+	for _, lookupAddr := range lookupAddrs {
+		records, err := net.LookupTXT(lookupAddr)
+
+		for _, v := range records {
+			match := sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"] == v
+			if match {
+				return match, v, err
+			}
 		}
 	}
 

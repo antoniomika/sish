@@ -152,6 +152,7 @@ func init() {
 	rootCmd.PersistentFlags().DurationP("authentication-key-request-timeout", "", 5*time.Second, "Duration to wait for a response from the authentication key request")
 	rootCmd.PersistentFlags().StringP("authentication-password-request-url", "", "", "A url to validate passwords for password-based authentication.\nsish will make an HTTP POST request to this URL with a JSON body containing\nthe provided password, username, and ip address. E.g.:\n{\"password\": string, \"user\": string, \"remote_addr\": string}\nA response with status code 200 indicates approval of the password")
 	rootCmd.PersistentFlags().DurationP("authentication-password-request-timeout", "", 5*time.Second, "Duration to wait for a response from the authentication password request")
+	rootCmd.PersistentFlags().BoolP("verify-dns-subdomains", "", false, "When verifying DNS information for a host, match any key fingerprint up the hierarchy of subdomains,\ninstead of only verifying for the specified host")
 }
 
 // initConfig initializes the configuration and loads needed
