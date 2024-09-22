@@ -1,6 +1,6 @@
 ---
 title: CLI
-description: How use sish's CLI 
+description: How use sish's CLI
 keywords: [sish, cli]
 ---
 
@@ -127,6 +127,8 @@ Flags:
       --tcp-load-balancer                                       Enable the TCP load balancer (multiple clients can bind the same port)
       --time-format string                                      The time format to use for both HTTP and general log messages (default "2006/01/02 - 15:04:05")
       --verify-dns                                              Verify DNS information for hosts and ensure it matches a connecting users sha256 key fingerprint (default true)
+      --verify-dns-subdomains                                   When verifying DNS information for a host, match any key fingerprint up the hierarchy of subdomains,
+                                                                instead of only verifying for the specified host
       --verify-ssl                                              Verify SSL certificates made on proxied HTTP connections (default true)
   -v, --version                                                 version for sish
   -y, --whitelisted-countries string                            A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections
