@@ -49,7 +49,6 @@ require (
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailgun/timetools v0.0.0-20170619190023-f3a7b8ffff47 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mholt/acmez v1.2.0 // indirect
 	github.com/mholt/acmez/v2 v2.0.2 // indirect
 	github.com/miekg/dns v1.1.62 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
