@@ -9,11 +9,11 @@ ssg:
 .PHONY: ssg
 
 docs: ssg
-	rsync -vr ./docs/public/ hey@pgs.sh:/sish-local
+	rsync -vr ./docs/public/ pgs.sh:/sish-local
 .PHONY: docs
 
 docs-prod: ssg
-	rsync -vr ./docs/public/ hey@pgs.sh:/sish-prod
+	rsync -vr ./docs/public/ pgs.sh:/sish-prod
 .PHONY: docs-prod
 
 dev:
