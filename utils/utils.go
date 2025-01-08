@@ -118,7 +118,7 @@ func LoadProxyProtoConfig(l *proxyproto.Listener) {
 	if viper.GetBool("proxy-protocol-use-timeout") {
 		l.ReadHeaderTimeout = viper.GetDuration("proxy-protocol-timeout")
 
-		l.Policy = func(upstream net.Addr) (proxyproto.Policy, error) {
+		l.ConnPolicy = func(connPolicyOptions proxyproto.ConnPolicyOptions) (proxyproto.Policy, error) {
 			switch viper.GetString("proxy-protocol-policy") {
 			case "ignore":
 				return proxyproto.IGNORE, nil
