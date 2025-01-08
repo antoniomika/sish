@@ -25,7 +25,7 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
     - name: Set up Go
       uses: actions/setup-go@v3
@@ -43,7 +43,7 @@ jobs:
         go test -v ./... -cover -race -coverprofile=coverage.out
         go tool cover -func=coverage.out -o=coverage.out
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: test
     steps:
     - name: Checkout repo
