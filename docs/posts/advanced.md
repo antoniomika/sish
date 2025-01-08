@@ -75,3 +75,31 @@ enabling load balancing in sish, this happens automatically when a device with
 the same forwarded TCP port, alias, or HTTP subdomain connects to sish.
 Connections will then be evenly distributed to whatever nodes are connected to
 sish that match the forwarded connection.
+
+# Access client IP addresses
+
+When an HTTP request is forwarded to your service, sish automatically appends the following standard headers:
+
+* [`X-Forwarded-For`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For)
+* [`X-Forwarded-Host`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-Host)
+* [`X-Forwarded-Proto`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-Proto)
+
+Here is an example request that came from `203.0.113.12`:
+
+```
+GET / HTTP/1.1
+Host: example-project.tuns.sh
+User-Agent: curl/8.7.1
+Accept: */*
+X-Forwarded-For: 198.51.100.10, 203.0.113.12
+X-Forwarded-Host: example-project.tuns.sh
+X-Forwarded-Port: 443
+X-Forwarded-Proto: https
+X-Forwarded-Server: oracle2
+X-Real-Ip: 198.51.100.10
+Accept-Encoding: gzip
+```
+
+Each proxy that the request passes through will add a new value to the right of `X-Forwarded-For`. In most cases, you can obtain the real client IP address by reading the right-most value of `X-Forwarded-For`.
+
+Do not trust the `X-Real-Ip` header or the other values in `X-Forwarded-For` since those can be spoofed. Please read the [security and privacy concerns](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For#security_and_privacy_concerns) section for more details.
