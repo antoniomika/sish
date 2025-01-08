@@ -2,17 +2,21 @@
 
 {{define "title"}}{{.Data.Title}}{{end}}
 
-{{define "meta"}}{{end}}
+{{define "meta"}}
+<meta name="description" content="{{.Data.Description}}" />
+{{end}}
 
-{{define "attrs"}}class="container"{{end}}
+{{define "attrs"}}class="post-container"{{end}}
 
 {{define "body"}}
 {{template "nav" .}}
 
-<div class="post-container">
-  <main class="post flex-1">
-    <h1 class="text-2xl text-underline-hdr text-hdr inline-block">{{.Data.Title}}</h1>
-    <h2 class="text-xl">{{.Data.Description}}</h2>
+<div class="post-group">
+  <main class="post">
+    <h1 class="text-2xl text-hdr m-0 flex items-center">
+      {{.Data.Title}}
+    </h1>
+    <p class="m-0">{{.Data.Description}}</p>
 
     <hr />
 
@@ -21,10 +25,10 @@
     </article>
 
     {{template "pager" .}}
+    {{template "footer" .}}
   </main>
 
   {{template "sitemap-footer" .}}
 </div>
 
-{{template "footer" .}}
 {{end}}
