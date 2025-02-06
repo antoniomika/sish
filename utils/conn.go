@@ -204,7 +204,7 @@ func (i IdleTimeoutConn) Write(buf []byte) (int, error) {
 	return i.Conn.Write(buf)
 }
 
-// CopyBoth copies betwen a reader and writer and will cleanup each.
+// CopyBoth copies between a reader and writer and will cleanup each.
 func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 	closeBoth := func() {
 		reader.Close()

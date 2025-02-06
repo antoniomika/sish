@@ -51,7 +51,7 @@ Let's say instead I don't want the service to be accessible by the rest of the
 world, you can then use a TCP alias. A TCP alias is a type of forwarded TCP
 connection that only exists inside of sish. You can gain access to the alias by
 using SSH with the `-W` flag, which will forwarding the SSH process'
-stdin/stdout to the fowarded TCP connection. In combination with authentication,
+stdin/stdout to the forwarded TCP connection. In combination with authentication,
 this will guarantee your remote service is safe from the rest of the world
 because you need to login to sish before you can access it. Changing the example
 above for this would mean running the following command on my laptop:

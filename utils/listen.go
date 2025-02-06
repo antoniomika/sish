@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	// AddressSeparator is the separtor when providing multiple addresses.
+	// AddressSeparator is the separator when providing multiple addresses.
 	AddressSeparator = ","
 
 	// NetworkSeparator is the sepator between a network and address.

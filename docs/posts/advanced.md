@@ -53,12 +53,12 @@ If you trust the users connecting to sish and would like to allow any domain to
 be used with sish (bypassing verification), there are a few added flags to aid
 in this. This is especially useful when adding multiple wildcard certificates to
 sish in order to not need to automatically provision Let's Encrypt certs. To
-disable verfication, set `--bind-any-host=true`, which will allow and
+disable verification, set `--bind-any-host=true`, which will allow and
 subdomain/domain combination to be used. To only allow subdomains of a certain
 subset of domains, you can set `--bind-hosts` to a comma separated list of
 domains that are allowed to be bound.
 
-To add certficates for sish to use, configure the
+To add certificates for sish to use, configure the
 `--https-certificate-directory` flag to point to a dir that is accessible by
 sish. In the directory, sish will look for a combination of files that look like
 `name.crt` and `name.key`. `name` can be arbitrary in either case, it just needs

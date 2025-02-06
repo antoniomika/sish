@@ -60,7 +60,7 @@ Flags:
       --debug-interval duration                                 Duration to wait between each debug loop output if debug is true (default 2s)
   -d, --domain string                                           The root domain for HTTP(S) multiplexing that will be appended to subdomains (default "ssi.sh")
       --force-all-https                                         Redirect all requests to the https server
-      --force-https                                             Allow indiviual binds to request for https to be enforced
+      --force-https                                             Allow individual binds to request for https to be enforced
       --force-requested-aliases                                 Force the aliases used to be the one that is requested. Will fail the bind if it exists already
       --force-requested-ports                                   Force the ports used to be the one that is requested. Will fail the bind if it exists already
       --force-requested-subdomains                              Force the subdomains used to be the one that is requested. Will fail the bind if it exists already
@@ -88,9 +88,9 @@ Flags:
       --log-to-client                                           Enable logging HTTP and TCP requests to the client
       --log-to-file                                             Enable writing log output to file, specified by log-to-file-path
       --log-to-file-compress                                    Enable compressing log output files
-      --log-to-file-max-age int                                 The maxium number of days to store log output in a file (default 28)
-      --log-to-file-max-backups int                             The maxium number of rotated logs files to keep (default 3)
-      --log-to-file-max-size int                                The maximum size of outputed log files in megabytes (default 500)
+      --log-to-file-max-age int                                 The maximum number of days to store log output in a file (default 28)
+      --log-to-file-max-backups int                             The maximum number of rotated logs files to keep (default 3)
+      --log-to-file-max-size int                                The maximum size of outputted log files in megabytes (default 500)
       --log-to-file-path string                                 The file to write log output to (default "/tmp/sish.log")
       --log-to-stdout                                           Enable writing log output to stdout (default true)
       --ping-client                                             Send ping requests to the underlying SSH client.
