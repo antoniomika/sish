@@ -26,11 +26,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ScaleFT/sshkeys"
 	"github.com/caddyserver/certmagic"
 	"github.com/jpillora/ipfilter"
 	"github.com/logrusorgru/aurora"
-	"github.com/mikesmitty/edkey"
 	"github.com/pires/go-proxyproto"
 	"github.com/radovskyb/watcher"
 	"github.com/spf13/viper"
@@ -609,20 +607,16 @@ func generatePrivateKey(passphrase string) []byte {
 	// is likely cleaner and less specialized.
 	var pemData []byte
 	if passphrase != "" {
-		pemData, err = sshkeys.Marshal(pk, &sshkeys.MarshalOptions{
-			Passphrase: []byte(passphrase),
-			Format:     sshkeys.FormatOpenSSHv1,
-		})
-
+		pemBlock, err := ssh.MarshalPrivateKeyWithPassphrase(pk, "", []byte(passphrase))
 		if err != nil {
 			log.Fatal(err)
 		}
+		pemData = pem.EncodeToMemory(pemBlock)
 	} else {
-		pemBlock := &pem.Block{
-			Type:  "OPENSSH PRIVATE KEY",
-			Bytes: edkey.MarshalED25519PrivateKey(pk),
+		pemBlock, err := ssh.MarshalPrivateKey(pk, "")
+		if err != nil {
+			log.Fatal(err)
 		}
-
 		pemData = pem.EncodeToMemory(pemBlock)
 	}
 

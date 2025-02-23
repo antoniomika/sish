@@ -1,7 +1,7 @@
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine as builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 
-ENV CGO_ENABLED 0
+ENV CGO_ENABLED=0
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY go.* ./
 
 RUN go mod download
 
-FROM builder as build-image
+FROM builder AS build-image
 
 COPY . .
 
@@ -30,7 +30,7 @@ RUN go build -o /go/bin/app -ldflags="-s -w -X github.com/${REPOSITORY}/cmd.Vers
 
 ENTRYPOINT ["/go/bin/app"]
 
-FROM scratch as release
+FROM scratch AS release
 LABEL maintainer="Antonio Mika <me@antoniomika.me>"
 
 WORKDIR /app
