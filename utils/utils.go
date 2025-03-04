@@ -517,6 +517,10 @@ func GetSSHConfig() *ssh.ServerConfig {
 		},
 	}
 
+	if viper.GetString("authentication-password") == "" && viper.GetString("authentication-password-request-url") == "" {
+		sshConfig.PasswordCallback = nil
+	}
+
 	loadPrivateKeys(sshConfig)
 
 	return sshConfig
