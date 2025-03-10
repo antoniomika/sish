@@ -87,7 +87,7 @@ jobs:
         cache-from: |
           ${{ github.repository }}-cache
         cache-to: |
-          type=registry,ref=${{ github.repository }}-cache,mode=max
+          ${{ github.actor == github.repository_owner && format('type=registry,ref={0}-cache,mode=max', github.repository) || '' }}
         platforms: ${{ github.actor == github.repository_owner && env.PLATFORMS || 'linux/amd64' }}
         build-args: |
           DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
