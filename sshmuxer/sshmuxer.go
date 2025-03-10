@@ -292,6 +292,13 @@ func Start() {
 					case <-ticker.C:
 						runTime++
 
+						if holderConn.Deadline != nil && time.Now().After(*holderConn.Deadline) {
+							holderConn.SendMessage("Connection deadline reached. Closing connection.", true)
+							time.Sleep(1 * time.Millisecond)
+							holderConn.CleanUp(state)
+							return
+						}
+
 						if ((viper.GetBool("cleanup-unbound") && runTime > viper.GetDuration("cleanup-unbound-timeout").Seconds()) || holderConn.AutoClose) && holderConn.ListenerCount() == 0 {
 							holderConn.SendMessage("No forwarding requests sent. Closing connection.", true)
 							time.Sleep(1 * time.Millisecond)
