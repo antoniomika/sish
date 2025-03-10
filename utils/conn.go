@@ -37,6 +37,7 @@ type SSHConnection struct {
 	Session                chan bool
 	CleanupHandler         bool
 	SetupLock              *sync.Mutex
+	Deadline               *time.Time
 }
 
 // SendMessage sends a console message to the connection. If block is true, it

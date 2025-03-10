@@ -119,3 +119,25 @@ ssh -p 2222 tuns.sh
 For example if you want to use `netcat` to send files between computers.
 
 [Setup a TCP alias](/forwarding-types#tcp-alias)
+
+# Setting a deadline for a tunnel
+
+You can set a deadline for a tunnel after which the connection will automatically close.
+
+The deadline can be relative:
+
+```bash
+ssh -R 80:localhost:3000 tuns.sh deadline=15m
+```
+
+Or it can be provided as an absolute [ISO-8601 time string](https://www.iso.org/iso-8601-date-and-time-format.html):
+
+```bash
+ssh -R 80:localhost:3000 tuns.sh deadline=2025-03-10T15:19:22
+```
+
+Or as an absolute [Unix epoch value](https://www.unixtimestamp.com/):
+
+```bash
+ssh -R 80:localhost:3000 tuns.sh deadline=1741614000
+```

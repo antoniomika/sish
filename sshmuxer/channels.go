@@ -55,6 +55,9 @@ const (
 
 	// tcpAliasesAllowedUsersPrefix defines a comma separated list of allowed key fingerprints to access TCP aliases.
 	tcpAliasesAllowedUsersPrefix = "tcp-aliases-allowed-users"
+
+	// deadlinePrefix defines a timestamp at which the connection will close automatically.
+	deadlinePrefix = "deadline"
 )
 
 // handleSession handles the channel when a user requests a session.
@@ -257,6 +260,15 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						}
 
 						sshConn.SendMessage(fmt.Sprintf("Allowed users for TCP Aliases set to: %s", strings.Join(printKeys, ", ")), true)
+					case deadlinePrefix:
+						deadline, err := parseDeadline(param)
+						if err != nil {
+							log.Printf("Unable to parse deadline: %s", param)
+							break
+						}
+
+						sshConn.Deadline = &deadline
+						sshConn.SendMessage(fmt.Sprintf("Deadline for connection set to: %s", sshConn.Deadline.Format("2006-01-02 15:04:05")), true)
 					}
 				}
 
@@ -414,4 +426,27 @@ func getProxyProtoVersion(proxyProtoUserVersion string) byte {
 	}
 
 	return byte(realProtoVersion)
+}
+
+// parseDeadline parses the deadline string provided by the client to a time object.
+func parseDeadline(param string) (time.Time, error) {
+	// Try parsing as an epoch time
+	if epoch, err := strconv.ParseInt(param, 10, 64); err == nil {
+		return time.Unix(epoch, 0), nil
+	}
+
+	// Try parsing as a duration
+	if duration, err := time.ParseDuration(param); err == nil {
+		return time.Now().Add(duration), nil
+	}
+
+	// Try parsing as a date-time
+	layouts := []string{"2006-01-02 15:04:05", "2006-01-02T15:04:05"}
+	for _, layout := range layouts {
+		if deadline, err := time.Parse(layout, param); err == nil {
+			return deadline, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("invalid deadline format")
 }
