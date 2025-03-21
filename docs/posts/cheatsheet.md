@@ -134,6 +134,8 @@ Or it can be provided as an absolute [ISO-8601 time string](https://www.iso.org/
 
 ```bash
 ssh -R 80:localhost:3000 tuns.sh deadline=2025-03-10T15:19:22
+ssh -R 80:localhost:3000 tuns.sh deadline=2025-03-10T15:19:22Z
+ssh -R 80:localhost:3000 tuns.sh deadline=2025-03-10T15:19:22-07:00
 ```
 
 Or as an absolute [Unix epoch value](https://www.unixtimestamp.com/):
