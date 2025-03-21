@@ -268,7 +268,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						}
 
 						sshConn.Deadline = &deadline
-						sshConn.SendMessage(fmt.Sprintf("Deadline for connection set to: %s", sshConn.Deadline.Format("2006-01-02 15:04:05")), true)
+						sshConn.SendMessage(fmt.Sprintf("Deadline for connection set to: %s", sshConn.Deadline.UTC().Format("2006-01-02 15:04:05")), true)
 					}
 				}
 
@@ -441,7 +441,12 @@ func parseDeadline(param string) (time.Time, error) {
 	}
 
 	// Try parsing as a date-time
-	layouts := []string{"2006-01-02 15:04:05", "2006-01-02T15:04:05"}
+	layouts := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04:05Z07:00",
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04:05Z07:00",
+	}
 	for _, layout := range layouts {
 		if deadline, err := time.Parse(layout, param); err == nil {
 			return deadline, nil
