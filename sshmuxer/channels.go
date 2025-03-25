@@ -73,7 +73,10 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 		log.Println("Handling session for connection:", connection)
 	}
 
-	writeToSession(connection, aurora.BgRed("Press Ctrl-C to close the session.").String()+"\r\n")
+	welcomeMessage := viper.GetString("welcome-message")
+	if welcomeMessage != "" {
+		writeToSession(connection, aurora.BgRed(welcomeMessage).String()+"\r\n")
+	}
 
 	go func() {
 		for {
