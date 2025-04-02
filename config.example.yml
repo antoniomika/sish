@@ -97,5 +97,6 @@ tcp-load-balancer: false
 time-format: 2006/01/02 - 15:04:05
 verify-dns: true
 verify-ssl: true
+welcome-message: "Press Ctrl-C to close the session."
 whitelisted-countries: ""
 whitelisted-ips: ""

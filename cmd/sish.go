@@ -78,6 +78,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("log-to-file-path", "", "/tmp/sish.log", "The file to write log output to")
 	rootCmd.PersistentFlags().StringP("bind-hosts", "", "", "A comma separated list of other hosts a user can bind. Requested hosts should be subdomains of a host in this list")
 	rootCmd.PersistentFlags().StringP("load-templates-directory", "", "templates/*", "The directory and glob parameter for templates that should be loaded")
+	rootCmd.PersistentFlags().StringP("welcome-message", "", "Press Ctrl-C to close the session.", "Message displayed to users upon connection")
 
 	rootCmd.PersistentFlags().BoolP("force-requested-ports", "", false, "Force the ports used to be the one that is requested. Will fail the bind if it exists already")
 	rootCmd.PersistentFlags().BoolP("force-requested-aliases", "", false, "Force the aliases used to be the one that is requested. Will fail the bind if it exists already")
