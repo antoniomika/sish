@@ -201,33 +201,33 @@ func Start() {
 			continue
 		}
 
-		clientRemote, _, err := net.SplitHostPort(conn.RemoteAddr().String())
-
-		if err != nil || state.IPFilter.Blocked(clientRemote) {
-			conn.Close()
-			continue
-		}
-
-		clientLoggedInMutex := &sync.Mutex{}
-
-		clientLoggedInMutex.Lock()
-		clientLoggedIn := false
-		clientLoggedInMutex.Unlock()
-
-		if viper.GetBool("cleanup-unauthed") {
-			go func() {
-				<-time.After(viper.GetDuration("cleanup-unauthed-timeout"))
-				clientLoggedInMutex.Lock()
-				if !clientLoggedIn {
-					conn.Close()
-				}
-				clientLoggedInMutex.Unlock()
-			}()
-		}
-
-		log.Println("Accepted SSH connection for:", conn.RemoteAddr())
-
 		go func() {
+			clientRemote, _, err := net.SplitHostPort(conn.RemoteAddr().String())
+
+			if err != nil || state.IPFilter.Blocked(clientRemote) {
+				conn.Close()
+				return
+			}
+
+			clientLoggedInMutex := &sync.Mutex{}
+
+			clientLoggedInMutex.Lock()
+			clientLoggedIn := false
+			clientLoggedInMutex.Unlock()
+
+			if viper.GetBool("cleanup-unauthed") {
+				go func() {
+					<-time.After(viper.GetDuration("cleanup-unauthed-timeout"))
+					clientLoggedInMutex.Lock()
+					if !clientLoggedIn {
+						conn.Close()
+					}
+					clientLoggedInMutex.Unlock()
+				}()
+			}
+
+			log.Println("Accepted SSH connection for:", conn.RemoteAddr())
+
 			sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
 			clientLoggedInMutex.Lock()
 			clientLoggedIn = true
