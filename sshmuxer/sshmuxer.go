@@ -324,26 +324,38 @@ func Start() {
 			if viper.GetBool("ping-client") {
 				go func() {
 					tickDuration := viper.GetDuration("ping-client-interval")
+					tickTimeout := viper.GetDuration("ping-client-timeout")
+					user := sshConn.User()
+					addr := sshConn.RemoteAddr().String()
+
+					log.Printf("[%s@%s] Starting ping client with interval: %v, timeout: %v", user, addr, tickDuration, tickTimeout)
 					ticker := time.NewTicker(tickDuration)
 
 					for {
-						err := conn.SetDeadline(time.Now().Add(tickDuration).Add(viper.GetDuration("ping-client-timeout")))
+						err := conn.SetDeadline(time.Now().Add(tickDuration).Add(tickTimeout))
 						if err != nil {
-							log.Println("Unable to set deadline")
+							log.Printf("[%s@%s] Unable to set deadline: %v", user, addr, err)
 						}
 
 						select {
 						case <-ticker.C:
+							log.Printf("[%s@%s] Sending keepalive request", user, addr)
 							_, _, err := sshConn.SendRequest("keepalive@sish", true, nil)
 							if err != nil {
-								log.Println("Error retrieving keepalive response:", err)
+								log.Printf("[%s@%s] Error retrieving keepalive response: %v", user, addr, err)
 								return
+							} else {
+								log.Printf("[%s@%s] Keepalive successful", user, addr)
 							}
+
 						case <-holderConn.Close:
+							log.Printf("[%s@%s] Connection closed, stopping ping client", user, addr)
 							return
 						}
 					}
 				}()
+			} else {
+				log.Printf("No ping client is available")
 			}
 		}()
 	}
