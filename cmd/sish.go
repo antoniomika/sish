@@ -128,7 +128,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("bind-wildcards", "", false, "Allow binding wildcards when accepting an HTTP listener")
 	rootCmd.PersistentFlags().BoolP("load-templates", "", true, "Load HTML templates. This is required for admin/service consoles")
 	rootCmd.PersistentFlags().BoolP("rewrite-host-header", "", true, "Force rewrite the host header if the user provides host-header=host.com")
-	rootCmd.PersistentFlags().BoolP("load-keys-by-user", "", false, "Load public keys by user name + ip address. I.e.: if income request went from user 'ruslan.masuk@gmail.com' and ip address '172.17.52.209' then try to find public key: 'ruslan.masuk@gmail.com-172.17.52.209.pub'")
+	rootCmd.PersistentFlags().BoolP("load-keys-by-user", "", false, "Load public keys by user name + UUID. I.e.: if income request went from user 'ruslan.masuk@gmail.com' and UUID '12345' then try to find public key: 'ruslan.masuk@gmail.com-UUID.pub'")
 	rootCmd.PersistentFlags().BoolP("single-connection-per-device", "", false, "Allow single connection per device")
 	rootCmd.PersistentFlags().BoolP("tcp-disabled", "", false, "Disable tcp alias")
 	rootCmd.PersistentFlags().BoolP("allow-password-auth", "", true, "Is allow password authentication")

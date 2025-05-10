@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -49,9 +48,11 @@ func (w LogWriter) Write(bytes []byte) (int, error) {
 // ListenerHolder represents a generic listener.
 type ListenerHolder struct {
 	net.Listener
-	ListenAddr string
-	Type       ListenerType
-	SSHConn    *SSHConnection
+	ListenAddr   string
+	Type         ListenerType
+	SSHConn      *SSHConnection
+	OriginalAddr string
+	OriginalPort uint32
 }
 
 // HTTPHolder holds proxy and connection info.
@@ -98,99 +99,109 @@ func (tH *TCPHolder) Handle(state *State) {
 			break
 		}
 
-		clientRemote, _, err := net.SplitHostPort(cl.RemoteAddr().String())
+		go func() {
+			clientRemote, _, err := net.SplitHostPort(cl.RemoteAddr().String())
 
-		if err != nil || state.IPFilter.Blocked(clientRemote) {
-			cl.Close()
-			continue
-		}
-
-		var firstWrite *bytes.Buffer
-
-		balancerName := ""
-		if tH.SNIProxy {
-			tlsHello, buf, _, err := PeekTLSHello(cl)
-			if err != nil && tlsHello == nil {
-				log.Printf("Unable to read TLS hello: %s", err)
+			if err != nil || state.IPFilter.Blocked(clientRemote) {
 				cl.Close()
-				continue
+				return
 			}
 
-			balancerName = tlsHello.ServerName
-			firstWrite = buf
-		}
+			var bufBytes []byte
 
-		pB, ok := tH.Balancers.Load(balancerName)
-		if !ok {
-			tH.Balancers.Range(func(n string, b *roundrobin.RoundRobin) bool {
-				if MatchesWildcardHost(balancerName, n) {
-					pB = b
-					return false
+			balancerName := ""
+			if tH.SNIProxy {
+				tlsHello, teeConn, err := PeekTLSHello(cl)
+				if tlsHello == nil {
+					log.Printf("Unable to read TLS hello: %s", err)
+					cl.Close()
+					return
 				}
-				return true
-			})
 
-			if pB == nil {
-				log.Printf("Unable to load connection location: %s not found on TCP listener %s", balancerName, tH.TCPHost)
-				cl.Close()
-				continue
+				bufBytes = make([]byte, teeConn.Buffer.Buffered())
+
+				_, err = io.ReadFull(teeConn, bufBytes)
+				if err != nil {
+					log.Printf("Unable to read buffered data: %s", err)
+					cl.Close()
+					return
+				}
+
+				balancerName = tlsHello.ServerName
 			}
-		}
 
-		balancer := pB
-
-		connectionLocation, err := balancer.NextServer()
-		if err != nil {
-			log.Println("Unable to load connection location:", err)
-			cl.Close()
-			continue
-		}
-
-		host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
-		if err != nil {
-			log.Println("Unable to decode connection location:", err)
-			cl.Close()
-			continue
-		}
-
-		hostAddr := string(host)
-
-		logLine := fmt.Sprintf("Accepted connection from %s -> %s", cl.RemoteAddr().String(), cl.LocalAddr().String())
-		log.Println(logLine)
-
-		if viper.GetBool("log-to-client") {
-			tH.SSHConnections.Range(func(key string, sshConn *SSHConnection) bool {
-				sshConn.Listeners.Range(func(listenerAddr string, val net.Listener) bool {
-					if listenerAddr == hostAddr {
-						sshConn.SendMessage(logLine, true)
-
+			pB, ok := tH.Balancers.Load(balancerName)
+			if !ok {
+				tH.Balancers.Range(func(n string, b *roundrobin.RoundRobin) bool {
+					if MatchesWildcardHost(balancerName, n) {
+						pB = b
 						return false
 					}
-
 					return true
 				})
 
-				return true
-			})
-		}
-
-		conn, err := net.Dial("unix", hostAddr)
-		if err != nil {
-			log.Println("Error connecting to tcp balancer:", err)
-			cl.Close()
-			continue
-		}
-
-		if firstWrite != nil {
-			_, err := conn.Write(firstWrite.Bytes())
-			if err != nil {
-				log.Println("Unable to write to conn:", err)
-				cl.Close()
-				continue
+				if pB == nil {
+					log.Printf("Unable to load connection location: %s not found on TCP listener %s", balancerName, tH.TCPHost)
+					cl.Close()
+					return
+				}
 			}
-		}
 
-		go CopyBoth(conn, cl)
+			balancer := pB
+
+			connectionLocation, err := balancer.NextServer()
+			if err != nil {
+				log.Println("Unable to load connection location:", err)
+				cl.Close()
+				return
+			}
+
+			host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
+			if err != nil {
+				log.Println("Unable to decode connection location:", err)
+				cl.Close()
+				return
+			}
+
+			hostAddr := string(host)
+
+			logLine := fmt.Sprintf("Accepted connection from %s -> %s", cl.RemoteAddr().String(), cl.LocalAddr().String())
+			log.Println(logLine)
+
+			if viper.GetBool("log-to-client") {
+				tH.SSHConnections.Range(func(key string, sshConn *SSHConnection) bool {
+					sshConn.Listeners.Range(func(listenerAddr string, val net.Listener) bool {
+						if listenerAddr == hostAddr {
+							sshConn.SendMessage(logLine, true)
+
+							return false
+						}
+
+						return true
+					})
+
+					return true
+				})
+			}
+
+			conn, err := net.Dial("unix", hostAddr)
+			if err != nil {
+				log.Println("Error connecting to tcp balancer:", err)
+				cl.Close()
+				return
+			}
+
+			if bufBytes != nil {
+				_, err := conn.Write(bufBytes)
+				if err != nil {
+					log.Println("Unable to write to conn:", err)
+					cl.Close()
+					return
+				}
+			}
+
+			CopyBoth(conn, cl)
+		}()
 	}
 }
 

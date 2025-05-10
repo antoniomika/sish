@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/antoniomika/multilistener"
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
 	"github.com/pires/go-proxyproto"
@@ -40,6 +41,55 @@ type forwardedTCPPayload struct {
 	OriginPort uint32
 }
 
+// handleCancelRemoteForward will handle a remote forward cancellation
+// request and remove the relevant listeners.
+func handleCancelRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, _ *utils.State) {
+	check := &channelForwardMsg{}
+
+	err := ssh.Unmarshal(newRequest.Payload, check)
+	if err != nil {
+		log.Println("Error unmarshaling remote forward payload:", err)
+		err = newRequest.Reply(false, nil)
+		if err != nil {
+			log.Println("Error replying to request:", err)
+		}
+		return
+	}
+
+	closed := false
+
+	sshConn.Listeners.Range(func(remoteAddr string, listener net.Listener) bool {
+		holder, ok := listener.(*utils.ListenerHolder)
+		if !ok {
+			return false
+		}
+
+		if holder.OriginalAddr == check.Addr && holder.OriginalPort == check.Rport {
+			closed = true
+			holder.Close()
+			return false
+		}
+
+		return true
+	})
+
+	if !closed {
+		log.Println("Unable to close tunnel")
+
+		err = newRequest.Reply(false, nil)
+		if err != nil {
+			log.Println("Error replying to request:", err)
+		}
+
+		return
+	}
+
+	err = newRequest.Reply(true, nil)
+	if err != nil {
+		log.Println("Error replying to request:", err)
+	}
+}
+
 // handleRemoteForward will handle a remote forward request
 // and stand up the relevant listeners.
 func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State, history *utils.ConnectionHistory) {
@@ -55,6 +105,17 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	err := ssh.Unmarshal(newRequest.Payload, check)
 	if err != nil {
 		log.Println("Error unmarshaling remote forward payload:", err)
+
+		err = newRequest.Reply(false, nil)
+		if err != nil {
+			log.Println("Error replying to socket request:", err)
+		}
+		return
+	}
+
+	originalCheck := &channelForwardMsg{
+		Addr:  check.Addr,
+		Rport: check.Rport,
 	}
 
 	originalAddress := check.Addr
@@ -85,11 +146,6 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	if comparePortHTTPS == 0 {
 		comparePortHTTPS = 443
-	}
-
-	if viper.GetBool("tcp-disabled") && bindPort != comparePortHTTP {
-		log.Println("Tcp listeners are disabled for requested port: ", bindPort, ". User: ", sshConn.SSHConn.User())
-		sshConn.SSHConn.Close()
 	}
 
 	tcpAliasForced := viper.GetBool("tcp-aliases") && sshConn.TCPAlias
@@ -135,10 +191,12 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	}
 
 	listenerHolder := &utils.ListenerHolder{
-		ListenAddr: listenAddr,
-		Listener:   chanListener,
-		Type:       listenerType,
-		SSHConn:    sshConn,
+		ListenAddr:   listenAddr,
+		Listener:     chanListener,
+		Type:         listenerType,
+		SSHConn:      sshConn,
+		OriginalAddr: originalCheck.Addr,
+		OriginalPort: originalCheck.Rport,
 	}
 
 	state.Listeners.Store(listenAddr, listenerHolder)
@@ -252,7 +310,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			return
 		}
 
-		portChannelForwardReplyPayload.Rport = uint32(tH.Listener.Addr().(*net.TCPAddr).Port)
+		portChannelForwardReplyPayload.Rport = uint32(tH.Listener.Addr().(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port)
 
 		mainRequestMessages = requestMessages
 
@@ -296,9 +354,6 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		return
 	}
 
-	if !viper.GetBool("bind-verbose") {
-		mainRequestMessages = "Connection started"
-	}
 	sshConn.SendMessage(mainRequestMessages, true)
 
 	go func() {
@@ -309,47 +364,48 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 				break
 			}
 
-			resp := &forwardedTCPPayload{
-				Addr:       originalAddress,
-				Port:       portChannelForwardReplyPayload.Rport,
-				OriginAddr: originalAddress,
-				OriginPort: portChannelForwardReplyPayload.Rport,
-			}
-
-			newChan, newReqs, err := sshConn.SSHConn.OpenChannel("forwarded-tcpip", ssh.Marshal(resp))
-			if err != nil {
-				sshConn.SendMessage(err.Error(), true)
-				cl.Close()
-				continue
-			}
-
-			if sshConn.ProxyProto != 0 && listenerType == utils.TCPListener {
-				var sourceInfo *net.TCPAddr
-				var destInfo *net.TCPAddr
-				if _, ok := cl.RemoteAddr().(*net.TCPAddr); !ok {
-					sourceInfo = sshConn.SSHConn.RemoteAddr().(*net.TCPAddr)
-					destInfo = sshConn.SSHConn.LocalAddr().(*net.TCPAddr)
-				} else {
-					sourceInfo = cl.RemoteAddr().(*net.TCPAddr)
-					destInfo = cl.LocalAddr().(*net.TCPAddr)
+			go func() {
+				resp := &forwardedTCPPayload{
+					Addr:       originalAddress,
+					Port:       portChannelForwardReplyPayload.Rport,
+					OriginAddr: originalAddress,
+					OriginPort: portChannelForwardReplyPayload.Rport,
 				}
 
-				proxyProtoHeader := proxyproto.Header{
-					Version:           sshConn.ProxyProto,
-					Command:           proxyproto.ProtocolVersionAndCommand(proxyproto.PROXY),
-					TransportProtocol: proxyproto.AddressFamilyAndProtocol(proxyproto.TCPv4),
-					SourceAddr:        sourceInfo,
-					DestinationAddr:   destInfo,
+				newChan, newReqs, err := sshConn.SSHConn.OpenChannel("forwarded-tcpip", ssh.Marshal(resp))
+				if err != nil {
+					sshConn.SendMessage(err.Error(), true)
+					cl.Close()
 				}
 
-				_, err := proxyProtoHeader.WriteTo(newChan)
-				if err != nil && viper.GetBool("debug") {
-					log.Println("Error writing to channel:", err)
-				}
-			}
+				if sshConn.ProxyProto != 0 && listenerType == utils.TCPListener {
+					var sourceInfo *net.TCPAddr
+					var destInfo *net.TCPAddr
+					if _, ok := cl.RemoteAddr().(*net.TCPAddr); !ok {
+						sourceInfo = sshConn.SSHConn.RemoteAddr().(*net.TCPAddr)
+						destInfo = sshConn.SSHConn.LocalAddr().(*net.TCPAddr)
+					} else {
+						sourceInfo = cl.RemoteAddr().(*net.TCPAddr)
+						destInfo = cl.LocalAddr().(*net.TCPAddr)
+					}
 
-			go utils.CopyBoth(cl, newChan)
-			go ssh.DiscardRequests(newReqs)
+					proxyProtoHeader := proxyproto.Header{
+						Version:           sshConn.ProxyProto,
+						Command:           proxyproto.ProtocolVersionAndCommand(proxyproto.PROXY),
+						TransportProtocol: proxyproto.AddressFamilyAndProtocol(proxyproto.TCPv4),
+						SourceAddr:        sourceInfo,
+						DestinationAddr:   destInfo,
+					}
+
+					_, err := proxyProtoHeader.WriteTo(newChan)
+					if err != nil && viper.GetBool("debug") {
+						log.Println("Error writing to channel:", err)
+					}
+				}
+
+				go ssh.DiscardRequests(newReqs)
+				utils.CopyBoth(cl, newChan)
+			}()
 		}
 	}()
 }

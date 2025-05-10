@@ -26,11 +26,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ScaleFT/sshkeys"
 	"github.com/caddyserver/certmagic"
 	"github.com/jpillora/ipfilter"
 	"github.com/logrusorgru/aurora"
-	"github.com/mikesmitty/edkey"
 	"github.com/pires/go-proxyproto"
 	"github.com/radovskyb/watcher"
 	"github.com/spf13/viper"
@@ -40,7 +38,7 @@ import (
 
 const (
 	// sishDNSPrefix is the prefix used for DNS TXT records.
-	sishDNSPrefix = "sish="
+	sishDNSPrefix = "_sish"
 
 	// Prefix used for defining wildcard host matchers.
 	wildcardPrefix = "*."
@@ -203,7 +201,7 @@ func LoadProxyProtoConfig(l *proxyproto.Listener) {
 	if viper.GetBool("proxy-protocol-use-timeout") {
 		l.ReadHeaderTimeout = viper.GetDuration("proxy-protocol-timeout")
 
-		l.Policy = func(upstream net.Addr) (proxyproto.Policy, error) {
+		l.ConnPolicy = func(connPolicyOptions proxyproto.ConnPolicyOptions) (proxyproto.Policy, error) {
 			switch viper.GetString("proxy-protocol-policy") {
 			case "ignore":
 				return proxyproto.IGNORE, nil
@@ -220,7 +218,7 @@ func LoadProxyProtoConfig(l *proxyproto.Listener) {
 
 // GetRandomPortInRange returns a random port in the provided range.
 // The port range is a comma separated list of ranges or ports.
-func GetRandomPortInRange(portRange string) uint32 {
+func GetRandomPortInRange(listenAddr string, portRange string) uint32 {
 	var bindPort uint32
 
 	ranges := strings.Split(strings.TrimSpace(portRange), ",")
@@ -258,9 +256,9 @@ func GetRandomPortInRange(portRange string) uint32 {
 		bindPort = uint32(mathrand.Intn(int(possible[locHolder][1]-possible[locHolder][0])) + int(possible[locHolder][0]))
 	}
 
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", bindPort))
+	ln, err := Listen(GenerateAddress(listenAddr, bindPort))
 	if err != nil {
-		return GetRandomPortInRange(portRange)
+		return GetRandomPortInRange(listenAddr, portRange)
 	}
 
 	ln.Close()
@@ -542,6 +540,27 @@ func GetSSHConfig() *ssh.ServerConfig {
 		MaxAuthTries:  viper.GetInt("authentication-max-auth-tries"),
 		ServerVersion: "SSH-2.0-sish",
 		NoClientAuth:  !viper.GetBool("authentication"),
+		PasswordCallback: func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+			log.Printf("Login attempt: %s, user %s", c.RemoteAddr(), c.User())
+
+			if string(password) == viper.GetString("authentication-password") && viper.GetString("authentication-password") != "" {
+				return nil, nil
+			}
+
+			// Allow validation of passwords via a sub-request to another service
+			authUrl := viper.GetString("authentication-password-request-url")
+			if authUrl != "" {
+				validKey, err := checkAuthenticationPasswordRequest(authUrl, password, c.RemoteAddr(), c.User())
+				if err != nil {
+					log.Printf("Error calling authentication password URL %s: %s\n", authUrl, err)
+				}
+				if validKey {
+					return nil, nil
+				}
+			}
+
+			return nil, fmt.Errorf("password doesn't match")
+		},
 		AuthLogCallback: func(c ssh.ConnMetadata, method string, err error) {
 			if err != nil {
 				log.Printf("Auth log failed: %s; User %s; Method: %s. Error: %s", c.RemoteAddr(), c.User(), method, err)
@@ -590,7 +609,7 @@ func GetSSHConfig() *ssh.ServerConfig {
 			if authUrl != "" {
 				validKey, err := checkAuthenticationKeyRequest(authUrl, authKey, c.RemoteAddr(), c.User())
 				if err != nil {
-					log.Printf("Error calling authentication URL %s: %s\n", authUrl, err)
+					log.Printf("Error calling authentication key URL %s: %s\n", authUrl, err)
 				}
 				if validKey {
 					permssionsData := &ssh.Permissions{
@@ -607,16 +626,8 @@ func GetSSHConfig() *ssh.ServerConfig {
 		},
 	}
 
-	if viper.GetBool("allow-password-auth") {
-		sshConfig.PasswordCallback = func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-			log.Printf("Login attempt: %s, user %s", c.RemoteAddr(), c.User())
-
-			if string(password) == viper.GetString("authentication-password") && viper.GetString("authentication-password") != "" {
-				return nil, nil
-			}
-
-			return nil, fmt.Errorf("password doesn't match")
-		}
+	if viper.GetString("authentication-password") == "" && viper.GetString("authentication-password-request-url") == "" {
+		sshConfig.PasswordCallback = nil
 	}
 
 	loadPrivateKeys(sshConfig)
@@ -659,6 +670,40 @@ func checkAuthenticationKeyRequest(authUrl string, authKey []byte, addr net.Addr
 	return true, nil
 }
 
+// checkAuthenticationPasswordRequest makes an HTTP POST request to the specified url with
+// the provided user-password pair to validate whether it should be accepted.
+func checkAuthenticationPasswordRequest(authUrl string, password []byte, addr net.Addr, user string) (bool, error) {
+	parsedUrl, err := url.ParseRequestURI(authUrl)
+	if err != nil {
+		return false, fmt.Errorf("error parsing url %s", err)
+	}
+
+	c := &http.Client{
+		Timeout: viper.GetDuration("authentication-password-request-timeout"),
+	}
+	urlS := parsedUrl.String()
+	reqBodyMap := map[string]string{
+		"password":    string(password),
+		"remote_addr": addr.String(),
+		"user":        user,
+	}
+	reqBody, err := json.Marshal(reqBodyMap)
+	if err != nil {
+		return false, fmt.Errorf("error jsonifying request body")
+	}
+	res, err := c.Post(urlS, "application/json", bytes.NewBuffer(reqBody))
+	if err != nil {
+		return false, err
+	}
+
+	if res.StatusCode != http.StatusOK {
+		log.Printf("Password rejected by auth service: %s with status %d", urlS, res.StatusCode)
+		return false, nil
+	}
+
+	return true, nil
+}
+
 // generatePrivateKey creates a new ed25519 private key to be used by the
 // the SSH server as the host key.
 func generatePrivateKey(passphrase string) []byte {
@@ -675,20 +720,16 @@ func generatePrivateKey(passphrase string) []byte {
 	// is likely cleaner and less specialized.
 	var pemData []byte
 	if passphrase != "" {
-		pemData, err = sshkeys.Marshal(pk, &sshkeys.MarshalOptions{
-			Passphrase: []byte(passphrase),
-			Format:     sshkeys.FormatOpenSSHv1,
-		})
-
+		pemBlock, err := ssh.MarshalPrivateKeyWithPassphrase(pk, "", []byte(passphrase))
 		if err != nil {
 			log.Fatal(err)
 		}
+		pemData = pem.EncodeToMemory(pemBlock)
 	} else {
-		pemBlock := &pem.Block{
-			Type:  "OPENSSH PRIVATE KEY",
-			Bytes: edkey.MarshalED25519PrivateKey(pk),
+		pemBlock, err := ssh.MarshalPrivateKey(pk, "")
+		if err != nil {
+			log.Fatal(err)
 		}
-
 		pemData = pem.EncodeToMemory(pemBlock)
 	}
 
@@ -750,16 +791,12 @@ func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
 		return false, "", nil
 	}
 
-	records, err := net.LookupTXT(addr)
+	records, err := net.LookupTXT(fmt.Sprintf("%s.%s", sishDNSPrefix, addr))
 
 	for _, v := range records {
-		if strings.HasPrefix(v, sishDNSPrefix) {
-			dnsPubKeyFingerprint := strings.TrimSpace(strings.TrimPrefix(v, sishDNSPrefix))
-
-			match := sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"] == dnsPubKeyFingerprint
-			if match {
-				return match, dnsPubKeyFingerprint, err
-			}
+		match := sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"] == v
+		if match {
+			return match, v, err
 		}
 	}
 
@@ -796,21 +833,21 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 					bindErr = fmt.Errorf("unable to bind requested port")
 				}
 
-				sshConn.SendMessage(aurora.Sprintf("The TCP port %s is unavailable.%s", aurora.Red(listenAddr), extra), true)
+				sshConn.SendMessage(aurora.Sprintf("The TCP port %d is unavailable.%s", aurora.Red(bindPort), extra), true)
 			}
 		}
 
-		checkPort := func(checkerAddr string, checkerPort uint32) bool {
+		checkPort := func(checkerPort uint32) bool {
 			if bindErr != nil {
 				return false
 			}
 
-			listenAddr = fmt.Sprintf("%s:%d", bindAddr, bindPort)
+			listenAddr = GenerateAddress(bindAddr, bindPort)
 			checkedPort, err := CheckPort(checkerPort, viper.GetString("port-bind-range"))
 			_, ok := state.TCPListeners.Load(listenAddr)
 
-			if err == nil && (!viper.GetBool("tcp-load-balancer") || (viper.GetBool("tcp-load-balancer") && !ok) || (sniProxyEnabled && !ok)) {
-				ln, listenErr := net.Listen("tcp", listenAddr)
+			if err == nil && !ok && (viper.GetBool("tcp-load-balancer") || viper.GetBool("sni-load-balancer")) {
+				ln, listenErr := Listen(listenAddr)
 				if listenErr != nil {
 					err = listenErr
 				} else {
@@ -822,7 +859,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 				reportUnavailable(true)
 
 				if viper.GetString("port-bind-range") != "" {
-					bindPort = GetRandomPortInRange(viper.GetString("port-bind-range"))
+					bindPort = GetRandomPortInRange(bindAddr, viper.GetString("port-bind-range"))
 				} else {
 					bindPort = 0
 				}
@@ -830,9 +867,9 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 				bindPort = checkedPort
 			}
 
-			listenAddr = fmt.Sprintf("%s:%d", bindAddr, bindPort)
+			listenAddr = GenerateAddress(bindAddr, bindPort)
 			holder, ok := state.TCPListeners.Load(listenAddr)
-			if ok && (!sniProxyEnabled && viper.GetBool("tcp-load-balancer") || (sniProxyEnabled && viper.GetBool("sni-load-balancer"))) {
+			if ok && ((!sniProxyEnabled && viper.GetBool("tcp-load-balancer")) || sniProxyEnabled) {
 				tH = holder
 				ok = false
 			}
@@ -843,7 +880,7 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 			return ok
 		}
 
-		for checkPort(bindAddr, bindPort) {
+		for checkPort(bindPort) {
 		}
 
 		return listenAddr, bindPort, tH
@@ -902,15 +939,13 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 			}
 		}
 
-		checkHost := func(checkHost string) bool {
+		checkHost := func() bool {
 			if bindErr != nil {
 				return false
 			}
 
 			if viper.GetBool("bind-random-subdomains") || !first || inList(host, bannedSubdomainList) {
-				if viper.GetBool("bind-verbose") {
-					reportUnavailable(true)
-				}
+				reportUnavailable(true)
 				host = getRandomHost()
 			}
 
@@ -940,7 +975,7 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 			return ok
 		}
 
-		for checkHost(host) {
+		for checkHost() {
 		}
 
 		return host, bindErr
@@ -1034,15 +1069,13 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			}
 		}
 
-		checkHost := func(checkHost string) bool {
+		checkHost := func() bool {
 			if bindErr != nil {
 				return false
 			}
 
 			if viper.GetBool("bind-random-subdomains") || !first || inList(host, bannedSubdomainList) {
-				if viper.GetBool("bind-verbose") {
-					reportUnavailable(true)
-				}
+				reportUnavailable(true)
 				host = getRandomHost()
 			}
 
@@ -1077,7 +1110,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			return ok
 		}
 
-		for checkHost(host) {
+		for checkHost() {
 		}
 
 		if bindErr != nil {
@@ -1123,7 +1156,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 			}
 		}
 
-		checkAlias := func(checkAlias string) bool {
+		checkAlias := func() bool {
 			if bindErr != nil {
 				return false
 			}
@@ -1145,7 +1178,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 			return ok
 		}
 
-		for checkAlias(alias) {
+		for checkAlias() {
 		}
 
 		if bindErr != nil {

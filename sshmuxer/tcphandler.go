@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/antoniomika/multilistener"
 	"github.com/antoniomika/sish/utils"
 	"github.com/antoniomika/syncmap"
 	"github.com/logrusorgru/aurora"
@@ -33,15 +34,11 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 	}
 
 	if tH == nil {
-		lis, err := net.Listen("tcp", tcpAddr)
+		lis, err := utils.Listen(tcpAddr)
 		if err != nil {
 			log.Println("Error listening on addr:", err)
 			return nil, nil, "", nil, "", "", err
 		}
-
-		realAddr := lis.Addr().(*net.TCPAddr)
-
-		tcpAddr = strings.ReplaceAll(realAddr.String(), "[::]", "")
 
 		tH = &utils.TCPHolder{
 			TCPHost:        tcpAddr,
@@ -120,7 +117,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		connType = "TLS"
 	}
 
-	listenPort := tH.Listener.Addr().(*net.TCPAddr).Port
+	listenPort := tH.Listener.Addr().(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port
 	requestMessages += fmt.Sprintf("%s: %s:%d\r\n", aurora.BgBlue(connType), domainName, listenPort)
 	log.Printf("%s forwarding started: %s:%d -> %s for client: %s\n", aurora.BgBlue(connType), domainName, listenPort, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 

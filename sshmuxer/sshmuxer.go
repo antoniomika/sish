@@ -29,17 +29,17 @@ func Start() {
 		sshPort   int
 	)
 
-	_, httpPortString, err := net.SplitHostPort(viper.GetString("http-address"))
+	_, httpPortString, err := utils.ParseAddress(viper.GetString("http-address"))
 	if err != nil {
 		log.Fatalln("Error parsing address:", err)
 	}
 
-	_, httpsPortString, err := net.SplitHostPort(viper.GetString("https-address"))
+	_, httpsPortString, err := utils.ParseAddress(viper.GetString("https-address"))
 	if err != nil {
 		log.Fatalln("Error parsing address:", err)
 	}
 
-	_, sshPortString, err := net.SplitHostPort(viper.GetString("ssh-address"))
+	_, sshPortString, err := utils.ParseAddress(viper.GetString("ssh-address"))
 	if err != nil {
 		log.Fatalln("Error parsing address:", err)
 	}
@@ -100,8 +100,6 @@ func Start() {
 					})
 
 					log.Println(key, value.SSHConn.User(), listeners)
-					log.Println("Metrics:", value.Created.Format(time.RFC3339),
-						"Duration:", time.Since(value.Created).Round(time.Second))
 					return true
 				})
 				log.Println("===HTTP Listeners===")
@@ -165,7 +163,7 @@ func Start() {
 
 	var listener net.Listener
 
-	l, err := net.Listen("tcp", viper.GetString("ssh-address"))
+	l, err := utils.Listen(viper.GetString("ssh-address"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -203,86 +201,65 @@ func Start() {
 			continue
 		}
 
-		clientRemote, _, err := net.SplitHostPort(conn.RemoteAddr().String())
-
-		if err != nil || state.IPFilter.Blocked(clientRemote) || state.RetryTimer.Blocked(clientRemote) {
-			conn.Close()
-			continue
-		}
-
-		clientLoggedInMutex := &sync.Mutex{}
-
-		clientLoggedInMutex.Lock()
-		clientLoggedIn := false
-		clientLoggedInMutex.Unlock()
-
-		if viper.GetBool("cleanup-unauthed") {
-			go func() {
-				<-time.After(viper.GetDuration("cleanup-unauthed-timeout"))
-				clientLoggedInMutex.Lock()
-				if !clientLoggedIn {
-					conn.Close()
-				}
-				clientLoggedInMutex.Unlock()
-			}()
-		}
-
-		log.Println("Accepted SSH connection for:", conn.RemoteAddr())
-
 		go func() {
-			singleDevice := viper.GetBool("single-connection-per-device")
-			sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
+			clientRemote, _, err := net.SplitHostPort(conn.RemoteAddr().String())
 
-			if err == nil {
-				blockCount, blocked := state.UserFilter[sshConn.User()]
-				if blocked {
-					state.UserFilter[sshConn.User()] = blockCount + 1
-					log.Println("User ", sshConn.User(), " blocked")
-					conn.Close()
-					return
-				}
+			if err != nil || state.IPFilter.Blocked(clientRemote) || state.RetryTimer.Blocked(clientRemote) {
+				conn.Close()
+				return
 			}
 
+			clientLoggedInMutex := &sync.Mutex{}
+
+			clientLoggedInMutex.Lock()
+			clientLoggedIn := false
+			clientLoggedInMutex.Unlock()
+
+			if viper.GetBool("cleanup-unauthed") {
+				go func() {
+					<-time.After(viper.GetDuration("cleanup-unauthed-timeout"))
+					clientLoggedInMutex.Lock()
+					if !clientLoggedIn {
+						conn.Close()
+					}
+					clientLoggedInMutex.Unlock()
+				}()
+			}
+
+			log.Println("Accepted SSH connection for:", conn.RemoteAddr())
+
+			sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
 			clientLoggedInMutex.Lock()
 			clientLoggedIn = true
 			clientLoggedInMutex.Unlock()
 			if err != nil {
 				conn.Close()
 				log.Println(err)
-				state.RetryTimer.TryLater(clientRemote)
 				return
 			}
 
-			if state.RetryTimer.Find(clientRemote) {
-				state.RetryTimer.Reset(clientRemote)
-			}
+			pubKeyFingerprint := ""
 
-			if singleDevice {
-				_, exists := state.SSHConnections.Load(sshConn.User())
-				if exists {
-					conn.Close()
-					log.Println("Connection already exists")
-					return
+			if sshConn.Permissions != nil {
+				if _, ok := sshConn.Permissions.Extensions["pubKey"]; ok {
+					pubKeyFingerprint = sshConn.Permissions.Extensions["pubKeyFingerprint"]
 				}
 			}
 
 			holderConn := &utils.SSHConnection{
-				SSHConn:   sshConn,
-				Listeners: syncmap.New[string, net.Listener](),
-				Closed:    &sync.Once{},
-				Close:     make(chan bool),
-				Exec:      make(chan bool),
-				Messages:  make(chan string),
-				Session:   make(chan bool),
-				SetupLock: &sync.Mutex{},
-				Created:   time.Now(),
+				SSHConn:                sshConn,
+				Listeners:              syncmap.New[string, net.Listener](),
+				Closed:                 &sync.Once{},
+				Close:                  make(chan bool),
+				Exec:                   make(chan bool),
+				Messages:               make(chan string),
+				Session:                make(chan bool),
+				SetupLock:              &sync.Mutex{},
+				TCPAliasesAllowedUsers: []string{pubKeyFingerprint},
+				Created:                time.Now(),
 			}
 
-			if singleDevice {
-				state.SSHConnections.Store(holderConn.SSHConn.User(), holderConn)
-			} else {
-				state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)
-			}
+			state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)
 
 			// History
 			histConnect := updateHistory(sshConn, state)
@@ -326,6 +303,13 @@ func Start() {
 					case <-ticker.C:
 						runTime++
 
+						if holderConn.Deadline != nil && time.Now().After(*holderConn.Deadline) {
+							holderConn.SendMessage("Connection deadline reached. Closing connection.", true)
+							time.Sleep(1 * time.Millisecond)
+							holderConn.CleanUp(state)
+							return
+						}
+
 						if ((viper.GetBool("cleanup-unbound") && runTime > viper.GetDuration("cleanup-unbound-timeout").Seconds()) || holderConn.AutoClose) && holderConn.ListenerCount() == 0 {
 							holderConn.SendMessage("No forwarding requests sent. Closing connection.", true)
 							time.Sleep(1 * time.Millisecond)
@@ -352,11 +336,8 @@ func Start() {
 						case <-ticker.C:
 							_, _, err := sshConn.SendRequest("keepalive@sish", true, nil)
 							if err != nil {
-								log.Println("Error retrieving keepalive response: from ", clientRemote, err.Error())
+								log.Println("Error retrieving keepalive response:", err)
 								return
-							}
-							if viper.GetBool("debug") {
-								log.Println("ticker expired for : ", clientRemote)
 							}
 						case <-holderConn.Close:
 							return

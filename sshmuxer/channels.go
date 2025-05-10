@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -51,6 +52,12 @@ const (
 
 	// tcpAddressPrefix defines whether or not to set the tcp address for a tcp forward.
 	tcpAddressPrefix = "tcp-address"
+
+	// tcpAliasesAllowedUsersPrefix defines a comma separated list of allowed key fingerprints to access TCP aliases.
+	tcpAliasesAllowedUsersPrefix = "tcp-aliases-allowed-users"
+
+	// deadlinePrefix defines a timestamp at which the connection will close automatically.
+	deadlinePrefix = "deadline"
 )
 
 // handleSession handles the channel when a user requests a session.
@@ -66,7 +73,10 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 		log.Println("Handling session for connection:", connection)
 	}
 
-	writeToSession(connection, aurora.BgRed("Press Ctrl-C to close the session.").String()+"\r\n")
+	welcomeMessage := viper.GetString("welcome-message")
+	if welcomeMessage != "" {
+		writeToSession(connection, aurora.BgRed(welcomeMessage).String()+"\r\n")
+	}
 
 	go func() {
 		for {
@@ -226,6 +236,42 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						sshConn.LocalForward = localForward
 
 						sshConn.SendMessage(fmt.Sprintf("Connection used for local forwards set to: %t", sshConn.LocalForward), true)
+					case tcpAliasesAllowedUsersPrefix:
+						if !viper.GetBool("tcp-aliases-allowed-users") {
+							break
+						}
+
+						fingerPrints := strings.Split(param, ",")
+
+						for i, fingerPrint := range fingerPrints {
+							fingerPrints[i] = strings.TrimSpace(fingerPrint)
+						}
+
+						connPubKey := ""
+						if sshConn.SSHConn.Permissions != nil {
+							if _, ok := sshConn.SSHConn.Permissions.Extensions["pubKey"]; ok {
+								connPubKey = sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"]
+							}
+						}
+
+						sshConn.TCPAliasesAllowedUsers = fingerPrints
+
+						printKeys := fingerPrints
+						if connPubKey != "" {
+							sshConn.TCPAliasesAllowedUsers = append(sshConn.TCPAliasesAllowedUsers, connPubKey)
+							printKeys = slices.Insert(printKeys, 0, fmt.Sprintf("%s (self)", connPubKey))
+						}
+
+						sshConn.SendMessage(fmt.Sprintf("Allowed users for TCP Aliases set to: %s", strings.Join(printKeys, ", ")), true)
+					case deadlinePrefix:
+						deadline, err := parseDeadline(param)
+						if err != nil {
+							log.Printf("Unable to parse deadline: %s", param)
+							break
+						}
+
+						sshConn.Deadline = &deadline
+						sshConn.SendMessage(fmt.Sprintf("Deadline for connection set to: %s", sshConn.Deadline.UTC().Format("2006-01-02 15:04:05")), true)
 					}
 				}
 
@@ -279,6 +325,34 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 	aH := loc
 
+	pubKeyFingerprint := ""
+
+	if sshConn.SSHConn.Permissions != nil {
+		if _, ok := sshConn.SSHConn.Permissions.Extensions["pubKey"]; ok {
+			pubKeyFingerprint = sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"]
+		}
+	}
+
+	if viper.GetBool("tcp-aliases-allowed-users") {
+		connAllowed := false
+
+		aH.SSHConnections.Range(func(name string, conn *utils.SSHConnection) bool {
+			for _, fingerprint := range conn.TCPAliasesAllowedUsers {
+				if fingerprint == "any" || (fingerprint != "" && pubKeyFingerprint != "" && fingerprint == pubKeyFingerprint) {
+					connAllowed = true
+					return false
+				}
+			}
+			return true
+		})
+
+		if !connAllowed {
+			log.Println("Connection not allowed because fingerprint is not found in allowed list")
+			sshConn.CleanUp(state)
+			return
+		}
+	}
+
 	connectionLocation, err := aH.Balancer.NextServer()
 	if err != nil {
 		log.Println("Unable to load connection location:", err)
@@ -295,7 +369,12 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 	aliasAddr := string(host)
 
-	logLine := fmt.Sprintf("Accepted connection from %s -> %s", sshConn.SSHConn.RemoteAddr().String(), tcpAliasToConnect)
+	connString := sshConn.SSHConn.RemoteAddr().String()
+	if pubKeyFingerprint != "" {
+		connString = fmt.Sprintf("%s (%s)", connString, pubKeyFingerprint)
+	}
+
+	logLine := fmt.Sprintf("Accepted connection from %s -> %s", connString, tcpAliasToConnect)
 	log.Println(logLine)
 
 	if viper.GetBool("log-to-client") {
@@ -350,4 +429,32 @@ func getProxyProtoVersion(proxyProtoUserVersion string) byte {
 	}
 
 	return byte(realProtoVersion)
+}
+
+// parseDeadline parses the deadline string provided by the client to a time object.
+func parseDeadline(param string) (time.Time, error) {
+	// Try parsing as an epoch time
+	if epoch, err := strconv.ParseInt(param, 10, 64); err == nil {
+		return time.Unix(epoch, 0), nil
+	}
+
+	// Try parsing as a duration
+	if duration, err := time.ParseDuration(param); err == nil {
+		return time.Now().Add(duration), nil
+	}
+
+	// Try parsing as a date-time
+	layouts := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04:05Z07:00",
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04:05Z07:00",
+	}
+	for _, layout := range layouts {
+		if deadline, err := time.Parse(layout, param); err == nil {
+			return deadline, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("invalid deadline format")
 }

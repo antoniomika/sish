@@ -257,8 +257,9 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 		c.State.TCPListeners.Range(func(tcpAlias string, aliasHolder *TCPHolder) bool {
 			for _, v := range listeners {
 				aliasHolder.Balancers.Range(func(ikey string, balancer *roundrobin.RoundRobin) bool {
+					newAlias := tcpAlias
 					if aliasHolder.SNIProxy {
-						tcpAlias = fmt.Sprintf("%s-%s", tcpAlias, ikey)
+						newAlias = fmt.Sprintf("%s-%s", tcpAlias, ikey)
 					}
 
 					for _, server := range balancer.Servers() {
@@ -271,7 +272,7 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 						aliasAddress := string(serverAddr)
 
 						if v == aliasAddress {
-							listenerParts[tcpAlias] = aliasAddress
+							listenerParts[newAlias] = aliasAddress
 						}
 					}
 
