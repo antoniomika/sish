@@ -79,6 +79,7 @@ proxy-protocol-policy: use
 proxy-protocol-timeout: 200ms
 proxy-protocol-use-timeout: false
 proxy-protocol-version: "1"
+proxy-ssl-termination: false
 redirect-root: true
 redirect-root-location: https://github.com/antoniomika/sish
 rewrite-host-header: true

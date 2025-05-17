@@ -1,6 +1,6 @@
 ---
 title: CLI
-description: How use sish's CLI 
+description: How use sish's CLI
 keywords: [sish, cli]
 ---
 
@@ -107,6 +107,7 @@ Flags:
       --proxy-protocol-use-timeout                              Use a timeout for the proxy-protocol read
   -q, --proxy-protocol-version string                           What version of the proxy protocol to use. Can either be 1, 2, or userdefined.
                                                                 If userdefined, the user needs to add a command to SSH called proxyproto=version (ie proxyproto=1) (default "1")
+      --proxy-ssl-termination                                   Whether sish is running behind an SSL terminated reverse proxy
       --redirect-root                                           Redirect the root domain to the location defined in --redirect-root-location (default true)
   -r, --redirect-root-location string                           The location to redirect requests to the root domain
                                                                 to instead of responding with a 404 (default "https://github.com/antoniomika/sish")
@@ -129,6 +130,7 @@ Flags:
       --verify-dns                                              Verify DNS information for hosts and ensure it matches a connecting users sha256 key fingerprint (default true)
       --verify-ssl                                              Verify SSL certificates made on proxied HTTP connections (default true)
   -v, --version                                                 version for sish
+      --welcome-message string                                  Message displayed to users upon connection (default "Press Ctrl-C to close the session.")
   -y, --whitelisted-countries string                            A comma separated list of whitelisted countries. Applies to HTTP, TCP, and SSH connections
   -w, --whitelisted-ips string                                  A comma separated list of whitelisted ips. Applies to HTTP, TCP, and SSH connections
 ```
