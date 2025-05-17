@@ -121,16 +121,17 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 		}
 	}
 
-	httpPortString := ""
-	if state.Ports.HTTPPort != 80 {
-		httpPortString = fmt.Sprintf(":%d", state.Ports.HTTPPort)
+	if !viper.GetBool("proxy-ssl-termination") {
+		httpPortString := ""
+		if state.Ports.HTTPPort != 80 {
+			httpPortString = fmt.Sprintf(":%d", state.Ports.HTTPPort)
+		}
+
+		requestMessages += fmt.Sprintf("%s: http://%s%s%s%s\r\n", aurora.BgBlue("HTTP"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path)
+		log.Printf("%s forwarding started: http://%s%s%s%s -> %s for client: %s\n", aurora.BgBlue("HTTP"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
 	}
 
-	requestMessages += fmt.Sprintf("%s: http://%s%s%s%s\r\n", aurora.BgBlue("HTTP"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path)
-
-	log.Printf("%s forwarding started: http://%s%s%s%s -> %s for client: %s\n", aurora.BgBlue("HTTP"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
-
-	if viper.GetBool("https") {
+	if viper.GetBool("https") || viper.GetBool("proxy-ssl-termination") {
 		httpsPortString := ""
 		if state.Ports.HTTPSPort != 443 {
 			httpsPortString = fmt.Sprintf(":%d", state.Ports.HTTPSPort)
