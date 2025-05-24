@@ -99,6 +99,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolP("proxy-protocol", "", false, "Use the proxy-protocol while proxying connections in order to pass-on IP address and port information")
 	rootCmd.PersistentFlags().BoolP("proxy-protocol-use-timeout", "", false, "Use a timeout for the proxy-protocol read")
 	rootCmd.PersistentFlags().BoolP("proxy-protocol-listener", "", false, "Use the proxy-protocol to resolve ip addresses from user connections")
+	rootCmd.PersistentFlags().BoolP("proxy-ssl-termination", "", false, "Whether sish is running behind an SSL-terminated reverse proxy\nIf true, the displayed HTTP URL will use `https://` despite running on port 80")
 	rootCmd.PersistentFlags().BoolP("https", "", false, "Listen for HTTPS connections. Requires a correct --https-certificate-directory")
 	rootCmd.PersistentFlags().BoolP("force-all-https", "", false, "Redirect all requests to the https server")
 	rootCmd.PersistentFlags().BoolP("force-https", "", false, "Allow indiviual binds to request for https to be enforced")
