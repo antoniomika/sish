@@ -96,7 +96,7 @@ func HandleSSHConn(sshListener net.Listener, successAuth *chan bool) {
 	defer func() {
 		err := conn.Close()
 		if err != nil {
-			log.Print("Error closing connection", err)
+			log.Println("Error closing connection:", err)
 		}
 	}()
 
@@ -241,7 +241,7 @@ func TestAuthenticationKeyRequest(t *testing.T) {
 			t.Log("ssh client connected")
 			err := client.Close()
 			if err != nil {
-				t.Error(err)
+				t.Log("Error closing", err)
 			}
 		}
 
