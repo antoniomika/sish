@@ -92,7 +92,15 @@ func (tH *TCPHolder) Handle(state *State) {
 			clientRemote, _, err := net.SplitHostPort(cl.RemoteAddr().String())
 
 			if err != nil || state.IPFilter.Blocked(clientRemote) {
-				cl.Close()
+				err := cl.Close()
+				if err != nil {
+					log.Printf("Unable to close connection: %s", err)
+				}
+
+				if viper.GetBool("debug") {
+					log.Printf("Blocked connection from %s to %s", cl.RemoteAddr().String(), cl.LocalAddr().String())
+				}
+
 				return
 			}
 
@@ -103,7 +111,12 @@ func (tH *TCPHolder) Handle(state *State) {
 				tlsHello, teeConn, err := PeekTLSHello(cl)
 				if tlsHello == nil {
 					log.Printf("Unable to read TLS hello: %s", err)
-					cl.Close()
+
+					err := cl.Close()
+					if err != nil {
+						log.Printf("Unable to close connection: %s", err)
+					}
+
 					return
 				}
 
@@ -112,7 +125,12 @@ func (tH *TCPHolder) Handle(state *State) {
 				_, err = io.ReadFull(teeConn, bufBytes)
 				if err != nil {
 					log.Printf("Unable to read buffered data: %s", err)
-					cl.Close()
+
+					err := cl.Close()
+					if err != nil {
+						log.Printf("Unable to close connection: %s", err)
+					}
+
 					return
 				}
 
@@ -131,7 +149,12 @@ func (tH *TCPHolder) Handle(state *State) {
 
 				if pB == nil {
 					log.Printf("Unable to load connection location: %s not found on TCP listener %s", balancerName, tH.TCPHost)
-					cl.Close()
+
+					err := cl.Close()
+					if err != nil {
+						log.Printf("Unable to close connection: %s", err)
+					}
+
 					return
 				}
 			}
@@ -141,14 +164,24 @@ func (tH *TCPHolder) Handle(state *State) {
 			connectionLocation, err := balancer.NextServer()
 			if err != nil {
 				log.Println("Unable to load connection location:", err)
-				cl.Close()
+
+				err := cl.Close()
+				if err != nil {
+					log.Printf("Unable to close connection: %s", err)
+				}
+
 				return
 			}
 
 			host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
 			if err != nil {
 				log.Println("Unable to decode connection location:", err)
-				cl.Close()
+
+				err := cl.Close()
+				if err != nil {
+					log.Printf("Unable to close connection: %s", err)
+				}
+
 				return
 			}
 
@@ -176,7 +209,12 @@ func (tH *TCPHolder) Handle(state *State) {
 			conn, err := net.Dial("unix", hostAddr)
 			if err != nil {
 				log.Println("Error connecting to tcp balancer:", err)
-				cl.Close()
+
+				err := cl.Close()
+				if err != nil {
+					log.Printf("Unable to close connection: %s", err)
+				}
+
 				return
 			}
 
@@ -184,7 +222,12 @@ func (tH *TCPHolder) Handle(state *State) {
 				_, err := conn.Write(bufBytes)
 				if err != nil {
 					log.Println("Unable to write to conn:", err)
-					cl.Close()
+
+					err := cl.Close()
+					if err != nil {
+						log.Printf("Unable to close connection: %s", err)
+					}
+
 					return
 				}
 			}

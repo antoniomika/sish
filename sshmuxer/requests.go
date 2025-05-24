@@ -66,7 +66,12 @@ func handleCancelRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnec
 
 		if holder.OriginalAddr == check.Addr && holder.OriginalPort == check.Rport {
 			closed = true
-			holder.Close()
+
+			err := holder.Close()
+			if err != nil {
+				log.Println("Error closing listener:", err)
+			}
+
 			return false
 		}
 
@@ -174,8 +179,16 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		}
 		return
 	}
-	tmpfile.Close()
-	os.Remove(tmpfile.Name())
+
+	err = tmpfile.Close()
+	if err != nil {
+		log.Println("Error closing temporary file:", err)
+	}
+
+	err = os.Remove(tmpfile.Name())
+	if err != nil {
+		log.Println("Error removing temporary file:", err)
+	}
 
 	listenAddr := tmpfile.Name()
 
@@ -205,10 +218,19 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	deferHandler := func() {}
 
 	cleanupChanListener := func() {
-		listenerHolder.Close()
+		err := listenerHolder.Close()
+		if err != nil {
+			log.Println("Error closing listener:", err)
+		}
+
 		state.Listeners.Delete(listenAddr)
 		sshConn.Listeners.Delete(listenAddr)
-		os.Remove(listenAddr)
+
+		err = os.Remove(listenAddr)
+		if err != nil {
+			log.Println("Error removing unix socket:", err)
+		}
+
 		deferHandler()
 	}
 
@@ -334,7 +356,11 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 				})
 
 				if balancers == 0 {
-					tH.Listener.Close()
+					err := tH.Listener.Close()
+					if err != nil {
+						log.Println("Error closing TCPListener:", err)
+					}
+
 					state.Listeners.Delete(tcpAddr)
 					state.TCPListeners.Delete(tcpAddr)
 				}
@@ -373,7 +399,11 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 				newChan, newReqs, err := sshConn.SSHConn.OpenChannel("forwarded-tcpip", ssh.Marshal(resp))
 				if err != nil {
 					sshConn.SendMessage(err.Error(), true)
-					cl.Close()
+
+					err := cl.Close()
+					if err != nil {
+						log.Println("Error closing client connection:", err)
+					}
 				}
 
 				if sshConn.ProxyProto != 0 && listenerType == utils.TCPListener {

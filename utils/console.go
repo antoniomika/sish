@@ -169,7 +169,10 @@ func (c *WebConsole) HandleDisconnectRoute(proxyUrl string, g *gin.Context) {
 		listener, ok := listenerTmp.(*ListenerHolder)
 
 		if ok {
-			listener.Close()
+			err := listener.Close()
+			if err != nil {
+				log.Println("Error closing listener:", err)
+			}
 		}
 	}
 
@@ -194,12 +197,7 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 		routeListeners := map[string]map[string]any{}
 
 		sshConn.Listeners.Range(func(name string, val net.Listener) bool {
-			ok := true
-			if name == "" {
-				ok = false
-			}
-
-			if ok {
+			if name != "" {
 				listeners = append(listeners, name)
 			}
 
@@ -347,7 +345,10 @@ func (c *WebConsole) RemoveRoute(route string) {
 	}
 
 	for _, client := range clients {
-		client.Conn.Close()
+		err := client.Conn.Close()
+		if err != nil {
+			log.Println("Error closing websocket connection:", err)
+		}
 	}
 
 	c.Clients.Delete(route)
@@ -407,7 +408,11 @@ func (c *WebConsole) BroadcastRoute(route string, message []byte) {
 // Handle is the only place socket reads and writes happen.
 func (c *WebClient) Handle() {
 	defer func() {
-		c.Conn.Close()
+		err := c.Conn.Close()
+		if err != nil {
+			log.Println("Error closing websocket connection:", err)
+		}
+
 		c.Console.RemoveClient(c.Route, c)
 	}()
 
