@@ -26,7 +26,14 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 	clientRemote, _, err := net.SplitHostPort(cl.RemoteAddr().String())
 
 	if err != nil || pL.State.IPFilter.Blocked(clientRemote) {
-		cl.Close()
+		err := cl.Close()
+		if err != nil {
+			log.Println("Error closing connection:", err)
+		}
+
+		if viper.GetBool("debug") {
+			log.Printf("Blocked connection from %s to %s", cl.RemoteAddr().String(), cl.LocalAddr().String())
+		}
 		return pL.Accept()
 	}
 
@@ -58,14 +65,20 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 	connectionLocation, err := balancer.NextServer()
 	if err != nil {
 		log.Println("Unable to load connection location:", err)
-		teeConn.Close()
+		err := teeConn.Close()
+		if err != nil {
+			log.Println("Error closing teeConn:", err)
+		}
 		return pL.Accept()
 	}
 
 	host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
 	if err != nil {
 		log.Println("Unable to decode connection location:", err)
-		teeConn.Close()
+		err := teeConn.Close()
+		if err != nil {
+			log.Println("Error closing teeConn:", err)
+		}
 		return pL.Accept()
 	}
 
@@ -93,7 +106,10 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 	conn, err := net.Dial("unix", hostAddr)
 	if err != nil {
 		log.Println("Error connecting to tcp balancer:", err)
-		teeConn.Close()
+		err := teeConn.Close()
+		if err != nil {
+			log.Println("Error closing teeConn:", err)
+		}
 		return pL.Accept()
 	}
 

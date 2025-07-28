@@ -459,7 +459,12 @@ func Start(state *utils.State) {
 				state.TCPListeners.Store(httpsServer.Addr, tH)
 			}
 
-			defer httpsListener.Close()
+			defer func() {
+				err := httpsListener.Close()
+				if err != nil {
+					log.Println("Error closing https listener:", err)
+				}
+			}()
 
 			log.Fatal(httpsServer.ServeTLS(httpsListener, "", ""))
 		}()
@@ -491,7 +496,12 @@ func Start(state *utils.State) {
 		httpListener = l
 	}
 
-	defer httpListener.Close()
+	defer func() {
+		err := httpListener.Close()
+		if err != nil {
+			log.Println("Error closing http listener:", err)
+		}
+	}()
 
 	log.Fatal(httpServer.Serve(httpListener))
 }

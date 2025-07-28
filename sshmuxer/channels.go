@@ -421,14 +421,13 @@ func getProxyProtoVersion(proxyProtoUserVersion string) byte {
 		proxyProtoUserVersion = viper.GetString("proxy-protocol-version")
 	}
 
-	realProtoVersion := 0
-	if proxyProtoUserVersion == "1" {
-		realProtoVersion = 1
-	} else if proxyProtoUserVersion == "2" {
-		realProtoVersion = 2
-	}
-
-	return byte(realProtoVersion)
+	switch proxyProtoUserVersion {
+	case "1":
+		return 1
+	case "2":
+		return 2
+	default:
+		return 0
 }
 
 // parseDeadline parses the deadline string provided by the client to a time object.

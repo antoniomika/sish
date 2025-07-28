@@ -83,7 +83,10 @@ func (s *SSHConnection) ListenerCount() int {
 func (s *SSHConnection) CleanUp(state *State) {
 	s.Closed.Do(func() {
 		close(s.Close)
-		s.SSHConn.Close()
+		err := s.SSHConn.Close()
+		if err != nil {
+			log.Println("Error closing SSH connection:", err)
+		}
 		state.SSHConnections.Delete(s.SSHConn.RemoteAddr().String())
 		log.Println("Closed SSH connection for:", s.SSHConn.RemoteAddr().String(), "user:", s.SSHConn.User())
 	})
@@ -209,8 +212,15 @@ func (i IdleTimeoutConn) Write(buf []byte) (int, error) {
 // CopyBoth copies betwen a reader and writer and will cleanup each.
 func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 	closeBoth := func() {
-		reader.Close()
-		writer.Close()
+		err := reader.Close()
+		if err != nil {
+			log.Println("Error closing reader:", err)
+		}
+
+		err = writer.Close()
+		if err != nil {
+			log.Println("Error closing writer:", err)
+		}
 	}
 
 	var tcon io.ReadWriter

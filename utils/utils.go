@@ -261,7 +261,10 @@ func GetRandomPortInRange(listenAddr string, portRange string) uint32 {
 		return GetRandomPortInRange(listenAddr, portRange)
 	}
 
-	ln.Close()
+	err = ln.Close()
+	if err != nil {
+		log.Println("Error closing listener:", err)
+	}
 
 	return bindPort
 }
@@ -851,7 +854,10 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 				if listenErr != nil {
 					err = listenErr
 				} else {
-					ln.Close()
+					err = ln.Close()
+					if err != nil {
+						log.Println("Error closing listener:", err)
+					}
 				}
 			}
 

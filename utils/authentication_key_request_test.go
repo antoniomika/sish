@@ -92,7 +92,12 @@ func HandleSSHConn(sshListener net.Listener, successAuth *chan bool) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			log.Print("Error closing connection", err)
+		}
+	}()
 
 	// GetSSHConfig is the method we are testing to validate that it
 	// can use an http request to validate client public key auth
@@ -102,7 +107,10 @@ func HandleSSHConn(sshListener net.Listener, successAuth *chan bool) {
 		*successAuth <- false
 		return
 	}
-	connection.Close()
+	err = connection.Close()
+	if err != nil {
+		log.Print("Error closing connection", err)
+	}
 
 	*successAuth <- true
 }
@@ -117,7 +125,12 @@ func TestAuthenticationKeyRequest(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer os.RemoveAll(dir)
+	defer func() {
+		err := os.RemoveAll(dir)
+		if err != nil {
+			t.Error(err)
+		}
+	}()
 	viper.Set("private-keys-directory", dir)
 	viper.Set("authentication", true)
 
@@ -193,7 +206,12 @@ func TestAuthenticationKeyRequest(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer sshListener.Close()
+		defer func() {
+			err := sshListener.Close()
+			if err != nil {
+				t.Error(err)
+			}
+		}()
 
 		successAuth := make(chan bool)
 		go HandleSSHConn(sshListener, &successAuth)
@@ -217,7 +235,10 @@ func TestAuthenticationKeyRequest(t *testing.T) {
 			t.Log("ssh client rejected", err)
 		} else {
 			t.Log("ssh client connected")
-			client.Close()
+			err := client.Close()
+			if err != nil {
+				t.Error(err)
+			}
 		}
 
 		didAuth := <-successAuth

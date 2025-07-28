@@ -182,7 +182,10 @@ func Start() {
 	state.Listeners.Store(viper.GetString("ssh-address"), listener)
 
 	defer func() {
-		listener.Close()
+		err := listener.Close()
+		if err != nil {
+			log.Println("Error closing listener:", err)
+		}
 		state.Listeners.Delete(viper.GetString("ssh-address"))
 	}()
 
@@ -205,7 +208,14 @@ func Start() {
 			clientRemote, _, err := net.SplitHostPort(conn.RemoteAddr().String())
 
 			if err != nil || state.IPFilter.Blocked(clientRemote) || state.RetryTimer.Blocked(clientRemote) {
-				conn.Close()
+				err := conn.Close()
+				if err != nil {
+					log.Println("Error closing connection:", err)
+				}
+
+				if viper.GetBool("debug") {
+					log.Printf("Blocked connection from %s to %s", conn.RemoteAddr().String(), conn.LocalAddr().String())
+				}
 				return
 			}
 
@@ -220,7 +230,10 @@ func Start() {
 					<-time.After(viper.GetDuration("cleanup-unauthed-timeout"))
 					clientLoggedInMutex.Lock()
 					if !clientLoggedIn {
-						conn.Close()
+						err := conn.Close()
+						if err != nil {
+							log.Println("Error closing connection:", err)
+						}
 					}
 					clientLoggedInMutex.Unlock()
 				}()
@@ -233,8 +246,12 @@ func Start() {
 			clientLoggedIn = true
 			clientLoggedInMutex.Unlock()
 			if err != nil {
-				conn.Close()
-				log.Println(err)
+				err := conn.Close()
+				if err != nil {
+					log.Println("Error closing connection:", err)
+				}
+
+				log.Println("SSH connection could not be established", err)
 				return
 			}
 
