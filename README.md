@@ -14,6 +14,62 @@ Http urls:
 An open source serveo/ngrok alternative.
 + Added 'bruteforce ssh connections' from https://github.com/vickeykumar/sish-lb
 
+## Build
+
+For detailed instructions on how to build sish from source, please refer to the [BUILD.md](BUILD.md) file.
+
+### Docker (Recommended)
+
+The easiest way to build and use sish is with Docker:
+
+#### Linux/macOS
+
+```bash
+# Build the Docker image
+make docker
+
+# Push the Docker image to a registry
+make push
+```
+
+#### Windows
+
+On Windows, you can use the provided scripts:
+
+```cmd
+# Using Command Prompt
+docker-build.bat
+
+# Using PowerShell
+.\docker-build.ps1
+```
+
+For detailed Docker build instructions, see [DOCKER_BUILD_GUIDE.md](DOCKER_BUILD_GUIDE.md).
+
+### Linux Build
+
+For Linux environments, you can use the provided build script:
+
+```bash
+# Make the script executable
+chmod +x build.sh
+
+# Run the build script
+./build.sh
+```
+
+### Manual Build
+
+You can also build manually using standard Go commands:
+
+```bash
+# Build for current platform
+go build -o sish
+
+# Build for Linux specifically
+GOOS=linux GOARCH=amd64 go build -o sish-linux-amd64
+```
+
 ## Deploy
 
 Builds are made automatically for each commit to the repo and are pushed to Dockerhub. Builds are tagged using a commit sha,

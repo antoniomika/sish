@@ -428,6 +428,7 @@ func getProxyProtoVersion(proxyProtoUserVersion string) byte {
 		return 2
 	default:
 		return 0
+	}
 }
 
 // parseDeadline parses the deadline string provided by the client to a time object.
