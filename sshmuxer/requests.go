@@ -405,6 +405,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 					if err != nil {
 						log.Println("Error closing client connection:", err)
 					}
+					return
 				}
 
 				if sshConn.ProxyProto != 0 && listenerType == utils.TCPListener {
