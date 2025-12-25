@@ -17,10 +17,10 @@ jobs:
       - name: build docs site
         run: make ssg
       - name: publish to pgs
-        uses: picosh/pgs-action@v3
+        uses: picosh/pgs-action@v5
         with:
-          user: hey
           key: ${{ secrets.PRIVATE_KEY }}
+          cert_pubkey: ${{ secrets.CERT_PUBKEY }}
           src: './docs/public/'
           project: "sish-${{ steps.vars.outputs.sha_short }}"
           promote: "sish-prod"
