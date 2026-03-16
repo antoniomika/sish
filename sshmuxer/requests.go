@@ -419,10 +419,15 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 						destInfo = cl.LocalAddr().(*net.TCPAddr)
 					}
 
+					addressFamily := proxyproto.TCPv4
+					if sourceInfo.IP.To4() == nil {
+						addressFamily = proxyproto.TCPv6
+					}
+
 					proxyProtoHeader := proxyproto.Header{
 						Version:           sshConn.ProxyProto,
-						Command:           proxyproto.ProtocolVersionAndCommand(proxyproto.PROXY),
-						TransportProtocol: proxyproto.AddressFamilyAndProtocol(proxyproto.TCPv4),
+						Command:           proxyproto.PROXY,
+						TransportProtocol: addressFamily,
 						SourceAddr:        sourceInfo,
 						DestinationAddr:   destInfo,
 					}
