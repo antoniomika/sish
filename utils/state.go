@@ -11,6 +11,7 @@ import (
 
 	"github.com/antoniomika/syncmap"
 	"github.com/jpillora/ipfilter"
+	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
 	"github.com/vulcand/oxy/forward"
 	"github.com/vulcand/oxy/roundrobin"
@@ -216,6 +217,44 @@ func (tH *TCPHolder) Handle(state *State) {
 				}
 
 				return
+			}
+
+			var proxyProtoHeader *proxyproto.Header
+
+			tH.SSHConnections.Range(func(_ string, sshConn *SSHConnection) bool {
+				if sshConn.ProxyProto != 0 {
+					var sourceInfo *net.TCPAddr
+					var destInfo *net.TCPAddr
+					if _, ok := cl.RemoteAddr().(*net.TCPAddr); !ok {
+						sourceInfo = sshConn.SSHConn.RemoteAddr().(*net.TCPAddr)
+						destInfo = sshConn.SSHConn.LocalAddr().(*net.TCPAddr)
+					} else {
+						sourceInfo = cl.RemoteAddr().(*net.TCPAddr)
+						destInfo = cl.LocalAddr().(*net.TCPAddr)
+					}
+
+					addressFamily := proxyproto.TCPv4
+					if sourceInfo.IP.To4() == nil {
+						addressFamily = proxyproto.TCPv6
+					}
+
+					proxyProtoHeader = &proxyproto.Header{
+						Version:           sshConn.ProxyProto,
+						Command:           proxyproto.PROXY,
+						TransportProtocol: addressFamily,
+						SourceAddr:        sourceInfo,
+						DestinationAddr:   destInfo,
+					}
+				}
+
+				return false
+			})
+
+			if proxyProtoHeader != nil {
+				_, err := proxyProtoHeader.WriteTo(conn)
+				if err != nil && viper.GetBool("debug") {
+					log.Println("Error writing to channel:", err)
+				}
 			}
 
 			if bufBytes != nil {
