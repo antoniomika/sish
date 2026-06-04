@@ -201,131 +201,134 @@ func Start() {
 			continue
 		}
 
-		clientRemote, _, err := net.SplitHostPort(conn.RemoteAddr().String())
+		go handleConn(conn, state, sshConfig)
+	}
+}
 
-		if err != nil || state.IPFilter.Blocked(clientRemote) {
-			conn.Close()
-			continue
-		}
+// handleConn handles a single accepted SSH connection: it performs the SSH
+// handshake and wires up the per-connection goroutines (cleanup on close,
+// request/channel handling, unbound cleanup and keepalives). It is split out
+// of Start so the connection lifecycle can be exercised by tests.
+func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) {
+	clientRemote, _, err := net.SplitHostPort(conn.RemoteAddr().String())
 
-		clientLoggedInMutex := &sync.Mutex{}
+	if err != nil || state.IPFilter.Blocked(clientRemote) {
+		conn.Close()
+		return
+	}
 
-		clientLoggedInMutex.Lock()
-		clientLoggedIn := false
-		clientLoggedInMutex.Unlock()
+	clientLoggedInMutex := &sync.Mutex{}
+	clientLoggedIn := false
 
-		if viper.GetBool("cleanup-unauthed") {
-			go func() {
-				<-time.After(viper.GetDuration("cleanup-unauthed-timeout"))
-				clientLoggedInMutex.Lock()
-				if !clientLoggedIn {
-					conn.Close()
-				}
-				clientLoggedInMutex.Unlock()
-			}()
-		}
-
-		log.Println("Accepted SSH connection for:", conn.RemoteAddr())
-
+	if viper.GetBool("cleanup-unauthed") {
 		go func() {
-			sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
+			<-time.After(viper.GetDuration("cleanup-unauthed-timeout"))
 			clientLoggedInMutex.Lock()
-			clientLoggedIn = true
-			clientLoggedInMutex.Unlock()
-			if err != nil {
+			if !clientLoggedIn {
 				conn.Close()
-				log.Println(err)
-				return
 			}
+			clientLoggedInMutex.Unlock()
+		}()
+	}
 
-			pubKeyFingerprint := ""
+	log.Println("Accepted SSH connection for:", conn.RemoteAddr())
 
-			if sshConn.Permissions != nil {
-				if _, ok := sshConn.Permissions.Extensions["pubKey"]; ok {
-					pubKeyFingerprint = sshConn.Permissions.Extensions["pubKeyFingerprint"]
-				}
-			}
+	sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
+	clientLoggedInMutex.Lock()
+	clientLoggedIn = true
+	clientLoggedInMutex.Unlock()
+	if err != nil {
+		conn.Close()
+		log.Println(err)
+		return
+	}
 
-			holderConn := &utils.SSHConnection{
-				SSHConn:                sshConn,
-				Listeners:              syncmap.New[string, net.Listener](),
-				Closed:                 &sync.Once{},
-				Close:                  make(chan bool),
-				Exec:                   make(chan bool),
-				Messages:               make(chan string),
-				Session:                make(chan bool),
-				SetupLock:              &sync.Mutex{},
-				TCPAliasesAllowedUsers: []string{pubKeyFingerprint},
-			}
+	pubKeyFingerprint := ""
 
-			state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)
+	if sshConn.Permissions != nil {
+		if _, ok := sshConn.Permissions.Extensions["pubKey"]; ok {
+			pubKeyFingerprint = sshConn.Permissions.Extensions["pubKeyFingerprint"]
+		}
+	}
 
-			go func() {
-				err := sshConn.Wait()
-				if err != nil && viper.GetBool("debug") {
-					log.Println("Closing SSH connection:", err)
-				}
+	holderConn := &utils.SSHConnection{
+		SSHConn:                sshConn,
+		Listeners:              syncmap.New[string, net.Listener](),
+		Closed:                 &sync.Once{},
+		Close:                  make(chan bool),
+		Exec:                   make(chan bool),
+		Messages:               make(chan string),
+		Session:                make(chan bool),
+		SetupLock:              &sync.Mutex{},
+		TCPAliasesAllowedUsers: []string{pubKeyFingerprint},
+	}
 
-				select {
-				case <-holderConn.Close:
-					break
-				default:
+	state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)
+
+	go func() {
+		err := sshConn.Wait()
+		if err != nil && viper.GetBool("debug") {
+			log.Println("Closing SSH connection:", err)
+		}
+
+		select {
+		case <-holderConn.Close:
+			break
+		default:
+			holderConn.CleanUp(state)
+		}
+	}()
+
+	go handleRequests(reqs, holderConn, state)
+	go handleChannels(chans, holderConn, state)
+
+	go func() {
+		select {
+		case <-holderConn.Exec:
+		case <-time.After(1 * time.Second):
+			break
+		}
+
+		runTime := 0.0
+		ticker := time.NewTicker(1 * time.Second)
+
+		for {
+			select {
+			case <-ticker.C:
+				runTime++
+
+				if ((viper.GetBool("cleanup-unbound") && runTime > viper.GetDuration("cleanup-unbound-timeout").Seconds()) || holderConn.AutoClose) && holderConn.ListenerCount() == 0 {
+					holderConn.SendMessage("No forwarding requests sent. Closing connection.", true)
+					time.Sleep(1 * time.Millisecond)
 					holderConn.CleanUp(state)
 				}
-			}()
+			case <-holderConn.Close:
+				return
+			}
+		}
+	}()
 
-			go handleRequests(reqs, holderConn, state)
-			go handleChannels(chans, holderConn, state)
+	if viper.GetBool("ping-client") {
+		go func() {
+			tickDuration := viper.GetDuration("ping-client-interval")
+			ticker := time.NewTicker(tickDuration)
 
-			go func() {
-				select {
-				case <-holderConn.Exec:
-				case <-time.After(1 * time.Second):
-					break
+			for {
+				err := conn.SetDeadline(time.Now().Add(tickDuration).Add(viper.GetDuration("ping-client-timeout")))
+				if err != nil {
+					log.Println("Unable to set deadline")
 				}
 
-				runTime := 0.0
-				ticker := time.NewTicker(1 * time.Second)
-
-				for {
-					select {
-					case <-ticker.C:
-						runTime++
-
-						if ((viper.GetBool("cleanup-unbound") && runTime > viper.GetDuration("cleanup-unbound-timeout").Seconds()) || holderConn.AutoClose) && holderConn.ListenerCount() == 0 {
-							holderConn.SendMessage("No forwarding requests sent. Closing connection.", true)
-							time.Sleep(1 * time.Millisecond)
-							holderConn.CleanUp(state)
-						}
-					case <-holderConn.Close:
+				select {
+				case <-ticker.C:
+					_, _, err := sshConn.SendRequest("keepalive@sish", true, nil)
+					if err != nil {
+						log.Println("Error retrieving keepalive response:", err)
 						return
 					}
+				case <-holderConn.Close:
+					return
 				}
-			}()
-
-			if viper.GetBool("ping-client") {
-				go func() {
-					tickDuration := viper.GetDuration("ping-client-interval")
-					ticker := time.NewTicker(tickDuration)
-
-					for {
-						err := conn.SetDeadline(time.Now().Add(tickDuration).Add(viper.GetDuration("ping-client-timeout")))
-						if err != nil {
-							log.Println("Unable to set deadline")
-						}
-
-						select {
-						case <-ticker.C:
-							_, _, err := sshConn.SendRequest("keepalive@sish", true, nil)
-							if err != nil {
-								log.Println("Error retrieving keepalive response:", err)
-								return
-							}
-						case <-holderConn.Close:
-							return
-						}
-					}
-				}()
 			}
 		}()
 	}
