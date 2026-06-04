@@ -217,12 +217,23 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	deferHandler := func() {}
 
+	// Set once a forward is actually established (see the switch below); used
+	// to log when it is later torn down, mirroring the "forwarding started"
+	// logs. Left empty for setups that never completed, so we don't log a stop
+	// for a forward that never started.
+	forwardingType := ""
+	forwardingName := ""
+
 	cleanupChanListener := func() {
 		listenerHolder.Close()
 		state.Listeners.Delete(listenAddr)
 		sshConn.Listeners.Delete(listenAddr)
 		os.Remove(listenAddr)
 		deferHandler()
+
+		if forwardingType != "" {
+			log.Printf("%s forwarding stopped: %s -> %s for client: %s\n", aurora.BgBlue(forwardingType), forwardingName, listenAddr, sshConn.SSHConn.RemoteAddr().String())
+		}
 	}
 
 	connType := "tcp"
@@ -255,6 +266,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		}
 
 		mainRequestMessages = requestMessages
+
+		forwardingType = strings.ToUpper(connType)
+		forwardingName = pH.HTTPUrl.String()
 
 		deferHandler = func() {
 			err := pH.Balancer.RemoveServer(serverURL)
@@ -289,6 +303,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 		mainRequestMessages = requestMessages
 
+		forwardingType = "TCP Alias"
+		forwardingName = validAlias
+
 		deferHandler = func() {
 			err := aH.Balancer.RemoveServer(serverURL)
 			if err != nil {
@@ -319,6 +336,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		portChannelForwardReplyPayload.Rport = uint32(tH.Listener.Addr().(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port)
 
 		mainRequestMessages = requestMessages
+
+		forwardingType = strings.ToUpper(connType)
+		forwardingName = tcpAddr
 
 		if !tH.NoHandle {
 			go tH.Handle(state)
