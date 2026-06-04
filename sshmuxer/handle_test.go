@@ -1,11 +1,14 @@
 package sshmuxer
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +16,25 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
+
+// syncBuffer is a goroutine-safe buffer for capturing log output written
+// concurrently by the server goroutines under test.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
 
 // dropConnAfterForwardRequest connects to addr, requests an HTTP remote
 // forward for the given subdomain without waiting for the reply, and then
@@ -137,5 +159,92 @@ func TestForwardingCleanupOnDroppedConn(t *testing.T) {
 			t.Fatalf("%d HTTP forwarding route(s) leaked: connections dropped before forwarding completed left their subdomains permanently reserved", remaining)
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// TestForwardingStoppedIsLogged verifies that tearing down an established
+// forward emits a "forwarding stopped" log line, mirroring the
+// "forwarding started" log.
+func TestForwardingStoppedIsLogged(t *testing.T) {
+	dir, err := os.MkdirTemp("", "sish_keys")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+
+	viper.Set("private-keys-directory", dir)
+	viper.Set("authentication", false)
+	viper.Set("domain", "localhost")
+	viper.Set("bind-random-subdomains", false)
+	viper.Set("cleanup-unauthed", false)
+	viper.Set("ping-client", false)
+	viper.Set("idle-connection", false)
+
+	utils.Setup(io.Discard)
+
+	logBuf := &syncBuffer{}
+	log.SetOutput(logBuf)
+	defer log.SetOutput(os.Stderr)
+
+	sshConfig := utils.GetSSHConfig()
+	state := utils.NewState()
+
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go handleConn(conn, state, sshConfig)
+		}
+	}()
+
+	addr := listener.Addr().String()
+
+	netConn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+
+	conn, chans, reqs, err := ssh.NewClientConn(netConn, addr, &ssh.ClientConfig{
+		User:            "tester",
+		Auth:            []ssh.AuthMethod{ssh.Password("")},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	})
+	if err != nil {
+		_ = netConn.Close()
+		t.Fatalf("ssh handshake: %v", err)
+	}
+
+	go ssh.DiscardRequests(reqs)
+	go func() {
+		for nc := range chans {
+			_ = nc.Reject(ssh.Prohibited, "no channels")
+		}
+	}()
+
+	// Request the forward and wait for the reply: once it returns the server
+	// has established the forward ("forwarding started" is logged).
+	ok, _, err := conn.SendRequest("tcpip-forward", true,
+		ssh.Marshal(&channelForwardMsg{Addr: "stoptest", Rport: 80}))
+	if err != nil || !ok {
+		t.Fatalf("forward request not accepted: ok=%v err=%v", ok, err)
+	}
+
+	// Tear the forward down by closing the connection.
+	_ = netConn.Close()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(logBuf.String(), "forwarding stopped") {
+		if time.Now().After(deadline) {
+			t.Fatalf("expected a \"forwarding stopped\" log after the connection closed; got:\n%s", logBuf.String())
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
