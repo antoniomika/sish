@@ -99,11 +99,24 @@ func handleCancelRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnec
 func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
 	select {
 	case <-sshConn.Exec:
+	case <-sshConn.Close:
 	case <-time.After(1 * time.Second):
-		break
 	}
 
 	cleanupOnce := &sync.Once{}
+
+	// If the connection was torn down while we waited above (for example, the
+	// client dropped right after requesting the forward), don't stand up any
+	// forwarding for it: doing so would reserve the address for a dead session.
+	select {
+	case <-sshConn.Close:
+		if err := newRequest.Reply(false, nil); err != nil {
+			log.Println("Error replying to socket request:", err)
+		}
+		return
+	default:
+	}
+
 	check := &channelForwardMsg{}
 
 	err := ssh.Unmarshal(newRequest.Payload, check)
@@ -216,6 +229,13 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	deferHandler := func() {}
 
+	// Set once a forward is actually established (see the switch below); used
+	// to log when it is later torn down, mirroring the "forwarding started"
+	// logs. Left empty for setups that never completed, so we don't log a stop
+	// for a forward that never started.
+	forwardingType := ""
+	forwardingName := ""
+
 	cleanupChanListener := func() {
 		err := listenerHolder.Close()
 		if err != nil {
@@ -231,12 +251,11 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		}
 
 		deferHandler()
-	}
 
-	go func() {
-		<-sshConn.Close
-		cleanupOnce.Do(cleanupChanListener)
-	}()
+		if forwardingType != "" {
+			log.Printf("%s forwarding stopped: %s -> %s for client: %s\n", aurora.BgBlue(forwardingType), forwardingName, listenAddr, sshConn.SSHConn.RemoteAddr().String())
+		}
+	}
 
 	connType := "tcp"
 	if sniProxyForced {
@@ -268,6 +287,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		}
 
 		mainRequestMessages = requestMessages
+
+		forwardingType = strings.ToUpper(connType)
+		forwardingName = pH.HTTPUrl.String()
 
 		deferHandler = func() {
 			err := pH.Balancer.RemoveServer(serverURL)
@@ -302,6 +324,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 		mainRequestMessages = requestMessages
 
+		forwardingType = "TCP Alias"
+		forwardingName = validAlias
+
 		deferHandler = func() {
 			err := aH.Balancer.RemoveServer(serverURL)
 			if err != nil {
@@ -332,6 +357,9 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		portChannelForwardReplyPayload.Rport = uint32(tH.Listener.Addr().(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port)
 
 		mainRequestMessages = requestMessages
+
+		forwardingType = strings.ToUpper(connType)
+		forwardingName = tcpAddr
 
 		if !tH.NoHandle {
 			go tH.Handle(state)
@@ -366,6 +394,16 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			}
 		}
 	}
+
+	// Only now that deferHandler has been assigned by the switch above do we
+	// start watching for connection teardown. Wiring this up earlier races
+	// with that assignment and can run cleanup against the no-op handler,
+	// leaking the registered route. If the connection already closed during
+	// setup, this fires immediately and tears everything back down.
+	go func() {
+		<-sshConn.Close
+		cleanupOnce.Do(cleanupChanListener)
+	}()
 
 	if check.Rport != 0 {
 		portChannelForwardReplyPayload.Rport = check.Rport
