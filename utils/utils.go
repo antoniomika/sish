@@ -115,19 +115,19 @@ func CommaSplitFields(c rune) bool {
 func LoadProxyProtoConfig(l *proxyproto.Listener) {
 	if viper.GetBool("proxy-protocol-use-timeout") {
 		l.ReadHeaderTimeout = viper.GetDuration("proxy-protocol-timeout")
+	}
 
-		l.ConnPolicy = func(connPolicyOptions proxyproto.ConnPolicyOptions) (proxyproto.Policy, error) {
-			switch viper.GetString("proxy-protocol-policy") {
-			case "ignore":
-				return proxyproto.IGNORE, nil
-			case "reject":
-				return proxyproto.REJECT, nil
-			case "require":
-				return proxyproto.REQUIRE, nil
-			}
-
-			return proxyproto.USE, nil
+	l.ConnPolicy = func(connPolicyOptions proxyproto.ConnPolicyOptions) (proxyproto.Policy, error) {
+		switch viper.GetString("proxy-protocol-policy") {
+		case "ignore":
+			return proxyproto.IGNORE, nil
+		case "reject":
+			return proxyproto.REJECT, nil
+		case "require":
+			return proxyproto.REQUIRE, nil
 		}
+
+		return proxyproto.USE, nil
 	}
 }
 
