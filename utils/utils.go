@@ -418,6 +418,11 @@ func loadKeys() {
 	}
 
 	err := filepath.WalkDir(viper.GetString("authentication-keys-directory"), func(path string, d fs.DirEntry, err error) error {
+		if err != nil && d == nil {
+			// Directory we are walking is missing or otherwise unreadable.
+			return err
+		}
+
 		if d.IsDir() {
 			return nil
 		}
