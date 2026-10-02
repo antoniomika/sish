@@ -11,8 +11,7 @@
       "mode": "auto",
       "program": "${workspaceFolder}",
       "env": {},
-      // Disabled until race is fixed in 1.26
-      // "buildFlags": "-race",
+      "buildFlags": "-race",
       "args": [
         "--debug=true",
         "--http-address=:8081",

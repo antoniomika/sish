@@ -282,7 +282,7 @@ func loadPrivateKeys(config *ssh.ServerConfig) {
 
 		i, e := os.ReadFile(path)
 		if e != nil {
-			log.Printf("Can't read file %s as private key: %s\n", d.Name(), err)
+			log.Printf("Can't read file %s as private key: %s\n", d.Name(), e)
 			return nil
 		}
 
@@ -434,7 +434,7 @@ func loadKeys() {
 
 		i, e := os.ReadFile(path)
 		if e != nil {
-			log.Printf("Can't read file %s as public key: %s\n", d.Name(), err)
+			log.Printf("Can't read file %s as public key: %s\n", d.Name(), e)
 			return nil
 		}
 

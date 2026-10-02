@@ -60,12 +60,7 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 			if resBody != nil {
 				response.Body = io.NopCloser(bytes.NewBuffer(resBody))
 
-				// The console shows bodies unpacked, but not everything that
-				// claims to be gzip can be unpacked. A "not modified" reply
-				// carries no body at all, yet still repeats the encoding the
-				// upstream would have used. There is nothing to unpack there,
-				// so we don't try, and if unpacking fails anyway we keep the
-				// bytes as they arrived rather than losing them.
+				// A 304 can carry Content-Encoding: gzip with no body. Keep the raw bytes if decoding fails.
 				if response.Header.Get("Content-Encoding") == "gzip" && len(resBody) > 0 {
 					gzReader, err := gzip.NewReader(bytes.NewBuffer(resBody))
 					if err != nil {
