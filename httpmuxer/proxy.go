@@ -3,6 +3,7 @@ package httpmuxer
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"io"
@@ -19,13 +20,15 @@ import (
 // RoundTripper returns the specific handler for unix connections. This
 // will allow us to use our created sockets cleanly.
 func RoundTripper() *http.Transport {
-	dialer := func(network, addr string) (net.Conn, error) {
+	dialer := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		realAddr, err := base64.StdEncoding.DecodeString(strings.Split(addr, ":")[0])
 		if err != nil {
 			log.Println("Unable to parse socket:", err)
 		}
 
-		return net.Dial("unix", string(realAddr))
+		var d net.Dialer
+
+		return d.DialContext(ctx, "unix", string(realAddr))
 	}
 
 	tlsConfig := &tls.Config{
@@ -33,7 +36,7 @@ func RoundTripper() *http.Transport {
 	}
 
 	return &http.Transport{
-		Dial:            dialer,
+		DialContext:     dialer,
 		TLSClientConfig: tlsConfig,
 	}
 }
@@ -57,16 +60,20 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 			if resBody != nil {
 				response.Body = io.NopCloser(bytes.NewBuffer(resBody))
 
-				if response.Header.Get("Content-Encoding") == "gzip" {
-					gzData := bytes.NewBuffer(resBody)
-					gzReader, err := gzip.NewReader(gzData)
+				// The console shows bodies unpacked, but not everything that
+				// claims to be gzip can be unpacked. A "not modified" reply
+				// carries no body at all, yet still repeats the encoding the
+				// upstream would have used. There is nothing to unpack there,
+				// so we don't try, and if unpacking fails anyway we keep the
+				// bytes as they arrived rather than losing them.
+				if response.Header.Get("Content-Encoding") == "gzip" && len(resBody) > 0 {
+					gzReader, err := gzip.NewReader(bytes.NewBuffer(resBody))
 					if err != nil {
 						log.Println("Error reading gzip data:", err)
-					}
-
-					resBody, err = io.ReadAll(gzReader)
-					if err != nil {
+					} else if decodedBody, err := io.ReadAll(gzReader); err != nil {
 						log.Println("Error reading gzip data:", err)
+					} else {
+						resBody = decodedBody
 					}
 				}
 			} else {
