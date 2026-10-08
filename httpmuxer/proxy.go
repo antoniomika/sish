@@ -36,7 +36,13 @@ func RoundTripper() *http.Transport {
 	}
 
 	return &http.Transport{
-		DialContext:     dialer,
+		DialContext: dialer,
+		// oxy's forward.WebsocketRoundTripper takes only Dial from the
+		// transport. Without it, WebSocket upgrades dial the encoded socket
+		// path as a TCP host and fail with a 502.
+		Dial: func(network, addr string) (net.Conn, error) { //nolint:staticcheck // SA1019: still read by oxy's WebSocket forwarding
+			return dialer(context.Background(), network, addr)
+		},
 		TLSClientConfig: tlsConfig,
 	}
 }
