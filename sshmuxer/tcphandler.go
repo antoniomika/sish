@@ -14,7 +14,7 @@ import (
 	"github.com/logrusorgru/aurora"
 	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
-	"github.com/vulcand/oxy/roundrobin"
+	"github.com/vulcand/oxy/v2/roundrobin"
 )
 
 // handleTCPListener handles the creation of the tcpHandler

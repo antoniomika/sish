@@ -11,7 +11,7 @@ import (
 	"github.com/antoniomika/syncmap"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/viper"
-	"github.com/vulcand/oxy/roundrobin"
+	"github.com/vulcand/oxy/v2/roundrobin"
 )
 
 // handleAliasListener handles the creation of the aliasHandler

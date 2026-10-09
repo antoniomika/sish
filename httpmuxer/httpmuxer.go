@@ -23,8 +23,7 @@ import (
 	"github.com/caddyserver/certmagic"
 	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
-	"github.com/vulcand/oxy/forward"
-	"github.com/vulcand/oxy/roundrobin"
+	"github.com/vulcand/oxy/v2/roundrobin"
 
 	"github.com/gin-gonic/gin"
 )
@@ -332,10 +331,7 @@ func Start(state *utils.State) {
 			reqBody = []byte("{\"_sish_status\": false, \"_sish_message\": \"request body size exceeds limit for service console\"}")
 		}
 
-		err = forward.ResponseModifier(ResponseModifier(state, hostname, reqBody, c, currentListener))(currentListener.Forward)
-		if err != nil {
-			log.Println("Unable to set response modifier:", err)
-		}
+		c.Request = withResponseModifier(c.Request, ResponseModifier(state, hostname, reqBody, c, currentListener))
 
 		gin.WrapH(currentListener.Balancer)(c)
 	})

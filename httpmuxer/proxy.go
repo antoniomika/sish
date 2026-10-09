@@ -10,11 +10,14 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"strings"
+	"time"
 
 	"github.com/antoniomika/sish/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
+	"github.com/vulcand/oxy/v2/forward"
 )
 
 // RoundTripper returns the specific handler for unix connections. This
@@ -41,11 +44,53 @@ func RoundTripper() *http.Transport {
 	}
 }
 
+// responseModifierKey is the request context key for the response modifier
+// set by withResponseModifier.
+type responseModifierKey struct{}
+
+// withResponseModifier returns a copy of req whose response the forwarder
+// passes to modifier before sending it to the client.
+func withResponseModifier(req *http.Request, modifier func(*http.Response) error) *http.Request {
+	return req.WithContext(context.WithValue(req.Context(), responseModifierKey{}, modifier))
+}
+
+// NewForwarder returns the reverse proxy used for each HTTP host. It dials
+// the tunnel sockets through RoundTripper and streams responses with the same
+// flush interval oxy v1 used.
+func NewForwarder() *httputil.ReverseProxy {
+	fwd := forward.New(true)
+	fwd.Transport = RoundTripper()
+	fwd.FlushInterval = 100 * time.Millisecond
+
+	// All requests to a host share this proxy, so the modifier for each one
+	// travels in its context rather than in ModifyResponse.
+	fwd.ModifyResponse = func(response *http.Response) error {
+		if response.Request == nil {
+			return nil
+		}
+
+		modifier, ok := response.Request.Context().Value(responseModifierKey{}).(func(*http.Response) error)
+		if !ok {
+			return nil
+		}
+
+		return modifier(response)
+	}
+
+	return fwd
+}
+
 // ResponseModifier implements a response modifier for the specified request.
 // We don't actually modify any requests, but we do want to record the request
 // so we can send it to the web console.
 func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gin.Context, currentListener *utils.HTTPHolder) func(*http.Response) error {
 	return func(response *http.Response) error {
+		// The body of a 101 is the upgraded connection to the tunnel. Reading it
+		// would block until the connection closes, so leave upgrades unrecorded.
+		if response.StatusCode == http.StatusSwitchingProtocols {
+			return nil
+		}
+
 		if viper.GetBool("admin-console") || viper.GetBool("service-console") {
 			var err error
 			var resBody []byte

@@ -12,8 +12,7 @@ import (
 	"github.com/antoniomika/syncmap"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/viper"
-	"github.com/vulcand/oxy/forward"
-	"github.com/vulcand/oxy/roundrobin"
+	"github.com/vulcand/oxy/v2/roundrobin"
 )
 
 // handleHTTPListener handles the creation of the httpHandler
@@ -26,19 +25,7 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 	}
 
 	if pH == nil {
-		rT := httpmuxer.RoundTripper()
-
-		fwd, err := forward.New(
-			forward.Stream(true),
-			forward.PassHostHeader(true),
-			forward.RoundTripper(rT),
-			forward.WebsocketRoundTripper(rT),
-		)
-
-		if err != nil {
-			log.Println("Error initializing HTTP forwarder:", err)
-			return nil, nil, "", err
-		}
+		fwd := httpmuxer.NewForwarder()
 
 		lb, err := roundrobin.New(fwd)
 
