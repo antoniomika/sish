@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http/httputil"
 	"net/url"
 	"time"
 
@@ -13,8 +14,7 @@ import (
 	"github.com/jpillora/ipfilter"
 	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
-	"github.com/vulcand/oxy/forward"
-	"github.com/vulcand/oxy/roundrobin"
+	"github.com/vulcand/oxy/v2/roundrobin"
 )
 
 // ListenerType represents any listener sish supports.
@@ -60,7 +60,7 @@ type ListenerHolder struct {
 type HTTPHolder struct {
 	HTTPUrl        *url.URL
 	SSHConnections *syncmap.Map[string, *SSHConnection]
-	Forward        *forward.Forwarder
+	Forward        *httputil.ReverseProxy
 	Balancer       *roundrobin.RoundRobin
 }
 

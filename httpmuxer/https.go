@@ -8,7 +8,7 @@ import (
 
 	"github.com/antoniomika/sish/utils"
 	"github.com/spf13/viper"
-	"github.com/vulcand/oxy/roundrobin"
+	"github.com/vulcand/oxy/v2/roundrobin"
 )
 
 type proxyListener struct {
