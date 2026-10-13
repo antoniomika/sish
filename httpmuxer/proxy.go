@@ -88,6 +88,12 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 		// The body of a 101 is the upgraded connection to the tunnel. Reading it
 		// would block until the connection closes, so leave upgrades unrecorded.
 		if response.StatusCode == http.StatusSwitchingProtocols {
+			// The proxy writes the 101 to the hijacked connection, past gin's
+			// writer, which would keep reporting the 404 gin presets for
+			// unrouted requests. Setting the status here only records it, as
+			// nothing has been written to the client yet.
+			c.Status(http.StatusSwitchingProtocols)
+
 			return nil
 		}
 
