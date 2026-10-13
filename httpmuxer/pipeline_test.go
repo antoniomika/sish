@@ -25,7 +25,8 @@ import (
 
 // startTunnelBackend stands in for a tunneled client. It serves HTTP and a
 // websocket echo on a unix socket named the way sshmuxer/requests.go names
-// tunnel sockets, and returns the socket path.
+// tunnel sockets, and returns the socket path. Requests to /reject, upgrades
+// included, get a 401.
 func startTunnelBackend(t *testing.T) string {
 	t.Helper()
 
@@ -62,6 +63,11 @@ func startTunnelBackend(t *testing.T) string {
 
 	go func() {
 		_ = http.Serve(listener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/reject" {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
 			if !websocket.IsWebSocketUpgrade(r) {
 				if r.URL.Path == "/slow" {
 					time.Sleep(20 * time.Millisecond)
@@ -292,4 +298,105 @@ func TestForwarderPipelineConcurrentRequests(t *testing.T) {
 			t.Fatal("expected a console record for every request")
 		}
 	}
+}
+
+// newStatusFront serves the tunnel through fwd the way Start does and sends
+// the status the request log reports for each request on the returned
+// channel. Like gin's logger, it reads the status once the handlers return.
+func newStatusFront(t *testing.T, fwd *httputil.ReverseProxy, sock string) (*httptest.Server, <-chan int) {
+	t.Helper()
+
+	listener := &utils.HTTPHolder{
+		HTTPUrl:  &url.URL{Scheme: "http", Host: "sub.example.com"},
+		Forward:  fwd,
+		Balancer: newTunnelBalancer(t, fwd, sock),
+	}
+
+	statuses := make(chan int, 64)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		c.Next()
+		statuses <- c.Writer.Status()
+	}, func(c *gin.Context) {
+		c.Request = withResponseModifier(c.Request, ResponseModifier(nil, c.Request.Host, nil, c, listener))
+
+		gin.WrapH(listener.Balancer)(c)
+	})
+
+	front := httptest.NewServer(router)
+	t.Cleanup(front.Close)
+
+	return front, statuses
+}
+
+// The request log and the console must report the status the client
+// received, also for upgrades, whose response bypasses gin's writer.
+func TestForwarderPipelineLoggedStatus(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+
+	sock := startTunnelBackend(t)
+	front, statuses := newStatusFront(t, NewForwarder(), sock)
+
+	expectLoggedStatus := func(t *testing.T, expected int) {
+		t.Helper()
+
+		select {
+		case status := <-statuses:
+			if status != expected {
+				t.Errorf("expected the log to report status %d, got %d", expected, status)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("expected the request to be logged")
+		}
+	}
+
+	t.Run("http", func(t *testing.T) {
+		resp, err := http.Get(front.URL + "/reject")
+		if err != nil {
+			t.Fatalf("request failed: %s", err)
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+
+		expectLoggedStatus(t, http.StatusUnauthorized)
+	})
+
+	t.Run("websocket", func(t *testing.T) {
+		dialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
+
+		conn, resp, err := dialer.Dial("ws"+strings.TrimPrefix(front.URL, "http"), nil)
+		if err != nil {
+			status := 0
+			if resp != nil {
+				status = resp.StatusCode
+			}
+
+			t.Fatalf("websocket dial failed with status %d: %s", status, err)
+		}
+
+		// The handler, and with it the log entry, finishes once the upgraded
+		// connection closes.
+		_ = conn.Close()
+
+		expectLoggedStatus(t, http.StatusSwitchingProtocols)
+	})
+
+	t.Run("rejected websocket", func(t *testing.T) {
+		dialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
+
+		conn, resp, err := dialer.Dial("ws"+strings.TrimPrefix(front.URL, "http")+"/reject", nil)
+		if err == nil {
+			_ = conn.Close()
+			t.Fatal("expected the backend to reject the upgrade")
+		}
+
+		if resp == nil || resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("expected the client to receive a 401, got %v: %s", resp, err)
+		}
+
+		expectLoggedStatus(t, http.StatusUnauthorized)
+	})
 }
