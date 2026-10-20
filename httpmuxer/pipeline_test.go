@@ -2,8 +2,10 @@ package httpmuxer
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -28,6 +30,18 @@ import (
 // tunnel sockets, and returns the socket path.
 func startTunnelBackend(t *testing.T) string {
 	t.Helper()
+
+	sock, _ := startTunnelBackendWithStreamDone(t)
+
+	return sock
+}
+
+// startTunnelBackendWithStreamDone is startTunnelBackend, plus a channel that
+// receives once for every /stream handler that has returned.
+func startTunnelBackendWithStreamDone(t *testing.T) (string, <-chan struct{}) {
+	t.Helper()
+
+	streamDone := make(chan struct{}, 16)
 
 	var sock string
 
@@ -63,6 +77,31 @@ func startTunnelBackend(t *testing.T) string {
 	go func() {
 		_ = http.Serve(listener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !websocket.IsWebSocketUpgrade(r) {
+				switch r.URL.Path {
+				case "/chunked":
+					w.Header().Set("X-Test", "chunked")
+					_, _ = io.WriteString(w, "first")
+					w.(http.Flusher).Flush()
+					_, _ = io.WriteString(w, "second")
+
+					return
+				case "/drop":
+					_, _ = io.WriteString(w, "partial")
+					w.(http.Flusher).Flush()
+
+					// net/http closes the connection without the closing
+					// chunk, as a dropped tunnel does.
+					panic(http.ErrAbortHandler)
+				case "/stream":
+					defer func() { streamDone <- struct{}{} }()
+
+					_, _ = io.WriteString(w, "partial")
+					w.(http.Flusher).Flush()
+					<-r.Context().Done()
+
+					return
+				}
+
 				if r.URL.Path == "/slow" {
 					time.Sleep(20 * time.Millisecond)
 				}
@@ -91,7 +130,7 @@ func startTunnelBackend(t *testing.T) string {
 		}))
 	}()
 
-	return sock
+	return sock, streamDone
 }
 
 // newTunnelBalancer returns a balancer over fwd with the tunnel socket as its
@@ -122,6 +161,42 @@ func enableConsole(t *testing.T) {
 	viper.Set("service-console-max-content-length", int64(-1))
 }
 
+// captureLog sends the standard logger's output to a buffer for the rest of
+// the test and returns a function that reads it. The proxy goroutines write
+// while the test reads, so the buffer is guarded by a mutex.
+func captureLog(t *testing.T) func() string {
+	t.Helper()
+
+	var (
+		mu  sync.Mutex
+		buf bytes.Buffer
+	)
+
+	oldWriter := log.Writer()
+
+	log.SetOutput(writerFunc(func(p []byte) (int, error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		return buf.Write(p)
+	}))
+
+	t.Cleanup(func() {
+		log.SetOutput(oldWriter)
+	})
+
+	return func() string {
+		mu.Lock()
+		defer mu.Unlock()
+
+		return buf.String()
+	}
+}
+
+type writerFunc func(p []byte) (int, error)
+
+func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
+
 // newTestFront serves the tunnel through fwd the way Start does, with
 // ResponseModifier recording each response for the console. For each request
 // it sends the recorded console data, or nil if none was recorded, on the
@@ -139,6 +214,7 @@ func newTestFront(t *testing.T, fwd *httputil.ReverseProxy, sock string) (*httpt
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
+	router.Use(gin.Recovery())
 	router.Use(func(c *gin.Context) {
 		c.Request = withResponseModifier(c.Request, ResponseModifier(nil, c.Request.Host, nil, c, listener))
 
@@ -291,5 +367,192 @@ func TestForwarderPipelineConcurrentRequests(t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Fatal("expected a console record for every request")
 		}
+	}
+}
+
+// getThroughFront requests path from the front with the tunnel's host name.
+func getThroughFront(ctx context.Context, front *httptest.Server, path string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, front.URL+path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Host = "sub.example.com"
+
+	return http.DefaultClient.Do(req)
+}
+
+// A tunnel that drops in the middle of a response must not look like a
+// complete response to the browser. With the console on, the proxy reads the
+// whole body itself, so the browser must get an error status instead.
+func TestForwarderPipelineDroppedTunnelWithConsole(t *testing.T) {
+	enableConsole(t)
+
+	logs := captureLog(t)
+	sock := startTunnelBackend(t)
+	front, _ := newTestFront(t, NewForwarder(), sock)
+
+	resp, err := getThroughFront(t.Context(), front, "/drop")
+	if err != nil {
+		t.Fatalf("request failed: %s", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode < http.StatusInternalServerError {
+		t.Errorf("expected an error status, got %d", resp.StatusCode)
+	}
+
+	if strings.Contains(string(body), "partial") {
+		t.Errorf("expected no part of the cut-off body to be sent, got %q", body)
+	}
+
+	front.Close()
+
+	if !strings.Contains(logs(), "sub.example.com") {
+		t.Errorf("expected the log to name the host, got %q", logs())
+	}
+}
+
+// Without buffering, the proxy has already sent the status when the tunnel
+// drops. The browser must see the transfer fail instead of end cleanly.
+func TestForwarderPipelineDroppedTunnelWithoutBuffering(t *testing.T) {
+	setups := map[string]func(t *testing.T){
+		"console-off": func(t *testing.T) {
+			viper.Reset()
+			t.Cleanup(viper.Reset)
+		},
+		"console-limited": func(t *testing.T) {
+			enableConsole(t)
+			viper.Set("service-console-max-content-length", int64(1024))
+		},
+	}
+
+	for name, setup := range setups {
+		t.Run(name, func(t *testing.T) {
+			setup(t)
+
+			logs := captureLog(t)
+			sock := startTunnelBackend(t)
+			front, _ := newTestFront(t, NewForwarder(), sock)
+
+			resp, err := getThroughFront(t.Context(), front, "/drop")
+			if err != nil {
+				t.Fatalf("request failed before the body: %s", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			body, readErr := io.ReadAll(resp.Body)
+			if readErr == nil {
+				t.Errorf("expected the transfer to fail, got status %d with body %q", resp.StatusCode, body)
+			}
+
+			front.Close()
+
+			if !strings.Contains(logs(), "sub.example.com") {
+				t.Errorf("expected the log to name the host, got %q", logs())
+			}
+		})
+	}
+}
+
+// A response that ends properly must still reach the browser unchanged.
+func TestForwarderPipelineCompleteChunkedResponse(t *testing.T) {
+	setups := map[string]func(t *testing.T){
+		"console-on": enableConsole,
+		"console-off": func(t *testing.T) {
+			viper.Reset()
+			t.Cleanup(viper.Reset)
+		},
+	}
+
+	for name, setup := range setups {
+		t.Run(name, func(t *testing.T) {
+			setup(t)
+
+			sock := startTunnelBackend(t)
+			front, _ := newTestFront(t, NewForwarder(), sock)
+
+			resp, err := getThroughFront(t.Context(), front, "/chunked")
+			if err != nil {
+				t.Fatalf("request failed: %s", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("unable to read response body: %s", err)
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("expected status 200, got %d", resp.StatusCode)
+			}
+
+			if resp.Header.Get("X-Test") != "chunked" {
+				t.Errorf("expected the backend header, got %q", resp.Header.Get("X-Test"))
+			}
+
+			if string(body) != "firstsecond" {
+				t.Errorf("expected firstsecond, got %q", body)
+			}
+		})
+	}
+}
+
+// A browser that leaves mid-transfer makes the body read fail on the proxy
+// side. That is not a tunnel failure and must not be logged as one.
+func TestForwarderPipelineClientAbortIsNotLogged(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+
+	logs := captureLog(t)
+	sock, streamDone := startTunnelBackendWithStreamDone(t)
+	front, _ := newTestFront(t, NewForwarder(), sock)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	resp, err := getThroughFront(ctx, front, "/stream")
+	if err != nil {
+		t.Fatalf("request failed: %s", err)
+	}
+
+	received := make([]byte, len("partial"))
+	if _, err := io.ReadFull(resp.Body, received); err != nil {
+		t.Fatalf("unable to read the first part of the body: %s", err)
+	}
+
+	cancel()
+	_ = resp.Body.Close()
+
+	select {
+	case <-streamDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("expected the backend to notice the aborted request")
+	}
+
+	// Close waits for the proxy to finish its in-flight request, so a late
+	// log line cannot slip past the assertion.
+	front.Close()
+
+	if strings.Contains(logs(), "sub.example.com") {
+		t.Errorf("expected a client abort not to be logged, got %q", logs())
+	}
+}
+
+// Panics other than an aborted handler keep gin's behavior.
+func TestEngineRecoversOtherPanics(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	engine := gin.New()
+	engine.Use(gin.Recovery())
+	engine.GET("/boom", func(*gin.Context) { panic("boom") })
+
+	recorder := httptest.NewRecorder()
+	engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/boom", nil))
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500, got %d", recorder.Code)
 	}
 }
