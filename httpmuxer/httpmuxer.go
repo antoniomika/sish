@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -28,6 +29,26 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func newEngine() *gin.Engine {
+	r := gin.New()
+
+	// Gin's recovery swallows http.ErrAbortHandler as a broken pipe, so
+	// net/http would finish the response as complete. This middleware runs
+	// first and raises the abort after c.Next, so the access log line and
+	// the console broadcast still happen.
+	r.Use(func(c *gin.Context) {
+		c.Next()
+
+		for _, e := range c.Errors {
+			if errors.Is(e.Err, http.ErrAbortHandler) {
+				panic(http.ErrAbortHandler)
+			}
+		}
+	})
+
+	return r
+}
+
 // Start initializes the HTTP service.
 func Start(state *utils.State) {
 	releaseMode := gin.ReleaseMode
@@ -38,7 +59,7 @@ func Start(state *utils.State) {
 	gin.DefaultWriter = state.LogWriter
 	gin.ForceConsoleColor()
 
-	r := gin.New()
+	r := newEngine()
 
 	if viper.GetBool("load-templates") {
 		r.LoadHTMLGlob(viper.GetString("load-templates-directory"))
