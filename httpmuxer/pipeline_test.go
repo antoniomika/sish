@@ -213,7 +213,7 @@ func newTestFront(t *testing.T, fwd *httputil.ReverseProxy, sock string) (*httpt
 	recorded := make(chan map[string]any, 64)
 
 	gin.SetMode(gin.TestMode)
-	router := gin.New()
+	router := newEngine()
 	router.Use(gin.Recovery())
 	router.Use(func(c *gin.Context) {
 		c.Request = withResponseModifier(c.Request, ResponseModifier(nil, c.Request.Host, nil, c, listener))
@@ -545,7 +545,7 @@ func TestForwarderPipelineClientAbortIsNotLogged(t *testing.T) {
 func TestEngineRecoversOtherPanics(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	engine := gin.New()
+	engine := newEngine()
 	engine.Use(gin.Recovery())
 	engine.GET("/boom", func(*gin.Context) { panic("boom") })
 

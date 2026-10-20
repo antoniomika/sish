@@ -54,6 +54,27 @@ func withResponseModifier(req *http.Request, modifier func(*http.Response) error
 	return req.WithContext(context.WithValue(req.Context(), responseModifierKey{}, modifier))
 }
 
+// loggingBody logs the first failed read of an upstream response body.
+type loggingBody struct {
+	io.ReadCloser
+
+	host   string
+	ctx    context.Context
+	logged bool
+}
+
+func (b *loggingBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+
+	// A canceled context means the client went away, not the tunnel.
+	if err != nil && err != io.EOF && !b.logged && b.ctx.Err() == nil {
+		b.logged = true
+		log.Printf("Error reading response body from %s: %s", b.host, err)
+	}
+
+	return n, err
+}
+
 // NewForwarder returns the reverse proxy used for each HTTP host. It dials
 // the tunnel sockets through RoundTripper and streams responses with the same
 // flush interval oxy v1 used.
@@ -67,6 +88,14 @@ func NewForwarder() *httputil.ReverseProxy {
 	fwd.ModifyResponse = func(response *http.Response) error {
 		if response.Request == nil {
 			return nil
+		}
+
+		if response.Body != nil && response.StatusCode != http.StatusSwitchingProtocols {
+			response.Body = &loggingBody{
+				ReadCloser: response.Body,
+				host:       response.Request.Host,
+				ctx:        response.Request.Context(),
+			}
 		}
 
 		modifier, ok := response.Request.Context().Value(responseModifierKey{}).(func(*http.Response) error)
@@ -98,7 +127,7 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 			if viper.GetInt64("service-console-max-content-length") == -1 || (viper.GetInt64("service-console-max-content-length") > -1 && response.ContentLength > -1 && response.ContentLength < viper.GetInt64("service-console-max-content-length")) {
 				resBody, err = io.ReadAll(response.Body)
 				if err != nil {
-					log.Println("Error reading response body:", err)
+					return err
 				}
 			}
 
