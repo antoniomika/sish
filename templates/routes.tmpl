@@ -39,10 +39,14 @@
     .copy { border: 0; background: none; padding: 0 4px; color: var(--faint); cursor: pointer; font-size: 12px; }
     .copy:hover { color: var(--hover); }
 
+    .show-sm { display: none; }
+    .route-client { margin-top: 2px; font-size: 12px; }
+
     .toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; cursor: pointer; user-select: none; }
 
     @media (max-width: 760px) {
         .hide-sm { display: none; }
+        .show-sm { display: block; }
         .routes-inner { padding: 12px; }
         .input { width: 100%; }
     }
@@ -60,15 +64,19 @@
 <main class="page">
     <section class="stats" id="stats" aria-label="Summary"></section>
 
-    <section class="card" aria-label="Clients">
+    <section class="card" aria-label="Clients and routes">
         <div class="toolbar">
-            <input id="search" class="input" type="search" placeholder="Filter by address, user, key or route" aria-label="Filter clients" autocomplete="off">
+            <div class="segmented" id="view" role="group" aria-label="View">
+                <button type="button" data-view="clients">Clients</button>
+                <button type="button" data-view="routes">Routes</button>
+            </div>
+            <input id="search" class="input" type="search" aria-label="Filter" autocomplete="off">
             <span class="spacer"></span>
             <span id="updated" class="hint faint"></span>
             <label class="toggle"><input type="checkbox" id="auto" checked> Auto refresh</label>
             <button type="button" class="btn" id="refresh">Refresh</button>
         </div>
-        <div class="table-wrap">
+        <div class="table-wrap" id="clients-view">
             <table>
                 <thead>
                     <tr>
@@ -83,6 +91,21 @@
                 <tbody id="clients"></tbody>
             </table>
         </div>
+        <div class="table-wrap" id="routes-view" hidden>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Address</th>
+                        <th class="hide-sm">Forwarded to</th>
+                        <th class="hide-sm">Client</th>
+                        <th class="hide-sm">Connected</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="routes"></tbody>
+            </table>
+        </div>
     </section>
 </main>
 
@@ -93,11 +116,17 @@
     const REFRESH_MS = 5000;
     const CONFIRM_MS = 3000;
 
-    const state = { clients: [], expanded: new Set(), confirming: null, q: "", loadedAt: null, busy: false };
+    const TYPE_ORDER = ["HTTP", "TCP", "Alias"];
+
+    const state = { view: location.hash === "#routes" ? "routes" : "clients", clients: [], expanded: new Set(), confirming: null, q: "", loadedAt: null, busy: false };
 
     const els = {
         stats: document.getElementById("stats"),
         clients: document.getElementById("clients"),
+        routes: document.getElementById("routes"),
+        clientsView: document.getElementById("clients-view"),
+        routesView: document.getElementById("routes-view"),
+        view: document.getElementById("view"),
         search: document.getElementById("search"),
         auto: document.getElementById("auto"),
         refresh: document.getElementById("refresh"),
@@ -141,6 +170,11 @@
             .join(" ")
             .toLowerCase();
         return hay.includes(state.q);
+    }
+
+    function routeMatches(route, client) {
+        if (!state.q) return true;
+        return [route.type, route.name, ...route.targets, client.remoteAddr, client.user].join(" ").toLowerCase().includes(state.q);
     }
 
     function confirmButton(key, label, action) {
@@ -200,6 +234,23 @@
         ];
     }
 
+    function routeAddress(route, ...extra) {
+        return h("td", { class: "mono" }, route.type === "HTTP"
+            ? h("a", { href: consoleUrl(route), title: "Open the request console", text: displayName(route) })
+            : displayName(route), extra);
+    }
+
+    function clientLink(client) {
+        return [
+            h("a", { href: "#clients", class: "mono", title: "Show this client", onclick: () => showClient(client.key), text: client.remoteAddr }),
+            client.user ? h("span", { class: "muted", text: ` ${client.user}` }) : null,
+        ];
+    }
+
+    function routeDisconnect(client, route) {
+        return confirmButton(`route:${client.key}:${route.kind}:${route.name}`, "Disconnect", () => disconnectRoute(route));
+    }
+
     function routesRow(client) {
         const routes = client.routes;
         const facts = h("div", { class: "client-facts" },
@@ -212,15 +263,40 @@
                 h("thead", {}, h("tr", {}, h("th", { text: "Type" }), h("th", { text: "Address" }), h("th", { class: "hide-sm", text: "Forwarded to" }), h("th", {}))),
                 h("tbody", {}, routes.map((route) => h("tr", {},
                     h("td", {}, h("span", { class: `badge type-${route.type}`, text: route.type })),
-                    h("td", { class: "mono" }, route.type === "HTTP"
-                        ? h("a", { href: consoleUrl(route), title: "Open the request console", text: displayName(route) })
-                        : displayName(route)),
+                    routeAddress(route),
                     h("td", { class: "mono muted hide-sm", text: route.targets.join(", ") }),
-                    h("td", { class: "actions" }, confirmButton(`route:${client.key}:${route.kind}:${route.name}`, "Disconnect", () => disconnectRoute(route))),
+                    h("td", { class: "actions" }, routeDisconnect(client, route)),
                 )))))
             : h("div", { class: "muted", text: "No routes bound." });
 
         return h("tr", { class: "routes" }, h("td", { colspan: "6" }, h("div", { class: "routes-inner" }, facts, table)));
+    }
+
+    function emptyRow(title, hint) {
+        return h("tr", {}, h("td", { colspan: "6" }, h("div", { class: "empty" }, h("strong", { text: title }), h("span", { text: hint }))));
+    }
+
+    function renderRoutes() {
+        const all = state.clients.flatMap((client) => client.routes.map((route) => ({ client, route })));
+        const visible = all
+            .filter(({ client, route }) => routeMatches(route, client))
+            .sort((a, b) => TYPE_ORDER.indexOf(a.route.type) - TYPE_ORDER.indexOf(b.route.type) || a.route.name.localeCompare(b.route.name));
+
+        if (!visible.length) {
+            els.routes.replaceChildren(all.length
+                ? emptyRow("No matching routes", "Change the filter to see more.")
+                : emptyRow("No routes bound", "Routes show up here once a client forwards a port."));
+            return;
+        }
+
+        els.routes.replaceChildren(...visible.map(({ client, route }) => h("tr", {},
+            h("td", {}, h("span", { class: `badge type-${route.type}`, text: route.type })),
+            routeAddress(route, h("div", { class: "route-client show-sm" }, clientLink(client))),
+            h("td", { class: "mono muted hide-sm", text: route.targets.join(", ") }),
+            h("td", { class: "hide-sm" }, clientLink(client)),
+            h("td", { class: "hide-sm mono", title: client.connectedAt ? client.connectedAt.toLocaleString() : "", text: client.connectedAt ? since(client.connectedAt) : "" }),
+            h("td", { class: "actions" }, routeDisconnect(client, route)),
+        )));
     }
 
     function render() {
@@ -230,11 +306,22 @@
         const stat = (label, value) => h("div", { class: "stat" }, h("div", { class: "label", text: label }), h("div", { class: "value", text: String(value) }));
         els.stats.replaceChildren(stat("Clients", clients.length), stat("HTTP routes", count("HTTP")), stat("TCP listeners", count("TCP")), stat("TCP aliases", count("Alias")));
 
+        const routesView = state.view === "routes";
+        els.clientsView.hidden = routesView;
+        els.routesView.hidden = !routesView;
+        for (const button of els.view.querySelectorAll("button")) button.setAttribute("aria-pressed", String(button.dataset.view === state.view));
+        els.search.placeholder = routesView ? "Filter by route, client or user" : "Filter by address, user, key or route";
+
+        if (routesView) {
+            renderRoutes();
+            return;
+        }
+
         const visible = clients.filter(matches);
         if (!visible.length) {
-            els.clients.replaceChildren(h("tr", {}, h("td", { colspan: "6" }, h("div", { class: "empty" },
-                h("strong", { text: clients.length ? "No matching clients" : "No clients connected" }),
-                h("span", { text: clients.length ? "Change the filter to see more." : "Clients show up here once they connect over SSH." })))));
+            els.clients.replaceChildren(clients.length
+                ? emptyRow("No matching clients", "Change the filter to see more.")
+                : emptyRow("No clients connected", "Clients show up here once they connect over SSH."));
             return;
         }
 
@@ -258,6 +345,19 @@
             if (open) rows.push(routesRow(client));
         }
         els.clients.replaceChildren(...rows);
+    }
+
+    function setView(view) {
+        if (view === state.view) return;
+        state.view = view;
+        history.replaceState(null, "", `${location.pathname}${location.search}#${view}`);
+        render();
+    }
+
+    function showClient(key) {
+        state.expanded.add(key);
+        state.view = "clients";
+        render();
     }
 
     function toggle(key) {
@@ -300,6 +400,11 @@
         render();
     });
     els.refresh.addEventListener("click", load);
+    els.view.addEventListener("click", (ev) => {
+        const button = ev.target.closest("button[data-view]");
+        if (button) setView(button.dataset.view);
+    });
+    window.addEventListener("hashchange", () => setView(location.hash === "#routes" ? "routes" : "clients"));
 
     document.addEventListener("keydown", (ev) => {
         if (ev.key === "/" && !ev.target.matches("input, select, textarea")) {
