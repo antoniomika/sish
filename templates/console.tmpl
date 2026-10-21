@@ -1,131 +1,679 @@
 {{ define "console" }}
-{{ template "header" .}}
-<div class="row">
-    <div class="col-md-6 table-responsive">
-        <table id="request-table" class="table table-hover">
-            <thead class="thead-dark">
-                <tr>
-                    <th scope="col">Date</th>
-                    <th scope="col">Client IP</th>
-                    <th scope="col">Method</th>
-                    <th scope="col">Path</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Duration</th>
-                </tr>
-            </thead>
-            <tbody id="request-list" data-bind="foreach: requests">
-                <tr class="request-row" data-bind="click: showRequest, css: {'table-active' : active}">
-                    <th scope="row" data-bind="text: startTimePretty"></th>
-                    <th scope="row" data-bind="text: requestIP"></th>
-                    <th scope="row" data-bind="text: requestMethod"></th>
-                    <td data-bind="text: originalRequestURI"></td>
-                    <td data-bind="text: responseStatus"></td>
-                    <td data-bind="text: requestTime"></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="col-md-6">
-        <div class="row" data-bind="foreach: request">
-            <h2 id="request-info-h2">Request Info</h2>
-            <div class="container">
-                <h3>Headers</h3>
-                <div id="requestHeaders" class="dataContainers row">
-                    <pre class="pre-scrollable w-100" data-bind="text: JSON.stringify(headers, null, 4)"></pre>
-                </div>
-                
-                <h3>Body</h3>
-                <div id="requestBody" class="dataContainers row">
-                    <pre class="pre-scrollable w-100" data-bind="text: atob(body)"></pre>
-                </div>
-            </div>
-        </div>
-
-        <hr>
-
-        <div class="row" data-bind="foreach: response">
-            <h2>Response Info:</h2>
-            <div class="container">
-                <h3>Headers</h3>
-                <div id="responseHeaders" class="dataContainers row">
-                    <pre class="pre-scrollable w-100" data-bind="text: JSON.stringify(headers, null, 4)"></pre>
-                </div>
-                
-                <h3>Body</h3>
-                <div id="responseBody" class="dataContainers row">
-                    <pre class="pre-scrollable w-100" data-bind="text: atob(body)"></pre>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script type="text/javascript">
-    var requests = {
-        requests: ko.observableArray([]),
-        request: ko.observableArray([]),
-        response: ko.observableArray([]),
-    };
-
-    var Request = function(requestData) {
-        this.data = requestData;
-
-        this.startTimePretty = requestData.startTimePretty;
-        this.requestMethod = requestData.requestMethod;
-        this.requestUrl = requestData.requestUrl;
-        this.originalRequestURI = requestData.originalRequestURI;
-        this.responseStatus = requestData.responseStatus;
-        this.requestTime = requestData.requestTime;
-        this.requestIP = requestData.requestIP;
-
-        this.active = ko.observable(false);
-
-        this.showRequest = function() {
-            requests.request.removeAll();
-            requests.response.removeAll();
-
-            if ("Content-Type" in requestData.requestHeaders && requestData.requestHeaders["Content-Type"][0] == "application/json") {
-                requestData.requestBody = btoa(JSON.stringify(JSON.parse(atob(requestData.requestBody)), null, 4).toString('utf-8'));
-            }
-
-            if ("Content-Type" in requestData.responseHeaders && requestData.responseHeaders["Content-Type"][0] == "application/json") {
-                requestData.responseBody = btoa(JSON.stringify(JSON.parse(atob(requestData.responseBody)), null, 4).toString('utf-8'));
-            }
-
-            requests.request.push({
-                headers: requestData.requestHeaders,
-                body: requestData.requestBody
-            });
-
-            requests.response.push({
-                headers: requestData.responseHeaders,
-                body: requestData.responseBody
-            });
-
-            for (var request of requests.requests()) {
-                request.active(false);
-            }
-
-            this.active(true);
-        }.bind(this);
-    };
-
-    $(function() {
-        var ws = new WebSocket(window.location.href.replace('http', 'ws').replace('/console', '/console/ws'));
-        ko.applyBindings(requests);
-
-        ws.onmessage = function(event) {
-            var requestData = JSON.parse(event.data);
-            requests.requests.unshift(new Request(requestData));
-        };
-    });
-</script>
-
+{{ template "header" . }}
 <style>
-    .dataContainers {
-        padding-left: 16px;
+    body { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    .console {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    }
+
+    .list-pane { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); background: var(--surface); }
+    .list-pane .list-head { background: var(--bg); }
+    .list-head, .row {
+        display: grid;
+        grid-template-columns: 4.6rem 4.4rem minmax(0, 1fr) 3.4rem 5rem 7.5rem;
+        align-items: center;
+        gap: 10px;
+        padding: 0 16px;
+    }
+    .list-head {
+        height: 32px;
+        flex: none;
+        border-bottom: 1px solid var(--border);
+        color: var(--faint);
+        font-family: var(--mono);
+        font-size: 11.5px;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+    .list-head .num, .row .num { text-align: right; }
+    .list { flex: 1; overflow-y: auto; }
+    .row {
+        width: 100%;
+        height: 34px;
+        border: 0;
+        border-bottom: 1px solid var(--border);
+        background: none;
+        text-align: left;
+        cursor: pointer;
+    }
+    .row:hover { background: var(--surface-2); }
+    .row[aria-selected="true"] { background: var(--selected); box-shadow: inset 3px 0 0 var(--hover); }
+    .row.fresh { animation: fresh 1.2s ease-out; }
+    @keyframes fresh { from { background: var(--selected); } }
+    .row .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; }
+    .row .time, .row .dur, .row .ip { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .detail-pane { min-height: 0; overflow-y: auto; }
+    .detail { padding: 18px 20px 40px; display: grid; gap: 16px; }
+    .detail-title { display: flex; align-items: flex-start; gap: 10px; }
+    .detail-url { font-family: var(--mono); font-size: 13.5px; word-break: break-all; flex: 1; padding-top: 1px; }
+    .detail-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); font-size: 12.5px; }
+    .detail-meta span { white-space: nowrap; }
+    .detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
+    .tabs button {
+        padding: 8px 12px;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+        background: none;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .tabs button:hover { color: var(--text); }
+    .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--hover); }
+    .tabs .count { color: var(--faint); font-weight: 400; margin-left: 4px; }
+
+    .section { border: 1px solid var(--border-strong); background: var(--surface); overflow: hidden; }
+    .section-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 40px;
+        padding: 6px 12px;
+        border-bottom: 1px solid var(--border);
+    }
+    .section-head h3 { margin: 0; font-family: var(--mono); font-size: 13px; font-weight: bold; }
+    .section-head .spacer { flex: 1; }
+    .section-head .info { color: var(--faint); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+    .headers { display: grid; grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr); font-family: var(--mono); font-size: 12.5px; }
+    .headers > div { padding: 5px 12px; border-bottom: 1px solid var(--border); word-break: break-all; }
+    .headers > div:nth-last-child(-n + 2) { border-bottom: 0; }
+    .headers .key { color: var(--muted); }
+
+    .body { margin: 0; padding: 12px; max-height: 60vh; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+    .body.hex { white-space: pre; word-break: normal; }
+    .body-note { padding: 14px 12px; color: var(--muted); }
+    .body-image { padding: 12px; background: repeating-conic-gradient(var(--surface-2) 0% 25%, transparent 0% 50%) 0 0 / 16px 16px; }
+    .body-image img { display: block; max-width: 100%; max-height: 50vh; margin: 0 auto; }
+    .form-table { display: grid; grid-template-columns: minmax(6rem, max-content) minmax(0, 1fr); font-family: var(--mono); font-size: 12.5px; }
+    .form-table > div { padding: 5px 12px; border-bottom: 1px solid var(--border); word-break: break-all; }
+    .form-table .key { color: var(--muted); }
+
+    .j-key { color: var(--pink); }
+    .j-str { color: var(--yellow); }
+    .j-num { color: var(--purple); }
+    .j-lit { color: var(--pink); }
+
+    @media (max-width: 1100px) {
+        .list-head, .row { grid-template-columns: 4.6rem 4.4rem minmax(0, 1fr) 3.4rem 4.6rem; }
+        .list-head .ip, .row .ip { display: none; }
+    }
+
+    @media (max-width: 860px) {
+        body { height: auto; overflow: visible; }
+        .console { grid-template-columns: minmax(0, 1fr); }
+        .list-pane { border-right: 0; border-bottom: 1px solid var(--border); }
+        .list { max-height: 45vh; }
+        .detail-pane { overflow: visible; }
+        .list-head, .row { grid-template-columns: 4.2rem minmax(0, 1fr) 3.4rem; padding: 0 12px; }
+        .list-head .time, .row .time, .list-head .dur, .row .dur { display: none; }
+        .detail { padding: 16px 12px 32px; }
+        .input { width: 100%; }
     }
 </style>
-{{ template "footer" .}}
+
+<header class="topbar">
+    <span class="logo-header">sish</span>
+    <span class="crumb">/</span>
+    <span class="page-title">Requests</span>
+    <span class="page-sub" id="host"></span>
+    <span class="spacer"></span>
+    <span id="status" class="pill">Connecting</span>
+</header>
+
+<div class="toolbar">
+    <input id="search" class="input" type="search" placeholder="Filter by path, status or IP" aria-label="Filter requests" autocomplete="off">
+    <select id="method" class="select" aria-label="Method">
+        <option value="">All methods</option>
+        <option>GET</option>
+        <option>POST</option>
+        <option>PUT</option>
+        <option>PATCH</option>
+        <option>DELETE</option>
+        <option>HEAD</option>
+        <option>OPTIONS</option>
+    </select>
+    <div class="segmented" id="status-filter" role="group" aria-label="Status">
+        <button type="button" data-status="" aria-pressed="true">All</button>
+        <button type="button" data-status="2" aria-pressed="false">2xx</button>
+        <button type="button" data-status="3" aria-pressed="false">3xx</button>
+        <button type="button" data-status="4" aria-pressed="false">4xx</button>
+        <button type="button" data-status="5" aria-pressed="false">5xx</button>
+    </div>
+    <span class="spacer"></span>
+    <span id="count" class="hint"></span>
+    <button type="button" class="btn" id="pause">Pause</button>
+    <button type="button" class="btn" id="clear">Clear</button>
+</div>
+
+<main class="console">
+    <section class="list-pane" aria-label="Requests">
+        <div class="list-head" aria-hidden="true">
+            <span class="time">Time</span>
+            <span>Method</span>
+            <span>Path</span>
+            <span>Status</span>
+            <span class="dur num">Duration</span>
+            <span class="ip">Client</span>
+        </div>
+        <div class="list" id="list" role="listbox" aria-label="Request list"></div>
+    </section>
+    <section class="detail-pane" id="detail" aria-label="Request detail"></section>
+</main>
+
+<script>
+(() => {
+    const { h, base, token, copyText, toast, setStatus, bytes } = sish;
+
+    const MAX_ENTRIES = 1000;
+    const MAX_HIGHLIGHT = 256 * 1024;
+    const MAX_HEX = 64 * 1024;
+    const NOT_CAPTURED = "_sish_message";
+
+    const state = {
+        entries: [],
+        byId: new Map(),
+        pending: new Map(),
+        floor: 0,
+        paused: false,
+        selected: null,
+        tab: "request",
+        modes: {},
+        filter: { q: "", method: "", status: "" },
+        objectUrls: [],
+    };
+
+    const els = {
+        list: document.getElementById("list"),
+        detail: document.getElementById("detail"),
+        search: document.getElementById("search"),
+        method: document.getElementById("method"),
+        statusFilter: document.getElementById("status-filter"),
+        count: document.getElementById("count"),
+        pause: document.getElementById("pause"),
+        clear: document.getElementById("clear"),
+    };
+
+    document.getElementById("host").textContent = location.host + base;
+
+    function header(headers, name) {
+        const wanted = name.toLowerCase();
+        for (const [key, values] of Object.entries(headers || {})) {
+            if (key.toLowerCase() === wanted) return values[0] || "";
+        }
+        return "";
+    }
+
+    function toEntry(raw) {
+        const code = raw.responseCode || parseInt(raw.responseStatus, 10) || 0;
+        return {
+            id: raw.id,
+            method: raw.requestMethod || "",
+            uri: raw.originalRequestURI || "",
+            code,
+            status: raw.responseStatus || String(code),
+            duration: raw.requestTime || "",
+            ip: raw.requestIP || "",
+            time: raw.startTime ? new Date(raw.startTime) : null,
+            timePretty: raw.startTimePretty || "",
+            request: { headers: raw.requestHeaders || {}, b64: raw.requestBody || "" },
+            response: { headers: raw.responseHeaders || {}, b64: raw.responseBody || "" },
+        };
+    }
+
+    function decodeBody(part) {
+        if (part.body) return part.body;
+
+        const bin = atob(part.b64);
+        const raw = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) raw[i] = bin.charCodeAt(i);
+
+        const type = header(part.headers, "Content-Type").toLowerCase();
+        const body = { raw, type, size: raw.length, text: null, json: undefined, form: null, image: false, notCaptured: "" };
+
+        try {
+            body.text = new TextDecoder("utf-8", { fatal: true }).decode(raw);
+        } catch {
+            body.text = null;
+        }
+
+        if (body.text !== null && body.size > 0) {
+            const trimmed = body.text.trimStart();
+            if (type.includes("json") || trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                try {
+                    body.json = JSON.parse(body.text);
+                } catch {
+                    body.json = undefined;
+                }
+            }
+            if (body.json && body.json._sish_status === false && body.json[NOT_CAPTURED]) {
+                body.notCaptured = body.json[NOT_CAPTURED];
+            }
+            if (type.includes("application/x-www-form-urlencoded")) {
+                body.form = [...new URLSearchParams(body.text)];
+            }
+        }
+
+        body.image = type.startsWith("image/") && body.size > 0;
+
+        if (body.image) body.modes = ["preview", body.text !== null ? "raw" : "hex"];
+        else if (body.json !== undefined || body.form) body.modes = ["pretty", "raw"];
+        else if (body.text !== null) body.modes = ["raw"];
+        else body.modes = ["hex"];
+
+        part.body = body;
+        return body;
+    }
+
+    function matches(entry) {
+        const { q, method, status } = state.filter;
+        if (method && entry.method !== method) return false;
+        if (status && String(entry.code)[0] !== status) return false;
+        if (q) {
+            const hay = `${entry.method} ${entry.uri} ${entry.status} ${entry.ip}`.toLowerCase();
+            if (!hay.includes(q)) return false;
+        }
+        return true;
+    }
+
+    function rowFor(entry) {
+        if (entry.row) return entry.row;
+        const time = entry.time ? entry.time.toLocaleTimeString([], { hour12: false }) : "";
+        entry.row = h("button", {
+                type: "button",
+                class: "row",
+                role: "option",
+                "aria-selected": "false",
+                "data-id": entry.id,
+                onclick: () => select(entry),
+            },
+            h("span", { class: "time", title: entry.timePretty, text: time }),
+            h("span", {}, h("span", { class: `badge m-${entry.method}`, text: entry.method })),
+            h("span", { class: "path", title: entry.uri, text: entry.uri }),
+            h("span", {}, h("span", { class: `badge s-${String(entry.code)[0]}`, title: entry.status, text: entry.code })),
+            h("span", { class: "dur num", text: entry.duration }),
+            h("span", { class: "ip", title: entry.ip, text: entry.ip }),
+        );
+        return entry.row;
+    }
+
+    let renderQueued = false;
+    function renderList() {
+        if (renderQueued) return;
+        renderQueued = true;
+        requestAnimationFrame(() => {
+            renderQueued = false;
+            const visible = state.entries.filter(matches);
+            if (visible.length) {
+                els.list.replaceChildren(...visible.map(rowFor));
+            } else if (state.entries.length) {
+                els.list.replaceChildren(h("div", { class: "empty" }, h("strong", { text: "No matching requests" }), h("span", { text: "Change or clear the filters to see more." })));
+            } else {
+                els.list.replaceChildren(h("div", { class: "empty" },
+                    h("strong", { text: "Waiting for requests" }),
+                    h("span", { text: `Requests to ${location.host}${base} show up here as they happen.` })));
+            }
+            const total = state.entries.length;
+            els.count.textContent = visible.length === total ? `${total} request${total === 1 ? "" : "s"}` : `${visible.length} of ${total}`;
+        });
+    }
+
+    function insert(entry) {
+        // Entries stay newest first. History and live requests can arrive interleaved.
+        let i = 0;
+        while (i < state.entries.length && state.entries[i].id > entry.id) i++;
+        state.entries.splice(i, 0, entry);
+        state.byId.set(entry.id, entry);
+
+        while (state.entries.length > MAX_ENTRIES) {
+            const dropped = state.entries.pop();
+            state.byId.delete(dropped.id);
+            state.floor = Math.max(state.floor, dropped.id);
+        }
+    }
+
+    function receive(raw) {
+        if (typeof raw.id !== "number" || raw.id <= state.floor || state.byId.has(raw.id) || state.pending.has(raw.id)) return;
+        const entry = toEntry(raw);
+        if (state.paused) {
+            state.pending.set(entry.id, entry);
+            updatePause();
+            return;
+        }
+        insert(entry);
+        rowFor(entry).classList.add("fresh");
+        renderList();
+    }
+
+    function select(entry) {
+        if (state.selected && state.selected.row) state.selected.row.setAttribute("aria-selected", "false");
+        state.selected = entry;
+        if (entry) {
+            rowFor(entry).setAttribute("aria-selected", "true");
+            entry.row.scrollIntoView({ block: "nearest" });
+        }
+        renderDetail();
+    }
+
+    function highlightJson(text) {
+        const out = [];
+        const re = /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+        let last = 0;
+        for (const m of text.matchAll(re)) {
+            if (m.index > last) out.push(text.slice(last, m.index));
+            if (m[1]) {
+                out.push(h("span", { class: m[2] ? "j-key" : "j-str", text: m[1] }));
+                if (m[2]) out.push(m[2]);
+            } else if (m[3]) {
+                out.push(h("span", { class: "j-lit", text: m[3] }));
+            } else {
+                out.push(h("span", { class: "j-num", text: m[4] }));
+            }
+            last = m.index + m[0].length;
+        }
+        out.push(text.slice(last));
+        return out;
+    }
+
+    function hexDump(raw) {
+        const lines = [];
+        const limit = Math.min(raw.length, MAX_HEX);
+        for (let offset = 0; offset < limit; offset += 16) {
+            const chunk = raw.subarray(offset, Math.min(offset + 16, limit));
+            const hex = [...chunk].map((b) => b.toString(16).padStart(2, "0")).join(" ");
+            const ascii = [...chunk].map((b) => (b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : ".")).join("");
+            lines.push(`${offset.toString(16).padStart(8, "0")}  ${hex.padEnd(47, " ")}  ${ascii}`);
+        }
+        if (raw.length > limit) lines.push(`\n… ${bytes(raw.length - limit)} more`);
+        return lines.join("\n");
+    }
+
+    function bodyView(body, mode) {
+        if (body.notCaptured) {
+            return h("div", { class: "body-note" }, `Body not captured: ${body.notCaptured}. Raise --service-console-max-content-length to record it.`);
+        }
+        if (body.size === 0) return h("div", { class: "body-note", text: "No body" });
+
+        if (mode === "preview") {
+            const url = URL.createObjectURL(new Blob([body.raw], { type: body.type }));
+            state.objectUrls.push(url);
+            return h("div", { class: "body-image" }, h("img", { src: url, alt: "Response image" }));
+        }
+        if (mode === "hex") return h("pre", { class: "body hex", text: hexDump(body.raw) });
+        if (mode === "pretty" && body.form) {
+            return h("div", { class: "form-table" }, body.form.map(([k, v]) => [h("div", { class: "key", text: k }), h("div", { text: v })]));
+        }
+        if (mode === "pretty" && body.json !== undefined) {
+            const pretty = JSON.stringify(body.json, null, 2);
+            return h("pre", { class: "body" }, pretty.length > MAX_HIGHLIGHT ? pretty : highlightJson(pretty));
+        }
+        return h("pre", { class: "body", text: body.text });
+    }
+
+    function headersView(headers) {
+        const rows = [];
+        for (const key of Object.keys(headers).sort((a, b) => a.localeCompare(b))) {
+            for (const value of headers[key]) rows.push(h("div", { class: "key", text: key }), h("div", { text: value }));
+        }
+        if (!rows.length) return h("div", { class: "body-note", text: "No headers" });
+        return h("div", { class: "headers" }, rows);
+    }
+
+    function partView(side, part) {
+        const body = decodeBody(part);
+        const preferred = state.modes[side];
+        const mode = body.modes.includes(preferred) ? preferred : body.modes[0];
+        const headerCount = Object.values(part.headers).reduce((n, v) => n + v.length, 0);
+
+        const modeButtons = body.modes.length > 1 && !body.notCaptured
+            ? h("div", { class: "segmented", role: "group", "aria-label": "Body view" },
+                body.modes.map((m) => h("button", {
+                    type: "button",
+                    "aria-pressed": String(m === mode),
+                    text: m[0].toUpperCase() + m.slice(1),
+                    onclick: () => { state.modes[side] = m; renderDetail(); },
+                })))
+            : null;
+
+        const info = [body.type.split(";")[0], body.size ? bytes(body.size) : ""].filter(Boolean).join(" · ");
+
+        return [
+            h("div", { class: "section" },
+                h("div", { class: "section-head" }, h("h3", { text: "Headers" }), h("span", { class: "info", text: String(headerCount) })),
+                headersView(part.headers)),
+            h("div", { class: "section" },
+                h("div", { class: "section-head" },
+                    h("h3", { text: "Body" }),
+                    h("span", { class: "info", title: body.type, text: info }),
+                    h("span", { class: "spacer" }),
+                    modeButtons),
+                bodyView(body, mode)),
+        ];
+    }
+
+    function renderDetail() {
+        for (const url of state.objectUrls) URL.revokeObjectURL(url);
+        state.objectUrls = [];
+
+        const entry = state.selected;
+        if (!entry) {
+            els.detail.replaceChildren(h("div", { class: "empty" },
+                h("strong", { text: "No request selected" }),
+                h("span", {}, "Pick a request to see its headers and body. ", h("kbd", { text: "↑" }), " ", h("kbd", { text: "↓" }), " move, ", h("kbd", { text: "/" }), " filters.")));
+            return;
+        }
+
+        const canReplay = !decodeBody(entry.request).notCaptured;
+        decodeBody(entry.response);
+
+        const tab = (id, label, part) => h("button", {
+            type: "button",
+            role: "tab",
+            "aria-selected": String(state.tab === id),
+            onclick: () => { state.tab = id; renderDetail(); },
+        }, label, h("span", { class: "count", text: part.body.size ? bytes(part.body.size) : "" }));
+
+        els.detail.replaceChildren(h("div", { class: "detail" },
+            h("div", { class: "detail-title" },
+                h("span", { class: `badge m-${entry.method}`, text: entry.method }),
+                h("span", { class: "detail-url", text: entry.uri }),
+                h("span", { class: `badge s-${String(entry.code)[0]}`, text: entry.status })),
+            h("div", { class: "detail-meta" },
+                h("span", { title: "Started", text: entry.timePretty }),
+                h("span", { title: "Duration", text: entry.duration }),
+                h("span", { title: "Client IP", class: "mono", text: entry.ip })),
+            h("div", { class: "detail-actions" },
+                h("button", { type: "button", class: "btn", onclick: () => copyCurl(entry) }, "Copy as curl"),
+                h("button", {
+                    type: "button",
+                    class: "btn primary",
+                    disabled: !canReplay,
+                    title: canReplay ? "Send this request again from your browser" : "The request body wasn't captured",
+                    onclick: (ev) => replay(entry, ev.currentTarget),
+                }, "Replay")),
+            h("div", { class: "tabs", role: "tablist" }, tab("request", "Request", entry.request), tab("response", "Response", entry.response)),
+            state.tab === "request" ? partView("request", entry.request) : partView("response", entry.response),
+        ));
+    }
+
+    const quote = (s) => `'${s.replace(/'/g, `'\\''`)}'`;
+
+    function copyCurl(entry) {
+        const body = decodeBody(entry.request);
+        const args = [];
+        let prefix = "";
+        if (entry.method !== "GET" || (body.size && !body.notCaptured)) args.push(`-X ${entry.method}`);
+
+        let compressed = false;
+        for (const key of Object.keys(entry.request.headers).sort()) {
+            const lower = key.toLowerCase();
+            if (lower === "host" || lower === "content-length" || lower === "connection") continue;
+            if (lower === "accept-encoding") { compressed = true; continue; }
+            for (const value of entry.request.headers[key]) args.push(`-H ${quote(`${key}: ${value}`)}`);
+        }
+        if (compressed) args.push("--compressed");
+
+        if (body.size && !body.notCaptured) {
+            if (body.text !== null) {
+                args.push(`--data-raw ${quote(body.text)}`);
+            } else {
+                prefix = `printf %s ${quote(entry.request.b64)} | base64 -d | `;
+                args.push("--data-binary @-");
+            }
+        }
+
+        const command = [`${prefix}curl ${quote(location.origin + entry.uri)}`, ...args].join(" \\\n  ");
+        copyText(command)
+            .then(() => toast(body.notCaptured ? "Copied without the body, which wasn't captured" : "Copied curl command"))
+            .catch(() => toast("Couldn't copy to the clipboard", "error"));
+    }
+
+    async function replay(entry, button) {
+        const body = decodeBody(entry.request);
+        const headers = new Headers();
+        for (const [key, values] of Object.entries(entry.request.headers)) {
+            if (key.toLowerCase() === "host") continue;
+            for (const value of values) {
+                // Browsers refuse some headers (Cookie, Content-Length and others). Skip those.
+                try { headers.append(key, value); } catch { /* forbidden header */ }
+            }
+        }
+
+        button.disabled = true;
+        try {
+            const res = await fetch(entry.uri, {
+                method: entry.method,
+                headers,
+                body: ["GET", "HEAD"].includes(entry.method) || !body.size ? undefined : body.raw,
+                redirect: "manual",
+                cache: "no-store",
+            });
+            const result = res.type === "opaqueredirect" ? "redirect" : `${res.status} ${res.statusText}`.trim();
+            toast(`Replayed ${entry.method} ${entry.uri.length > 40 ? entry.uri.slice(0, 40) + "…" : entry.uri} → ${result}`);
+        } catch (err) {
+            toast(`Replay failed: ${err.message}`, "error");
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    function updatePause() {
+        els.pause.textContent = state.paused ? (state.pending.size ? `Resume (${state.pending.size} new)` : "Resume") : "Pause";
+        els.pause.classList.toggle("primary", state.paused);
+        if (connected) setStatus(state.paused ? "paused" : "live", state.paused ? "Paused" : "Live");
+    }
+
+    els.pause.addEventListener("click", () => {
+        state.paused = !state.paused;
+        if (!state.paused) {
+            for (const entry of state.pending.values()) insert(entry);
+            state.pending.clear();
+            renderList();
+        }
+        updatePause();
+    });
+
+    els.clear.addEventListener("click", () => {
+        const ids = [...state.byId.keys(), ...state.pending.keys()];
+        state.floor = Math.max(state.floor, ...ids);
+        state.entries = [];
+        state.byId.clear();
+        state.pending.clear();
+        select(null);
+        updatePause();
+        renderList();
+    });
+
+    els.search.addEventListener("input", () => {
+        state.filter.q = els.search.value.trim().toLowerCase();
+        renderList();
+    });
+
+    els.method.addEventListener("change", () => {
+        state.filter.method = els.method.value;
+        renderList();
+    });
+
+    els.statusFilter.addEventListener("click", (ev) => {
+        const button = ev.target.closest("button");
+        if (!button) return;
+        state.filter.status = button.dataset.status;
+        for (const b of els.statusFilter.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b === button));
+        renderList();
+    });
+
+    document.addEventListener("keydown", (ev) => {
+        const typing = ev.target.matches("input, select, textarea");
+        if (ev.key === "/" && !typing) {
+            ev.preventDefault();
+            els.search.focus();
+            return;
+        }
+        if (ev.key === "Escape") {
+            if (typing) ev.target.blur();
+            else select(null);
+            return;
+        }
+        if (typing || !["ArrowDown", "ArrowUp", "j", "k"].includes(ev.key)) return;
+
+        const visible = state.entries.filter(matches);
+        if (!visible.length) return;
+        ev.preventDefault();
+        const i = state.selected ? visible.indexOf(state.selected) : -1;
+        const down = ev.key === "ArrowDown" || ev.key === "j";
+        const next = i === -1 ? 0 : Math.min(visible.length - 1, Math.max(0, i + (down ? 1 : -1)));
+        select(visible[next]);
+    });
+
+    let socket = null;
+    let connected = false;
+    let attempts = 0;
+    let retryTimer = null;
+
+    function connect() {
+        clearTimeout(retryTimer);
+        setStatus("", attempts ? "Reconnecting" : "Connecting");
+
+        const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+        const ws = socket = new WebSocket(`${scheme}//${location.host}${base}/_sish/console/ws?x-authorization=${encodeURIComponent(token)}`);
+
+        ws.onopen = () => {
+            connected = true;
+            attempts = 0;
+            updatePause();
+        };
+        ws.onmessage = (ev) => {
+            try {
+                receive(JSON.parse(ev.data));
+            } catch (err) {
+                console.error("Bad console message", err);
+            }
+        };
+        ws.onclose = () => {
+            connected = false;
+            const delay = Math.min(10000, 1000 * 2 ** attempts++);
+            setStatus("down", `Disconnected, retrying in ${Math.round(delay / 1000)}s`);
+            retryTimer = setTimeout(connect, delay);
+        };
+    }
+
+    window.addEventListener("online", () => {
+        if (!socket || socket.readyState === WebSocket.CLOSED) connect();
+    });
+
+    renderList();
+    renderDetail();
+    connect();
+})();
+</script>
+{{ template "footer" }}
 {{ end }}

@@ -7,9 +7,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net"
@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antoniomika/sish/templates"
 	"github.com/antoniomika/sish/utils"
 	"github.com/antoniomika/syncmap"
 	"github.com/caddyserver/certmagic"
@@ -85,7 +86,11 @@ func Start(state *utils.State) {
 	r := gin.New()
 
 	if viper.GetBool("load-templates") {
-		r.LoadHTMLGlob(viper.GetString("load-templates-directory"))
+		if dir := viper.GetString("load-templates-directory"); dir != "" {
+			r.LoadHTMLGlob(dir)
+		} else {
+			r.SetHTMLTemplate(template.Must(template.ParseFS(templates.FS, "*.tmpl")))
+		}
 	}
 
 	r.Use(func(c *gin.Context) {
@@ -181,12 +186,7 @@ func Start(state *utils.State) {
 			routeData["responseCode"] = param.StatusCode
 			routeData["responseStatus"] = fmt.Sprintf("%d %s", param.StatusCode, http.StatusText(param.StatusCode))
 
-			jsonData, err := json.Marshal(routeData)
-			if err != nil {
-				log.Println("unable to marshal json data", err)
-			} else {
-				state.Console.BroadcastRoute(routeInfo, jsonData)
-			}
+			state.Console.BroadcastRoute(routeInfo, routeData)
 		}
 
 		return logLine

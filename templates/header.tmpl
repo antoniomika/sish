@@ -4,62 +4,96 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="">
-    <meta name="author" content="">
-    <title>sish</title>
+    <meta name="referrer" content="no-referrer">
+    <meta name="color-scheme" content="light dark">
+    <title>{{ .Title }} · sish</title>
+    <link rel="icon" type="image/svg+xml" href="{{ .Base }}/_sish/assets/favicon.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ .Base }}/_sish/assets/favicon.png">
+    <link rel="stylesheet" href="{{ .Base }}/_sish/assets/theme.css">
+    <link rel="stylesheet" href="{{ .Base }}/_sish/assets/console.css">
+    <script>
+        // Shared helpers for the console pages.
+        const sish = (() => {
+            const token = new URLSearchParams(location.search).get("x-authorization") || "";
+            const base = location.pathname.slice(0, Math.max(0, location.pathname.indexOf("/_sish/")));
 
-    <!-- Bootstrap Start -->
-    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.bundle.min.js"></script>
+            function h(tag, attrs, ...children) {
+                const el = document.createElement(tag);
+                for (const [key, value] of Object.entries(attrs || {})) {
+                    if (value === null || value === undefined || value === false) continue;
+                    if (key === "class") el.className = value;
+                    else if (key === "text") el.textContent = value;
+                    else if (key.startsWith("on")) el.addEventListener(key.slice(2), value);
+                    else el.setAttribute(key, value === true ? "" : value);
+                }
+                el.append(...children.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false));
+                return el;
+            }
 
-    <link href="https://stackpath.bootstrapcdn.com/bootswatch/4.4.1/sandstone/bootstrap.min.css" rel="stylesheet">
-    <link href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <!-- Bootstrap End -->
+            async function api(path, options = {}) {
+                const res = await fetch(`${base}/_sish/api/${path}`, {
+                    ...options,
+                    headers: { "x-authorization": token, ...(options.headers || {}) },
+                    cache: "no-store",
+                });
+                if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+                return res.json();
+            }
 
-    <!-- Knockout Start -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.5.1/knockout-latest.js"></script>
-    <!-- Knockout End -->
+            async function copyText(text) {
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                    return;
+                }
+                // Clipboard API needs a secure context, which plain-HTTP sish deployments don't have.
+                const area = h("textarea", { style: "position:fixed;opacity:0" });
+                area.value = text;
+                document.body.append(area);
+                area.select();
+                const ok = document.execCommand("copy");
+                area.remove();
+                if (!ok) throw new Error("copy failed");
+            }
 
-    <style>
-        #pageContainer {
-            padding-top: 60px;
-        }
+            function toast(message, kind) {
+                let box = document.querySelector(".toasts");
+                if (!box) {
+                    box = h("div", { class: "toasts", role: "status", "aria-live": "polite" });
+                    document.body.append(box);
+                }
+                const el = h("div", { class: `toast ${kind || ""}`, text: message });
+                box.append(el);
+                setTimeout(() => el.remove(), 3200);
+            }
 
-        .navbar {
-            max-height: 60px !important
-        }
-    </style>
+            function setStatus(kind, text) {
+                const pill = document.getElementById("status");
+                if (!pill) return;
+                pill.className = `pill ${kind}`;
+                pill.textContent = text;
+            }
 
-    <link rel="icon" href="data:;base64,iVBORw0KGgo=">
+            function bytes(n) {
+                if (n < 1024) return `${n} B`;
+                const units = ["KB", "MB", "GB"];
+                let i = -1;
+                do { n /= 1024; i++; } while (n >= 1024 && i < units.length - 1);
+                return `${n.toFixed(n < 10 ? 1 : 0)} ${units[i]}`;
+            }
 
-    <script type="text/javascript">
-        
+            function since(date) {
+                const s = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+                if (s < 60) return `${s}s`;
+                const m = Math.floor(s / 60);
+                if (m < 60) return `${m}m`;
+                const hrs = Math.floor(m / 60);
+                if (hrs < 24) return `${hrs}h ${m % 60}m`;
+                return `${Math.floor(hrs / 24)}d ${hrs % 24}h`;
+            }
+
+            return { token, base, h, api, copyText, toast, setStatus, bytes, since };
+        })();
     </script>
 </head>
-
 <body>
-<nav class="navbar navbar-expand-md fixed-top navbar-dark bg-primary" role="navigation">
-    <a class="navbar-brand" href="">sish</a>
-    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbar">
-        <ul class="navbar-nav mr-auto">
-            <li class="nav-item">
-                <!--
-                <a class="nav-link" href="/_sish/console">Home</a>
-                -->
-            </li>
-        </ul>
-        <ul class="navbar-nav flex-row ml-md-auto d-none d-md-flex">
-            <li class="nav-item">
-                <!--
-                <a class="nav-link" href="/_sish/console"><i class="fa fa-home"></i> Home</a>
-                -->
-            </li>
-        </ul>
-    </div>
-</nav>
-<div id="pageContainer" class="container-fluid">
 {{ end }}

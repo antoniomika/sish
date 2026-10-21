@@ -57,7 +57,7 @@ https-request-port-override: 0
 idle-connection: true
 idle-connection-timeout: 5s
 load-templates: true
-load-templates-directory: templates/*
+load-templates-directory: ""
 localhost-as-all: true
 log-to-client: false
 log-to-file: false
@@ -84,6 +84,7 @@ redirect-root: true
 redirect-root-location: https://github.com/antoniomika/sish
 rewrite-host-header: true
 service-console: false
+service-console-history: 25
 service-console-max-content-length: -1
 service-console-token: ""
 sni-load-balancer: false

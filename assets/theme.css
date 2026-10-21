@@ -1,0 +1,93 @@
+/* The sish palette, shared by the docs site and the consoles. Load it after smol.css and syntax.css. */
+:root {
+  color-scheme: dark;
+  --bg-color: #282a36;
+  --pre: #252525;
+  --text-color: #f2f2f2;
+  --code: #414558;
+  --link-color: #74b2c2;
+  --visited: #a28ec6;
+  --blockquote: #a28ec6;
+  --blockquote-bg: #353548;
+  --hover: #ff80bf;
+  --grey: #414558;
+  --grey-light: #6a708e;
+  --white: #f2f2f2;
+  --white-light: #f2f2f2;
+  --white-dark: #e8e8e8;
+  --muted: #a3a8c3;
+  --surface-2: #2f3140;
+  --selected: #353548;
+  --green: #50fa7b;
+  --yellow: #f1fa8c;
+  --red: #ff5555;
+  --pink: #ff79c6;
+  --purple: #bd93f9;
+  --cyan: #8be9fd;
+  --comment: #6272a4;
+  --logo-border: #ff79c6;
+  --logo-gradient: linear-gradient(to right, #ff5555, #ff79c6, #f8f859);
+}
+
+/* smol.css uses the --white tokens for text and borders, so they flip with the theme. */
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --bg-color: #fbfbfd;
+    --pre: #f1f1f5;
+    --text-color: #282a36;
+    --code: #d9dbe6;
+    --link-color: #1f7489;
+    --visited: #6b4fa8;
+    --blockquote: #6b4fa8;
+    --blockquote-bg: #efeaf8;
+    --hover: #c4307f;
+    --grey: #d9dbe6;
+    --grey-light: #6a708e;
+    --white: #282a36;
+    --white-light: #282a36;
+    --white-dark: #44475a;
+    --muted: #555a70;
+    --surface-2: #e9e9f0;
+    --selected: #ece6f7;
+    --green: #1a7f37;
+    --yellow: #946200;
+    --red: #c92a2a;
+    --pink: #c2185b;
+    --purple: #6f42c1;
+    --cyan: #0b7285;
+    --comment: #6a737d;
+    --logo-border: #d6336c;
+    --logo-gradient: linear-gradient(to right, #e03131, #d6336c, #d08c00);
+  }
+}
+
+.logo-header {
+  border-color: var(--logo-border);
+  background-color: var(--logo-border);
+  background-image: var(--logo-gradient);
+}
+
+.bg,
+.chroma {
+  color: var(--text-color);
+  background-color: var(--pre);
+}
+
+.chroma .k, .chroma .kc, .chroma .kn, .chroma .kp, .chroma .kr, .chroma .nt,
+.chroma .o, .chroma .ow, .chroma .cp, .chroma .cpf { color: var(--pink); }
+
+.chroma .kd, .chroma .kt, .chroma .nb, .chroma .nl, .chroma .nv,
+.chroma .vc, .chroma .vg, .chroma .vi { color: var(--cyan); }
+
+.chroma .na, .chroma .nc, .chroma .nf, .chroma .gi { color: var(--green); }
+
+.chroma .s, .chroma .sa, .chroma .sb, .chroma .sc, .chroma .dl, .chroma .sd, .chroma .s2,
+.chroma .se, .chroma .sh, .chroma .si, .chroma .sx, .chroma .sr, .chroma .s1, .chroma .ss { color: var(--yellow); }
+
+.chroma .m, .chroma .mb, .chroma .mf, .chroma .mh, .chroma .mi, .chroma .il, .chroma .mo { color: var(--purple); }
+
+.chroma .c, .chroma .ch, .chroma .cm, .chroma .c1, .chroma .cs { color: var(--comment); }
+
+.chroma .gd { color: var(--red); }
+.chroma .go { color: var(--grey-light); }

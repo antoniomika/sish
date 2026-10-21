@@ -43,7 +43,6 @@ COPY --from=build-image /emptydir /tmp
 COPY --from=build-image /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build-image /app/deploy/ /app/deploy/
 COPY --from=build-image /app/README* /app/LICENSE* /app/
-COPY --from=build-image /app/templates /app/templates
 COPY --from=build-image /go/bin/ /app/
 
 ENTRYPOINT ["/app/app"]
