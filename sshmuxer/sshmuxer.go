@@ -283,6 +283,7 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 		Session:                make(chan bool),
 		SetupLock:              &sync.Mutex{},
 		TCPAliasesAllowedUsers: []string{pubKeyFingerprint},
+		ConnectedAt:            time.Now(),
 	}
 
 	state.SSHConnections.Store(sshConn.RemoteAddr().String(), holderConn)

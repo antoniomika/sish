@@ -6,6 +6,7 @@ clean:
 ssg:
 	go run ./docs/cmd
 	cp ./docs/static/* ./docs/public
+	cp ./assets/smol.css ./assets/syntax.css ./assets/theme.css ./assets/favicon.svg ./assets/favicon.png ./docs/public
 .PHONY: ssg
 
 docs: ssg

@@ -2,12 +2,18 @@ package utils
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 
+	"github.com/antoniomika/sish/assets"
 	"github.com/antoniomika/syncmap"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -30,6 +36,7 @@ type WebClient struct {
 	Conn    *websocket.Conn
 	Console *WebConsole
 	Send    chan []byte
+	Done    chan struct{}
 	Route   string
 }
 
@@ -38,18 +45,33 @@ type WebConsole struct {
 	Clients     *syncmap.Map[string, []*WebClient]
 	RouteTokens *syncmap.Map[string, string]
 	State       *State
+
+	requestID   atomic.Uint64
+	history     map[string][][]byte
+	historyLock sync.Mutex
 }
 
 // NewWebConsole sets up the WebConsole.
 func NewWebConsole() *WebConsole {
-	return &WebConsole{
+	c := &WebConsole{
 		Clients:     syncmap.New[string, []*WebClient](),
 		RouteTokens: syncmap.New[string, string](),
+		history:     map[string][][]byte{},
 	}
+
+	// Ids keep increasing across restarts so a reconnecting page doesn't drop new requests as already seen.
+	c.requestID.Store(uint64(time.Now().UnixMicro()))
+
+	return c
 }
 
 // HandleRequest handles an incoming web request, handles auth, and then routes it.
 func (c *WebConsole) HandleRequest(proxyUrl string, hostIsRoot bool, g *gin.Context) {
+	if strings.HasPrefix(g.Request.URL.Path, "/_sish/assets/") {
+		HandleAsset(g)
+		return
+	}
+
 	userAuthed := false
 	userIsAdmin := false
 	if (viper.GetBool("admin-console") && viper.GetString("admin-console-token") != "") && (g.Request.URL.Query().Get("x-authorization") == viper.GetString("admin-console-token") || g.Request.Header.Get("x-authorization") == viper.GetString("admin-console-token")) {
@@ -76,10 +98,14 @@ func (c *WebConsole) HandleRequest(proxyUrl string, hostIsRoot bool, g *gin.Cont
 		c.HandleTemplate(proxyUrl, hostIsRoot, userIsAdmin, g)
 		return
 	} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/disconnectclient/") && userIsAdmin {
-		c.HandleDisconnectClient(proxyUrl, g)
+		if requirePost(g) {
+			c.HandleDisconnectClient(proxyUrl, g)
+		}
 		return
 	} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/disconnectroute/") && userIsAdmin {
-		c.HandleDisconnectRoute(proxyUrl, g)
+		if requirePost(g) {
+			c.HandleDisconnectRoute(proxyUrl, g)
+		}
 		return
 	} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/api/clients") && hostIsRoot && userIsAdmin {
 		c.HandleClients(proxyUrl, g)
@@ -87,15 +113,45 @@ func (c *WebConsole) HandleRequest(proxyUrl string, hostIsRoot bool, g *gin.Cont
 	}
 }
 
+// requirePost rejects requests that would change state unless they are POSTs.
+func requirePost(g *gin.Context) bool {
+	if g.Request.Method == http.MethodPost {
+		return true
+	}
+
+	g.Header("Allow", http.MethodPost)
+	g.AbortWithStatus(http.StatusMethodNotAllowed)
+	return false
+}
+
+// HandleAsset serves the shared stylesheets and icons. They hold nothing private, so they don't need a token.
+func HandleAsset(g *gin.Context) {
+	name := strings.TrimPrefix(g.Request.URL.Path, "/_sish/assets/")
+	if name == "" || strings.HasSuffix(name, "/") {
+		g.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+
+	g.FileFromFS(name, http.FS(assets.FS))
+}
+
 // HandleTemplate handles rendering the console templates.
 func (c *WebConsole) HandleTemplate(proxyUrl string, hostIsRoot bool, userIsAdmin bool, g *gin.Context) {
+	// Consoles for path routes are served under the route's path, so links to assets need that prefix.
+	base := g.GetString("originalPath")
+	if i := strings.Index(base, "/_sish/"); i >= 0 {
+		base = base[:i]
+	} else {
+		base = ""
+	}
+
 	if hostIsRoot && userIsAdmin {
-		g.HTML(http.StatusOK, "routes", nil)
+		g.HTML(http.StatusOK, "routes", gin.H{"Title": "Admin", "Base": base})
 		return
 	}
 
 	if c.RouteExists(proxyUrl) {
-		g.HTML(http.StatusOK, "console", nil)
+		g.HTML(http.StatusOK, "console", gin.H{"Title": "Requests", "Base": base})
 		return
 	}
 
@@ -117,12 +173,22 @@ func (c *WebConsole) HandleWebSocket(proxyUrl string, g *gin.Context) {
 		Conn:    conn,
 		Console: c,
 		Send:    make(chan []byte),
+		Done:    make(chan struct{}),
 		Route:   proxyUrl,
 	}
 
 	c.AddClient(proxyUrl, client)
 
 	go client.Handle()
+
+	// History can interleave with live requests, so the page orders them by id.
+	go func() {
+		for _, message := range c.History(proxyUrl) {
+			if !client.send(message) {
+				return
+			}
+		}
+	}()
 }
 
 // HandleDisconnectClient handles the disconnection request for a SSH client.
@@ -300,6 +366,7 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 			"session":           sshConn.SSHConn.SessionID(),
 			"pubKey":            pubKey,
 			"pubKeyFingerprint": pubKeyFingerprint,
+			"connectedAt":       sshConn.ConnectedAt,
 			"listeners":         listeners,
 			"routeListeners":    routeListeners,
 		}
@@ -353,6 +420,10 @@ func (c *WebConsole) RemoveRoute(route string) {
 
 	c.Clients.Delete(route)
 	c.RouteTokens.Delete(route)
+
+	c.historyLock.Lock()
+	delete(c.history, route)
+	c.historyLock.Unlock()
 }
 
 // AddClient adds a client to the console route.
@@ -392,22 +463,74 @@ func (c *WebConsole) RemoveClient(route string, w *WebClient) {
 	}
 }
 
-// BroadcastRoute sends a message to all clients on a route.
-func (c *WebConsole) BroadcastRoute(route string, message []byte) {
+// BroadcastRoute records a request made to a route and sends it to all of the route's clients.
+func (c *WebConsole) BroadcastRoute(route string, data map[string]any) {
 	clients, ok := c.Clients.Load(route)
 
 	if !ok {
 		return
 	}
 
+	data["id"] = c.requestID.Add(1)
+
+	message, err := json.Marshal(data)
+	if err != nil {
+		log.Println("Unable to marshal console data:", err)
+		return
+	}
+
+	c.addHistory(route, message)
+
 	for _, client := range clients {
-		client.Send <- message
+		client.send(message)
+	}
+}
+
+// addHistory keeps the most recent requests for a route, up to service-console-history.
+func (c *WebConsole) addHistory(route string, message []byte) {
+	limit := viper.GetInt("service-console-history")
+	if limit <= 0 {
+		return
+	}
+
+	c.historyLock.Lock()
+	defer c.historyLock.Unlock()
+
+	if !c.RouteExists(route) {
+		return
+	}
+
+	history := c.history[route]
+	if len(history) >= limit {
+		history = append(history[:0], history[len(history)-limit+1:]...)
+	}
+
+	c.history[route] = append(history, message)
+}
+
+// History returns the recorded requests for a route, oldest first.
+func (c *WebConsole) History(route string) [][]byte {
+	c.historyLock.Lock()
+	defer c.historyLock.Unlock()
+
+	return slices.Clone(c.history[route])
+}
+
+// send passes a message to the client's writer. It returns false if the client has closed.
+func (c *WebClient) send(message []byte) bool {
+	select {
+	case c.Send <- message:
+		return true
+	case <-c.Done:
+		return false
 	}
 }
 
 // Handle is the only place socket reads and writes happen.
 func (c *WebClient) Handle() {
 	defer func() {
+		close(c.Done)
+
 		err := c.Conn.Close()
 		if err != nil {
 			log.Println("Error closing websocket connection:", err)
@@ -416,24 +539,36 @@ func (c *WebClient) Handle() {
 		c.Console.RemoveClient(c.Route, c)
 	}()
 
-	for message := range c.Send {
-		w, err := c.Conn.NextWriter(websocket.TextMessage)
-		if err != nil {
+	// Reading answers close frames and notices when the page goes away.
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+
+		for {
+			if _, _, err := c.Conn.NextReader(); err != nil {
+				return
+			}
+		}
+	}()
+
+	for {
+		select {
+		case message := <-c.Send:
+			w, err := c.Conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+
+			_, err = w.Write(message)
+			if err != nil {
+				return
+			}
+
+			if err := w.Close(); err != nil {
+				return
+			}
+		case <-closed:
 			return
 		}
-
-		_, err = w.Write(message)
-		if err != nil {
-			return
-		}
-
-		if err := w.Close(); err != nil {
-			return
-		}
-	}
-
-	err := c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
-	if err != nil {
-		log.Println("Error writing to websocket:", err)
 	}
 }

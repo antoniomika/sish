@@ -134,3 +134,10 @@
     display: none;
   }
 }
+
+/* The how-it-works diagrams are drawn for a dark page. */
+@media (prefers-color-scheme: light) {
+  img[src*="hiw-"] {
+    filter: invert(1) hue-rotate(180deg);
+  }
+}

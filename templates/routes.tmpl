@@ -1,140 +1,323 @@
 {{ define "routes" }}
-{{ template "header" .}}
-<div class="row">
-    <div class="col table-responsive">
-        <h2>Clients</h2>
-        <table id="client-table" class="table table-hover">
-            <thead class="thead-dark">
-                <tr>
-                    <th scope="col">Client Remote Address</th>
-                    <th scope="col">Username</th>
-                    <th scope="col">SSH Version</th>
-                    <th scope="col">SSH Session ID</th>
-                    <th scope="col">SSH Pubkey Fingerprint</th>
-                    <th scope="col">Listeners</th>
-                    <th scope="col">Disconnect</th>
-                </tr>
-            </thead>
-            <tbody id="client-list" data-bind="foreach: clients">
-                <tr class="client-row" data-bind="click: showRoutes, css: {'table-active' : active}">
-                    <th scope="row" data-bind="text: remoteAddr"></th>
-                    <td data-bind="text: user"></td>
-                    <td data-bind="text: version"></td>
-                    <td data-bind="text: session"></td>
-                    <td data-bind="text: pubKeyFingerprint"></td>
-                    <td data-bind="text: listeners.length"></td>
-                    <td><a style="text-transform: none; color: white;" class="btn btn-danger" data-bind="click: disconnectClient">Disconnect</a></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-<div class="row">
-    <div class="col table-responsive">
-        <h2>Routes</h2>
-        <table id="route-table" class="table table-hover">
-            <thead class="thead-dark">
-                <tr>
-                    <th scope="col">Type</th>
-                    <th scope="col">Address</th>
-                    <th scope="col">File Address</th>
-                    <th scope="col">Client Remote Address</th>
-                    <th scope="col">Disconnect</th>
-                </tr>
-            </thead>
-            <tbody id="route-list" data-bind="foreach: routes">
-                <tr>
-                    <th scope="row" data-bind="text: type"></th>
-                    <td>
-                        <span data-bind="if: type == 'HTTP'"><a style="text-transform: none; color: white;" class="btn btn-primary" data-bind="click: forwardToConsole, text: fullName"></a></span>
-                        <span data-bind="ifnot: type == 'HTTP'"><span data-bind="text: fullName"></span></span>
-                    </td>
-                    <td data-bind="text: data"></td>
-                    <td data-bind="text: clientData.remoteAddr"></td>
-                    <td><a style="text-transform: none; color: white;" class="btn btn-danger" data-bind="click: disconnectRoute">Disconnect</a></td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
+{{ template "header" . }}
+<style>
+    .page { max-width: 1280px; margin: 0 auto; padding: 20px 16px 48px; display: grid; gap: 16px; }
 
-<script type="text/javascript">
-    var clients = {
-        clients: ko.observableArray([]),
-        routes: ko.observableArray([])
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    .stat { padding: var(--grid-height) 14px; border: 1px solid var(--border-strong); background: var(--surface); }
+    .stat .label { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+    .stat .value { font-family: var(--mono); font-size: 26px; font-weight: bold; font-variant-numeric: tabular-nums; }
+
+    .card { border: 1px solid var(--border-strong); background: var(--surface); overflow: hidden; }
+    .card .toolbar { border-bottom: 1px solid var(--border); }
+
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    th { color: var(--faint); font-family: var(--mono); font-size: 11.5px; font-weight: bold; text-transform: uppercase; white-space: nowrap; }
+    td.mono, td .mono { font-family: var(--mono); font-size: 12.5px; }
+    td.actions { text-align: right; white-space: nowrap; }
+    tr.client { cursor: pointer; }
+    tr.client:hover td { background: var(--surface-2); }
+    tr.client[aria-expanded="true"] td { background: var(--selected); }
+    tr.client td:first-child { box-shadow: inset 3px 0 0 transparent; white-space: nowrap; }
+    tr.client[aria-expanded="true"] td:first-child { box-shadow: inset 3px 0 0 var(--hover); }
+    .chev { display: inline-block; width: 1em; color: var(--faint); transition: transform 0.12s; }
+    tr.client[aria-expanded="true"] .chev { transform: rotate(90deg); }
+    .truncate { display: inline-block; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+
+    tr.routes > td { padding: 0; background: var(--bg); }
+    .routes-inner { padding: 12px 16px 16px 40px; display: grid; gap: 10px; }
+    .client-facts { display: flex; flex-wrap: wrap; gap: 6px 20px; color: var(--muted); font-size: 12.5px; }
+    .client-facts .mono { color: var(--text); }
+    .routes-table { border: 1px solid var(--border-strong); background: var(--surface); overflow: hidden; }
+    .routes-table tr:last-child td { border-bottom: 0; }
+    .type-HTTP { color: var(--cyan); }
+    .type-Alias { color: var(--purple); }
+    .type-TCP { color: var(--green); }
+
+    .copy { border: 0; background: none; padding: 0 4px; color: var(--faint); cursor: pointer; font-size: 12px; }
+    .copy:hover { color: var(--hover); }
+
+    .toggle { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; cursor: pointer; user-select: none; }
+
+    @media (max-width: 760px) {
+        .hide-sm { display: none; }
+        .routes-inner { padding: 12px; }
+        .input { width: 100%; }
+    }
+</style>
+
+<header class="topbar">
+    <span class="logo-header">sish</span>
+    <span class="crumb">/</span>
+    <span class="page-title">Admin</span>
+    <span class="page-sub" id="host"></span>
+    <span class="spacer"></span>
+    <span id="status" class="pill">Loading</span>
+</header>
+
+<main class="page">
+    <section class="stats" id="stats" aria-label="Summary"></section>
+
+    <section class="card" aria-label="Clients">
+        <div class="toolbar">
+            <input id="search" class="input" type="search" placeholder="Filter by address, user, key or route" aria-label="Filter clients" autocomplete="off">
+            <span class="spacer"></span>
+            <span id="updated" class="hint faint"></span>
+            <label class="toggle"><input type="checkbox" id="auto" checked> Auto refresh</label>
+            <button type="button" class="btn" id="refresh">Refresh</button>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Remote address</th>
+                        <th>User</th>
+                        <th class="hide-sm">Key fingerprint</th>
+                        <th class="hide-sm">Connected</th>
+                        <th class="hide-sm">Routes</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="clients"></tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<script>
+(() => {
+    const { h, api, token, copyText, toast, setStatus, since } = sish;
+
+    const REFRESH_MS = 5000;
+    const CONFIRM_MS = 3000;
+
+    const state = { clients: [], expanded: new Set(), confirming: null, q: "", loadedAt: null, busy: false };
+
+    const els = {
+        stats: document.getElementById("stats"),
+        clients: document.getElementById("clients"),
+        search: document.getElementById("search"),
+        auto: document.getElementById("auto"),
+        refresh: document.getElementById("refresh"),
+        updated: document.getElementById("updated"),
     };
 
-    var Route = function(clientData, routeType, routeName, routeData, disconnectType) {
-        this.clientData = clientData;
-        this.fullName = routeName;
-        this.data = routeData;
-        this.type = routeType;
-        this.name = routeName;
+    document.getElementById("host").textContent = location.host;
 
-        if (this.name.indexOf("/") !== -1) {
-            var routeParts = this.name.split("/");
-            this.name = routeParts[0];
-            this.pathname = `/${routeParts[1]}`;
+    function routesOf(client) {
+        const listeners = client.routeListeners || {};
+        const routes = [];
+        for (const [name, handlers] of Object.entries(listeners.httpListeners || {})) {
+            routes.push({ type: "HTTP", kind: "httplistener", name, targets: [].concat(handlers) });
+        }
+        for (const [name, target] of Object.entries(listeners.tcpAliases || {})) {
+            routes.push({ type: "Alias", kind: "tcpalias", name, targets: [target] });
+        }
+        for (const [name, target] of Object.entries(listeners.listeners || {})) {
+            routes.push({ type: "TCP", kind: "listener", name, targets: [target] });
+        }
+        return routes;
+    }
+
+    function displayName(route) {
+        // HTTP routes with basic auth are keyed as user:pass@host/path. Keep the password off screen.
+        return route.name.replace(/^([^:@/]*):[^@/]*@/, "$1:•••@");
+    }
+
+    function consoleUrl(route) {
+        const bare = route.name.replace(/^[^@/]*@/, "");
+        const slash = bare.indexOf("/");
+        const host = slash === -1 ? bare : bare.slice(0, slash);
+        const path = slash === -1 ? "" : bare.slice(slash).replace(/\/+$/, "");
+        const port = location.port ? `:${location.port}` : "";
+        return `${location.protocol}//${host}${port}${path}/_sish/console?x-authorization=${encodeURIComponent(token)}`;
+    }
+
+    function matches(client) {
+        if (!state.q) return true;
+        const hay = [client.remoteAddr, client.user, client.pubKeyFingerprint, client.version, ...client.routes.map((r) => `${r.name} ${r.targets.join(" ")}`)]
+            .join(" ")
+            .toLowerCase();
+        return hay.includes(state.q);
+    }
+
+    function confirmButton(key, label, action) {
+        const confirming = state.confirming && state.confirming.key === key;
+        return h("button", {
+            type: "button",
+            class: `btn small danger${confirming ? " confirm" : ""}`,
+            onclick: async (ev) => {
+                ev.stopPropagation();
+                if (!confirming) {
+                    state.confirming = { key, until: Date.now() + CONFIRM_MS };
+                    render();
+                    setTimeout(() => {
+                        if (state.confirming && state.confirming.key === key && Date.now() >= state.confirming.until) {
+                            state.confirming = null;
+                            render();
+                        }
+                    }, CONFIRM_MS + 50);
+                    return;
+                }
+                state.confirming = null;
+                ev.currentTarget.disabled = true;
+                try {
+                    await action();
+                    toast(`${label} done`);
+                } catch (err) {
+                    toast(`${label} failed: ${err.message}`, "error");
+                }
+                load();
+            },
+        }, confirming ? "Confirm" : label);
+    }
+
+    function disconnectClient(client) {
+        return api(`disconnectclient/${encodeURIComponent(client.key)}`, { method: "POST" });
+    }
+
+    async function disconnectRoute(route) {
+        for (const target of route.targets) {
+            await api(`disconnectroute/${route.kind}/${btoa(target)}`, { method: "POST" });
+        }
+    }
+
+    function copyable(text, className) {
+        return [
+            h("span", { class: `${className || ""} truncate mono`, title: text, text }),
+            h("button", {
+                type: "button",
+                class: "copy",
+                title: "Copy",
+                "aria-label": "Copy",
+                onclick: (ev) => {
+                    ev.stopPropagation();
+                    copyText(text).then(() => toast("Copied")).catch(() => toast("Couldn't copy to the clipboard", "error"));
+                },
+            }, "Copy"),
+        ];
+    }
+
+    function routesRow(client) {
+        const routes = client.routes;
+        const facts = h("div", { class: "client-facts" },
+            h("span", {}, "SSH ", h("span", { class: "mono", text: client.version || "unknown" })),
+            client.connectedAt ? h("span", {}, "Since ", h("span", { class: "mono", text: client.connectedAt.toLocaleString() })) : null,
+            client.pubKeyFingerprint ? h("span", {}, "Key ", h("span", { class: "mono", text: client.pubKeyFingerprint })) : null);
+
+        const table = routes.length
+            ? h("div", { class: "routes-table table-wrap" }, h("table", {},
+                h("thead", {}, h("tr", {}, h("th", { text: "Type" }), h("th", { text: "Address" }), h("th", { class: "hide-sm", text: "Forwarded to" }), h("th", {}))),
+                h("tbody", {}, routes.map((route) => h("tr", {},
+                    h("td", {}, h("span", { class: `badge type-${route.type}`, text: route.type })),
+                    h("td", { class: "mono" }, route.type === "HTTP"
+                        ? h("a", { href: consoleUrl(route), title: "Open the request console", text: displayName(route) })
+                        : displayName(route)),
+                    h("td", { class: "mono muted hide-sm", text: route.targets.join(", ") }),
+                    h("td", { class: "actions" }, confirmButton(`route:${client.key}:${route.kind}:${route.name}`, "Disconnect", () => disconnectRoute(route))),
+                )))))
+            : h("div", { class: "muted", text: "No routes bound." });
+
+        return h("tr", { class: "routes" }, h("td", { colspan: "6" }, h("div", { class: "routes-inner" }, facts, table)));
+    }
+
+    function render() {
+        const clients = state.clients;
+        const routes = clients.flatMap((c) => c.routes);
+        const count = (type) => routes.filter((r) => r.type === type).length;
+        const stat = (label, value) => h("div", { class: "stat" }, h("div", { class: "label", text: label }), h("div", { class: "value", text: String(value) }));
+        els.stats.replaceChildren(stat("Clients", clients.length), stat("HTTP routes", count("HTTP")), stat("TCP listeners", count("TCP")), stat("TCP aliases", count("Alias")));
+
+        const visible = clients.filter(matches);
+        if (!visible.length) {
+            els.clients.replaceChildren(h("tr", {}, h("td", { colspan: "6" }, h("div", { class: "empty" },
+                h("strong", { text: clients.length ? "No matching clients" : "No clients connected" }),
+                h("span", { text: clients.length ? "Change the filter to see more." : "Clients show up here once they connect over SSH." })))));
+            return;
         }
 
-        this.disconnectType = disconnectType;
+        const rows = [];
+        for (const client of visible) {
+            const open = state.expanded.has(client.key);
+            rows.push(h("tr", {
+                    class: "client",
+                    "aria-expanded": String(open),
+                    tabindex: "0",
+                    onclick: () => toggle(client.key),
+                    onkeydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); toggle(client.key); } },
+                },
+                h("td", { class: "mono" }, h("span", { class: "chev", "aria-hidden": "true", text: "›" }), " ", client.remoteAddr),
+                h("td", { text: client.user || "" }),
+                h("td", { class: "hide-sm" }, client.pubKeyFingerprint ? copyable(client.pubKeyFingerprint) : h("span", { class: "faint", text: "none" })),
+                h("td", { class: "hide-sm mono", title: client.connectedAt ? client.connectedAt.toLocaleString() : "", text: client.connectedAt ? since(client.connectedAt) : "" }),
+                h("td", { class: "hide-sm" }, client.routes.length ? client.routes.map((r) => h("span", { class: `badge type-${r.type}`, style: "margin-right:4px", text: r.type })) : h("span", { class: "faint", text: "none" })),
+                h("td", { class: "actions" }, confirmButton(`client:${client.key}`, "Disconnect", () => disconnectClient(client))),
+            ));
+            if (open) rows.push(routesRow(client));
+        }
+        els.clients.replaceChildren(...rows);
+    }
 
-        this.disconnectRoute = function() {
-            $.get(window.location.href.replace("console", `api/disconnectroute/${this.disconnectType}/${btoa(this.data)}`), function(data) {
-                window.location.reload();
-            });
-        }.bind(this);
+    function toggle(key) {
+        if (state.expanded.has(key)) state.expanded.delete(key);
+        else state.expanded.add(key);
+        render();
+    }
 
-        this.forwardToConsole = function() {
-            window.location.href = window.location.href.replace(window.location.hostname, this.name).replace(window.location.pathname, `${this.pathname && this.pathname.length > 1 ? this.pathname : ''}${window.location.pathname}`);
-        }.bind(this);
-    };
+    async function load() {
+        if (state.busy) return;
+        state.busy = true;
+        try {
+            const data = await api("clients");
+            state.clients = Object.entries(data.clients || {})
+                .map(([key, c]) => ({
+                    ...c,
+                    key,
+                    connectedAt: c.connectedAt && !c.connectedAt.startsWith("0001") ? new Date(c.connectedAt) : null,
+                    routes: [],
+                }))
+                .map((c) => ({ ...c, routes: routesOf(c) }))
+                .sort((a, b) => (a.connectedAt || 0) - (b.connectedAt || 0));
+            state.loadedAt = new Date();
+            setStatus("live", "Connected");
+        } catch (err) {
+            setStatus("down", `Couldn't load clients: ${err.message}`);
+        } finally {
+            state.busy = false;
+        }
+        render();
+        updated();
+    }
 
-    var Client = function(clientData) {
-        this.data = clientData;
+    function updated() {
+        els.updated.textContent = state.loadedAt ? `Updated ${state.loadedAt.toLocaleTimeString([], { hour12: false })}` : "";
+    }
 
-        this.pubKeyFingerprint = clientData.pubKeyFingerprint;
-        this.remoteAddr = clientData.remoteAddr;
-        this.user =clientData.user;
-        this.version = clientData.version;
-        this.session = clientData.session;
-        this.listeners = clientData.listeners;
-
-        this.active = ko.observable(false);
-
-        this.disconnectClient = function() {
-            $.get(window.location.href.replace("console", `api/disconnectclient/${this.remoteAddr}`), function(data) {
-                window.location.reload();
-            });
-        }.bind(this);
-
-        this.showRoutes = function() {
-            clients.routes.removeAll();
-
-            for (var client of clients.clients()) {
-                client.active(false);
-            }
-
-            this.active(true);
-
-            var routeTypes = {HTTP: ["httpListeners", "httplistener"], TCPAlias: ["tcpAliases", "tcpalias"], NET: ["listeners", "listener"]};
-            for (var routeType in routeTypes) {
-                for (var route in this.data.routeListeners[routeTypes[routeType][0]]) {
-                    clients.routes.push(new Route(this.data, routeType, route, this.data.routeListeners[routeTypes[routeType][0]][route], routeTypes[routeType][1]));
-                }
-            }
-        }.bind(this);
-    };
-
-    $(function() {
-        $.getJSON(window.location.href.replace("console", "api/clients"), function(data) {
-            for (var client in data.clients) {
-                clients.clients.push(new Client(data.clients[client]));
-            }
-
-            ko.applyBindings(clients);
-        });
+    els.search.addEventListener("input", () => {
+        state.q = els.search.value.trim().toLowerCase();
+        render();
     });
+    els.refresh.addEventListener("click", load);
+
+    document.addEventListener("keydown", (ev) => {
+        if (ev.key === "/" && !ev.target.matches("input, select, textarea")) {
+            ev.preventDefault();
+            els.search.focus();
+        }
+    });
+
+    setInterval(() => {
+        // Skip a refresh while a disconnect is waiting for confirmation so the button doesn't reset under the cursor.
+        if (els.auto.checked && document.visibilityState === "visible" && !state.confirming) load();
+    }, REFRESH_MS);
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && els.auto.checked) load();
+    });
+
+    load();
+})();
 </script>
-{{ template "footer" .}}
+{{ template "footer" }}
 {{ end }}

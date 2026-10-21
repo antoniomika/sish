@@ -83,7 +83,7 @@ Flags:
       --idle-connection                                         Enable connection idle timeouts for reads and writes (default true)
       --idle-connection-timeout duration                        Duration to wait for activity before closing a connection for all reads and writes (default 5s)
       --load-templates                                          Load HTML templates. This is required for admin/service consoles (default true)
-      --load-templates-directory string                         The directory and glob parameter for templates that should be loaded (default "templates/*")
+      --load-templates-directory string                         A directory and glob for templates to load instead of the built-in ones (ie templates/*)
       --localhost-as-all                                        Enable forcing localhost to mean all interfaces for tcp listeners (default true)
       --log-to-client                                           Enable logging HTTP and TCP requests to the client
       --log-to-file                                             Enable writing log output to file, specified by log-to-file-path
@@ -113,6 +113,7 @@ Flags:
                                                                 to instead of responding with a 404 (default "https://github.com/antoniomika/sish")
       --rewrite-host-header                                     Force rewrite the host header if the user provides host-header=host.com (default true)
       --service-console                                         Enable the service console for each service and send the info to connected clients
+      --service-console-history int                             The number of recent requests kept per service and sent to a console when it connects. 0 disables history (default 25)
       --service-console-max-content-length int                  The max content length before we stop reading the response body (default -1)
   -m, --service-console-token string                            The token to use for service console access. Auto generated if empty for each connected tunnel
       --sni-load-balancer                                       Enable the SNI load balancer (multiple clients can bind the same SNI domain/port)
