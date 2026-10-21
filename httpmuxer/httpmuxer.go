@@ -29,24 +29,47 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func newEngine() *gin.Engine {
-	r := gin.New()
+// abortedKey is the request context key for the flag recoverAbort sets.
+type abortedKey struct{}
 
-	// Gin's recovery swallows http.ErrAbortHandler as a broken pipe, so
-	// net/http would finish the response as complete. This middleware runs
-	// first and raises the abort after c.Next, so the access log line and
-	// the console broadcast still happen.
-	r.Use(func(c *gin.Context) {
-		c.Next()
+// recoverAbort stops the http.ErrAbortHandler the proxy raises for a cut-off
+// response, so the access log line and the console broadcast still happen,
+// and flags the request for reraiseAbort. Other panics go on to gin.Recovery.
+func recoverAbort(c *gin.Context) {
+	defer func() {
+		rec := recover()
+		if rec == nil {
+			return
+		}
 
-		for _, e := range c.Errors {
-			if errors.Is(e.Err, http.ErrAbortHandler) {
-				panic(http.ErrAbortHandler)
-			}
+		if err, ok := rec.(error); !ok || !errors.Is(err, http.ErrAbortHandler) {
+			panic(rec)
+		}
+
+		if aborted, ok := c.Request.Context().Value(abortedKey{}).(*bool); ok {
+			*aborted = true
+		}
+
+		c.Abort()
+	}()
+
+	c.Next()
+}
+
+// reraiseAbort serves engine and raises http.ErrAbortHandler again for a
+// request recoverAbort flagged, so net/http closes the connection instead of
+// ending the response as complete. Raising it out here lets gin finish the
+// request and return its context to the pool.
+func reraiseAbort(engine http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		aborted := false
+
+		engine.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), abortedKey{}, &aborted)))
+
+		if aborted {
+			panic(http.ErrAbortHandler)
 		}
 	})
-
-	return r
 }
 
 // Start initializes the HTTP service.
@@ -59,7 +82,7 @@ func Start(state *utils.State) {
 	gin.DefaultWriter = state.LogWriter
 	gin.ForceConsoleColor()
 
-	r := newEngine()
+	r := gin.New()
 
 	if viper.GetBool("load-templates") {
 		r.LoadHTMLGlob(viper.GetString("load-templates-directory"))
@@ -104,6 +127,7 @@ func Start(state *utils.State) {
 			param.Latency = param.Latency - param.Latency%time.Second
 		}
 
+		originalHost := param.Keys["originalHost"].(string)
 		originalURI := param.Keys["originalURI"].(string)
 
 		if viper.GetString("admin-console-token") != "" && strings.Contains(originalURI, viper.GetString("admin-console-token")) {
@@ -116,7 +140,7 @@ func Start(state *utils.State) {
 
 		logLine := fmt.Sprintf("%v | %s |%s %3d %s| %13v | %15s |%s %-7s %s %s\n%s",
 			param.TimeStamp.Format(viper.GetString("time-format")),
-			param.Request.Host,
+			originalHost,
 			statusColor, param.StatusCode, resetColor,
 			param.Latency,
 			param.ClientIP,
@@ -166,7 +190,8 @@ func Start(state *utils.State) {
 		}
 
 		return logLine
-	}), gin.Recovery(), func(c *gin.Context) {
+	}), gin.Recovery(), recoverAbort, func(c *gin.Context) {
+		c.Set("originalHost", c.Request.Host)
 		c.Set("originalURI", c.Request.RequestURI)
 		c.Set("originalPath", c.Request.URL.Path)
 		c.Set("originalRawPath", c.Request.URL.RawPath)
@@ -342,6 +367,7 @@ func Start(state *utils.State) {
 			reqBody, err = io.ReadAll(c.Request.Body)
 			if err != nil {
 				log.Println("Error reading request body:", err)
+				c.AbortWithStatus(http.StatusBadRequest)
 				return
 			}
 		}
@@ -352,10 +378,13 @@ func Start(state *utils.State) {
 			reqBody = []byte("{\"_sish_status\": false, \"_sish_message\": \"request body size exceeds limit for service console\"}")
 		}
 
+		c.Request = withPublicHost(c.Request, c.GetString("originalHost"))
 		c.Request = withResponseModifier(c.Request, ResponseModifier(state, hostname, reqBody, c, currentListener))
 
 		gin.WrapH(currentListener.Balancer)(c)
 	})
+
+	handler := reraiseAbort(r)
 
 	var acmeIssuer *certmagic.ACMEIssuer = nil
 
@@ -412,7 +441,7 @@ func Start(state *utils.State) {
 		httpsServer := &http.Server{
 			Addr:      viper.GetString("https-address"),
 			TLSConfig: tlsConfig,
-			Handler:   r,
+			Handler:   handler,
 		}
 
 		go func() {
@@ -489,10 +518,10 @@ func Start(state *utils.State) {
 
 	httpServer := &http.Server{
 		Addr:    viper.GetString("http-address"),
-		Handler: r,
+		Handler: handler,
 	}
 	if acmeIssuer != nil {
-		httpServer.Handler = acmeIssuer.HTTPChallengeHandler(r)
+		httpServer.Handler = acmeIssuer.HTTPChallengeHandler(handler)
 	}
 
 	var httpListener net.Listener

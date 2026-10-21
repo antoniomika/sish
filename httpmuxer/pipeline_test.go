@@ -203,11 +203,28 @@ type writerFunc func(p []byte) (int, error)
 
 func (f writerFunc) Write(p []byte) (int, error) { return f(p) }
 
+// frontRecord is what the request log sees for one request.
+type frontRecord struct {
+	status      int
+	proxySocket string
+
+	// console is the data recorded for the console, or nil if none was.
+	console map[string]any
+}
+
 // newTestFront serves the tunnel through fwd the way Start does, with
-// ResponseModifier recording each response for the console. For each request
-// it sends the recorded console data, or nil if none was recorded, on the
-// returned channel.
-func newTestFront(t *testing.T, fwd *httputil.ReverseProxy, sock string) (*httptest.Server, <-chan map[string]any) {
+// ResponseModifier recording each response. It sends a record for each
+// request on the returned channel, read like gin's logger reads it, once the
+// handlers return.
+func newTestFront(t *testing.T, fwd *httputil.ReverseProxy, sock string) (*httptest.Server, <-chan frontRecord) {
+	t.Helper()
+
+	return newTestFrontWithHostHeader(t, fwd, sock, "")
+}
+
+// newTestFrontWithHostHeader is newTestFront for a tunnel that overrides the
+// Host header sent to it, unless hostHeader is empty.
+func newTestFrontWithHostHeader(t *testing.T, fwd *httputil.ReverseProxy, sock, hostHeader string) (*httptest.Server, <-chan frontRecord) {
 	t.Helper()
 
 	listener := &utils.HTTPHolder{
@@ -216,25 +233,52 @@ func newTestFront(t *testing.T, fwd *httputil.ReverseProxy, sock string) (*httpt
 		Balancer: newTunnelBalancer(t, fwd, sock),
 	}
 
-	recorded := make(chan map[string]any, 64)
+	recorded := make(chan frontRecord, 64)
 
 	gin.SetMode(gin.TestMode)
-	router := newEngine()
-	router.Use(gin.Recovery())
+	router := gin.New()
 	router.Use(func(c *gin.Context) {
-		c.Request = withResponseModifier(c.Request, ResponseModifier(nil, c.Request.Host, nil, c, listener))
-
-		gin.WrapH(listener.Balancer)(c)
+		c.Next()
 
 		data, _ := c.Get("broadcastData")
-		record, _ := data.(map[string]any)
-		recorded <- record
+		console, _ := data.(map[string]any)
+
+		recorded <- frontRecord{
+			status:      c.Writer.Status(),
+			proxySocket: c.GetString("proxySocket"),
+			console:     console,
+		}
+	}, gin.Recovery(), recoverAbort, func(c *gin.Context) {
+		hostname := c.Request.Host
+
+		if hostHeader != "" {
+			c.Request.Host = hostHeader
+		}
+
+		c.Request = withPublicHost(c.Request, hostname)
+		c.Request = withResponseModifier(c.Request, ResponseModifier(nil, hostname, nil, c, listener))
+
+		gin.WrapH(listener.Balancer)(c)
 	})
 
-	front := httptest.NewServer(router)
+	front := httptest.NewServer(reraiseAbort(router))
 	t.Cleanup(front.Close)
 
 	return front, recorded
+}
+
+// nextRecord returns the record of the next request the front finished.
+func nextRecord(t *testing.T, recorded <-chan frontRecord) frontRecord {
+	t.Helper()
+
+	select {
+	case record := <-recorded:
+		return record
+	case <-time.After(5 * time.Second):
+		t.Fatal("expected the request to be logged")
+	}
+
+	return frontRecord{}
 }
 
 // The forwarder must carry both plain HTTP and websocket upgrades to the
@@ -273,22 +317,18 @@ func TestForwarderPipeline(t *testing.T) {
 			t.Errorf("expected the backend to see the original host, got %q", body)
 		}
 
-		select {
-		case data := <-recorded:
-			if data == nil {
-				t.Fatal("expected the response modifier to record the response")
-			}
-
-			consoleBody, err := base64.StdEncoding.DecodeString(data["responseBody"].(string))
-			if err != nil {
-				t.Fatalf("unable to decode recorded response body: %s", err)
-			}
-
-			if !bytes.Equal(consoleBody, body) {
-				t.Errorf("expected the console to record %q, got %q", body, consoleBody)
-			}
-		case <-time.After(5 * time.Second):
+		data := nextRecord(t, recorded).console
+		if data == nil {
 			t.Fatal("expected the response modifier to record the response")
+		}
+
+		consoleBody, err := base64.StdEncoding.DecodeString(data["responseBody"].(string))
+		if err != nil {
+			t.Fatalf("unable to decode recorded response body: %s", err)
+		}
+
+		if !bytes.Equal(consoleBody, body) {
+			t.Errorf("expected the console to record %q, got %q", body, consoleBody)
 		}
 	})
 
@@ -357,79 +397,53 @@ func TestForwarderPipelineConcurrentRequests(t *testing.T) {
 	wg.Wait()
 
 	for range requests {
-		select {
-		case data := <-recorded:
-			if data == nil {
-				t.Error("expected every request to be recorded")
-				continue
-			}
+		data := nextRecord(t, recorded).console
+		if data == nil {
+			t.Error("expected every request to be recorded")
+			continue
+		}
 
-			requestID := data["requestHeaders"].(http.Header).Get("X-Request-Id")
-			responseID := data["responseHeaders"].(http.Header).Get("X-Request-Id")
+		requestID := data["requestHeaders"].(http.Header).Get("X-Request-Id")
+		responseID := data["responseHeaders"].(http.Header).Get("X-Request-Id")
 
-			if requestID != responseID {
-				t.Errorf("request %s was recorded with the response to request %s", requestID, responseID)
-			}
-		case <-time.After(5 * time.Second):
-			t.Fatal("expected a console record for every request")
+		if requestID != responseID {
+			t.Errorf("request %s was recorded with the response to request %s", requestID, responseID)
 		}
 	}
 }
 
-// newStatusFront serves the tunnel through fwd the way Start does and sends
-// the status the request log reports for each request on the returned
-// channel. Like gin's logger, it reads the status once the handlers return.
-func newStatusFront(t *testing.T, fwd *httputil.ReverseProxy, sock string) (*httptest.Server, <-chan int) {
-	t.Helper()
-
-	listener := &utils.HTTPHolder{
-		HTTPUrl:  &url.URL{Scheme: "http", Host: "sub.example.com"},
-		Forward:  fwd,
-		Balancer: newTunnelBalancer(t, fwd, sock),
-	}
-
-	statuses := make(chan int, 64)
-
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	router.Use(func(c *gin.Context) {
-		c.Next()
-		statuses <- c.Writer.Status()
-	}, func(c *gin.Context) {
-		c.Request = withResponseModifier(c.Request, ResponseModifier(nil, c.Request.Host, nil, c, listener))
-
-		gin.WrapH(listener.Balancer)(c)
-	})
-
-	front := httptest.NewServer(router)
-	t.Cleanup(front.Close)
-
-	return front, statuses
-}
-
-// The request log and the console must report the status the client
-// received, also for upgrades, whose response bypasses gin's writer.
+// The request log must report the status the client received, also for
+// upgrades, whose response bypasses gin's writer. It must also name the tunnel
+// that served the request, so log-to-client reaches only that client.
 func TestForwarderPipelineLoggedStatus(t *testing.T) {
 	viper.Reset()
 	t.Cleanup(viper.Reset)
 
 	sock := startTunnelBackend(t)
-	front, statuses := newStatusFront(t, NewForwarder(), sock)
 
-	expectLoggedStatus := func(t *testing.T, expected int) {
-		t.Helper()
+	// Each subtest gets its own front, so a request one leaves unread can't
+	// be mistaken for the next one's.
+	newFront := func(t *testing.T) (*httptest.Server, func(t *testing.T, expected int)) {
+		front, recorded := newTestFront(t, NewForwarder(), sock)
 
-		select {
-		case status := <-statuses:
-			if status != expected {
-				t.Errorf("expected the log to report status %d, got %d", expected, status)
+		return front, func(t *testing.T, expected int) {
+			t.Helper()
+
+			record := nextRecord(t, recorded)
+
+			if record.status != expected {
+				t.Errorf("expected the log to report status %d, got %d", expected, record.status)
 			}
-		case <-time.After(5 * time.Second):
-			t.Fatal("expected the request to be logged")
+
+			if record.proxySocket != sock {
+				t.Errorf("expected the log to name tunnel %q, got %q", sock, record.proxySocket)
+			}
 		}
 	}
 
 	t.Run("http", func(t *testing.T) {
+		front, expectLoggedStatus := newFront(t)
+
 		resp, err := http.Get(front.URL + "/reject")
 		if err != nil {
 			t.Fatalf("request failed: %s", err)
@@ -441,6 +455,8 @@ func TestForwarderPipelineLoggedStatus(t *testing.T) {
 	})
 
 	t.Run("websocket", func(t *testing.T) {
+		front, expectLoggedStatus := newFront(t)
+
 		dialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
 
 		conn, resp, err := dialer.Dial("ws"+strings.TrimPrefix(front.URL, "http"), nil)
@@ -461,6 +477,8 @@ func TestForwarderPipelineLoggedStatus(t *testing.T) {
 	})
 
 	t.Run("rejected websocket", func(t *testing.T) {
+		front, expectLoggedStatus := newFront(t)
+
 		dialer := websocket.Dialer{HandshakeTimeout: 5 * time.Second}
 
 		conn, resp, err := dialer.Dial("ws"+strings.TrimPrefix(front.URL, "http")+"/reject", nil)
@@ -491,13 +509,14 @@ func getThroughFront(ctx context.Context, front *httptest.Server, path string) (
 
 // A tunnel that drops in the middle of a response must not look like a
 // complete response to the browser. With the console on, the proxy reads the
-// whole body itself, so the browser must get an error status instead.
+// whole body itself, so the browser must get a 502 instead. The console still
+// records what the tunnel sent.
 func TestForwarderPipelineDroppedTunnelWithConsole(t *testing.T) {
 	enableConsole(t)
 
 	logs := captureLog(t)
 	sock := startTunnelBackend(t)
-	front, _ := newTestFront(t, NewForwarder(), sock)
+	front, recorded := newTestFront(t, NewForwarder(), sock)
 
 	resp, err := getThroughFront(t.Context(), front, "/drop")
 	if err != nil {
@@ -507,12 +526,31 @@ func TestForwarderPipelineDroppedTunnelWithConsole(t *testing.T) {
 
 	body, _ := io.ReadAll(resp.Body)
 
-	if resp.StatusCode < http.StatusInternalServerError {
-		t.Errorf("expected an error status, got %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Errorf("expected status 502, got %d", resp.StatusCode)
 	}
 
 	if strings.Contains(string(body), "partial") {
 		t.Errorf("expected no part of the cut-off body to be sent, got %q", body)
+	}
+
+	record := nextRecord(t, recorded)
+
+	if record.proxySocket != sock {
+		t.Errorf("expected the log to name tunnel %q, got %q", sock, record.proxySocket)
+	}
+
+	if record.console == nil {
+		t.Fatal("expected the console to record the request")
+	}
+
+	consoleBody, err := base64.StdEncoding.DecodeString(record.console["responseBody"].(string))
+	if err != nil {
+		t.Fatalf("unable to decode recorded response body: %s", err)
+	}
+
+	if string(consoleBody) != "partial" {
+		t.Errorf("expected the console to record the partial body, got %q", consoleBody)
 	}
 
 	front.Close()
@@ -560,7 +598,36 @@ func TestForwarderPipelineDroppedTunnelWithoutBuffering(t *testing.T) {
 			if !strings.Contains(logs(), "sub.example.com") {
 				t.Errorf("expected the log to name the host, got %q", logs())
 			}
+
+			if lines := strings.Count(logs(), "\n"); lines != 1 {
+				t.Errorf("expected one log line for the drop, got %d: %q", lines, logs())
+			}
 		})
+	}
+}
+
+// The drop log must name the host the browser asked for, also when the tunnel
+// overrides the Host header sent to it.
+func TestForwarderPipelineDroppedTunnelLogsPublicHost(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+
+	logs := captureLog(t)
+	sock := startTunnelBackend(t)
+	front, _ := newTestFrontWithHostHeader(t, NewForwarder(), sock, "localhost:3000")
+
+	resp, err := getThroughFront(t.Context(), front, "/drop")
+	if err != nil {
+		t.Fatalf("request failed before the body: %s", err)
+	}
+
+	_, _ = io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+
+	front.Close()
+
+	if !strings.Contains(logs(), "from sub.example.com:") {
+		t.Errorf("expected the log to name sub.example.com, got %q", logs())
 	}
 }
 
@@ -652,12 +719,12 @@ func TestForwarderPipelineClientAbortIsNotLogged(t *testing.T) {
 func TestEngineRecoversOtherPanics(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	engine := newEngine()
-	engine.Use(gin.Recovery())
+	engine := gin.New()
+	engine.Use(gin.Recovery(), recoverAbort)
 	engine.GET("/boom", func(*gin.Context) { panic("boom") })
 
 	recorder := httptest.NewRecorder()
-	engine.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/boom", nil))
+	reraiseAbort(engine).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/boom", nil))
 
 	if recorder.Code != http.StatusInternalServerError {
 		t.Errorf("expected status 500, got %d", recorder.Code)
