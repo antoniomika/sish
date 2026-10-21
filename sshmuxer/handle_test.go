@@ -17,6 +17,31 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// TestMain configures the server once for every test. The connections a test
+// starts outlive it and keep reading this config, so a test that changed it
+// would race with them.
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "sish_keys")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	viper.Set("private-keys-directory", dir)
+	viper.Set("authentication", false)
+	viper.Set("domain", "localhost")
+	viper.Set("bind-random-subdomains", false)
+	viper.Set("cleanup-unauthed", false)
+	viper.Set("ping-client", false)
+	viper.Set("idle-connection", false)
+
+	utils.Setup(io.Discard)
+
+	code := m.Run()
+
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
+}
+
 // syncBuffer is a goroutine-safe buffer for capturing log output written
 // concurrently by the server goroutines under test.
 type syncBuffer struct {
@@ -95,22 +120,6 @@ func countHTTPListeners(state *utils.State) int {
 // the deferred cleanup handler, which -race flags), so a clean run must end
 // with zero HTTP listeners registered.
 func TestForwardingCleanupOnDroppedConn(t *testing.T) {
-	dir, err := os.MkdirTemp("", "sish_keys")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.RemoveAll(dir) }()
-
-	viper.Set("private-keys-directory", dir)
-	viper.Set("authentication", false)
-	viper.Set("domain", "localhost")
-	viper.Set("bind-random-subdomains", false)
-	viper.Set("cleanup-unauthed", false)
-	viper.Set("ping-client", false)
-	viper.Set("idle-connection", false)
-
-	utils.Setup(io.Discard)
-
 	// Silence the per-connection logging this test deliberately generates.
 	log.SetOutput(io.Discard)
 	defer log.SetOutput(os.Stderr)
@@ -166,22 +175,6 @@ func TestForwardingCleanupOnDroppedConn(t *testing.T) {
 // forward emits a "forwarding stopped" log line, mirroring the
 // "forwarding started" log.
 func TestForwardingStoppedIsLogged(t *testing.T) {
-	dir, err := os.MkdirTemp("", "sish_keys")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.RemoveAll(dir) }()
-
-	viper.Set("private-keys-directory", dir)
-	viper.Set("authentication", false)
-	viper.Set("domain", "localhost")
-	viper.Set("bind-random-subdomains", false)
-	viper.Set("cleanup-unauthed", false)
-	viper.Set("ping-client", false)
-	viper.Set("idle-connection", false)
-
-	utils.Setup(io.Discard)
-
 	logBuf := &syncBuffer{}
 	log.SetOutput(logBuf)
 	defer log.SetOutput(os.Stderr)
