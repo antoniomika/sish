@@ -1,13 +1,13 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,6 +38,18 @@ type WebClient struct {
 	Send    chan []byte
 	Done    chan struct{}
 	Route   string
+
+	dropped atomic.Int64
+}
+
+// clientQueue is how many live messages can wait for a slow page before new ones are dropped.
+const clientQueue = 512
+
+// consoleRecord is a request kept for consoles that connect later, with the WebSocket events that followed it.
+type consoleRecord struct {
+	id      uint64
+	message []byte
+	events  [][]byte
 }
 
 // WebConsole represents the data structure that stores web console client information.
@@ -47,7 +59,7 @@ type WebConsole struct {
 	State       *State
 
 	requestID   atomic.Uint64
-	history     map[string][][]byte
+	history     map[string][]*consoleRecord
 	historyLock sync.Mutex
 }
 
@@ -56,7 +68,7 @@ func NewWebConsole() *WebConsole {
 	c := &WebConsole{
 		Clients:     syncmap.New[string, []*WebClient](),
 		RouteTokens: syncmap.New[string, string](),
-		history:     map[string][][]byte{},
+		history:     map[string][]*consoleRecord{},
 	}
 
 	// Ids keep increasing across restarts so a reconnecting page doesn't drop new requests as already seen.
@@ -172,7 +184,7 @@ func (c *WebConsole) HandleWebSocket(proxyUrl string, g *gin.Context) {
 	client := &WebClient{
 		Conn:    conn,
 		Console: c,
-		Send:    make(chan []byte),
+		Send:    make(chan []byte, clientQueue),
 		Done:    make(chan struct{}),
 		Route:   proxyUrl,
 	}
@@ -181,14 +193,14 @@ func (c *WebConsole) HandleWebSocket(proxyUrl string, g *gin.Context) {
 
 	go client.Handle()
 
-	// History can interleave with live requests, so the page orders them by id.
-	go func() {
-		for _, message := range c.History(proxyUrl) {
-			if !client.send(message) {
-				return
-			}
-		}
-	}()
+	// History is one batch so it can't fill the queue that live messages use.
+	// It can interleave with live messages, so the page orders requests by id and events by seq.
+	if history := c.History(proxyUrl); len(history) > 0 {
+		batch := append([]byte("["), bytes.Join(history, []byte(","))...)
+		batch = append(batch, ']')
+
+		go client.send(batch)
+	}
 }
 
 // HandleDisconnectClient handles the disconnection request for a SSH client.
@@ -464,14 +476,41 @@ func (c *WebConsole) RemoveClient(route string, w *WebClient) {
 }
 
 // BroadcastRoute records a request made to a route and sends it to all of the route's clients.
-func (c *WebConsole) BroadcastRoute(route string, data map[string]any) {
+// It returns the request's id, or 0 if the route has no console.
+func (c *WebConsole) BroadcastRoute(route string, data map[string]any) uint64 {
+	clients, ok := c.Clients.Load(route)
+
+	if !ok {
+		return 0
+	}
+
+	id := c.requestID.Add(1)
+	data["id"] = id
+
+	message, err := json.Marshal(data)
+	if err != nil {
+		log.Println("Unable to marshal console data:", err)
+		return 0
+	}
+
+	c.addHistory(route, id, message)
+
+	for _, client := range clients {
+		client.queue(message)
+	}
+
+	return id
+}
+
+// BroadcastEvent sends an event that belongs to an earlier request, such as a WebSocket message, to the route's clients.
+func (c *WebConsole) BroadcastEvent(route string, requestID uint64, data map[string]any) {
 	clients, ok := c.Clients.Load(route)
 
 	if !ok {
 		return
 	}
 
-	data["id"] = c.requestID.Add(1)
+	data["requestId"] = requestID
 
 	message, err := json.Marshal(data)
 	if err != nil {
@@ -479,15 +518,15 @@ func (c *WebConsole) BroadcastRoute(route string, data map[string]any) {
 		return
 	}
 
-	c.addHistory(route, message)
+	c.addEvent(route, requestID, message)
 
 	for _, client := range clients {
-		client.send(message)
+		client.queue(message)
 	}
 }
 
 // addHistory keeps the most recent requests for a route, up to service-console-history.
-func (c *WebConsole) addHistory(route string, message []byte) {
+func (c *WebConsole) addHistory(route string, id uint64, message []byte) {
 	limit := viper.GetInt("service-console-history")
 	if limit <= 0 {
 		return
@@ -505,24 +544,66 @@ func (c *WebConsole) addHistory(route string, message []byte) {
 		history = append(history[:0], history[len(history)-limit+1:]...)
 	}
 
-	c.history[route] = append(history, message)
+	c.history[route] = append(history, &consoleRecord{id: id, message: message})
 }
 
-// History returns the recorded requests for a route, oldest first.
+// addEvent keeps an event with its request, up to service-console-websocket-messages per request.
+func (c *WebConsole) addEvent(route string, requestID uint64, message []byte) {
+	limit := viper.GetInt("service-console-websocket-messages")
+	if limit <= 0 {
+		return
+	}
+
+	c.historyLock.Lock()
+	defer c.historyLock.Unlock()
+
+	history := c.history[route]
+	for i := len(history) - 1; i >= 0; i-- {
+		record := history[i]
+		if record.id != requestID {
+			continue
+		}
+
+		if len(record.events) >= limit {
+			record.events = append(record.events[:0], record.events[len(record.events)-limit+1:]...)
+		}
+
+		record.events = append(record.events, message)
+		return
+	}
+}
+
+// History returns the recorded requests for a route, oldest first, each followed by its events.
 func (c *WebConsole) History(route string) [][]byte {
 	c.historyLock.Lock()
 	defer c.historyLock.Unlock()
 
-	return slices.Clone(c.history[route])
+	var messages [][]byte
+	for _, record := range c.history[route] {
+		messages = append(messages, record.message)
+		messages = append(messages, record.events...)
+	}
+
+	return messages
 }
 
-// send passes a message to the client's writer. It returns false if the client has closed.
+// send passes a message to the client's writer, waiting for room. It returns false if the client has closed.
 func (c *WebClient) send(message []byte) bool {
 	select {
 	case c.Send <- message:
 		return true
 	case <-c.Done:
 		return false
+	}
+}
+
+// queue passes a live message to the client's writer without waiting, so a slow page can't hold up
+// the request or connection that produced it. Messages that don't fit are counted and reported to the page.
+func (c *WebClient) queue(message []byte) {
+	select {
+	case c.Send <- message:
+	default:
+		c.dropped.Add(1)
 	}
 }
 
@@ -566,6 +647,13 @@ func (c *WebClient) Handle() {
 
 			if err := w.Close(); err != nil {
 				return
+			}
+
+			if n := c.dropped.Swap(0); n > 0 {
+				notice := fmt.Appendf(nil, `{"type":"dropped","count":%d}`, n)
+				if err := c.Conn.WriteMessage(websocket.TextMessage, notice); err != nil {
+					return
+				}
 			}
 		case <-closed:
 			return

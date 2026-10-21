@@ -167,15 +167,19 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 		}
 
 		// The body of a 101 is the upgraded connection to the tunnel. Reading it
-		// would block until the connection closes, so leave upgrades unrecorded.
+		// would block until the connection closes, so only WebSockets are recorded, as they pass through.
 		if response.StatusCode == http.StatusSwitchingProtocols {
 			// The proxy writes the 101 to the hijacked conn, past gin's writer.
 			c.Status(http.StatusSwitchingProtocols)
 
+			if consoleEnabled() && viper.GetInt("service-console-websocket-messages") > 0 && strings.EqualFold(response.Header.Get("Upgrade"), "websocket") {
+				inspectWebSocket(state, hostname, reqBody, c, currentListener, response)
+			}
+
 			return nil
 		}
 
-		if viper.GetBool("admin-console") || viper.GetBool("service-console") {
+		if consoleEnabled() {
 			var readErr error
 			var resBody []byte
 
@@ -201,23 +205,9 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 				resBody = []byte("{\"_sish_status\": false, \"_sish_message\": \"response body size exceeds limit for service console\"}")
 			}
 
-			startTime := c.GetTime("startTime")
-
-			requestHeaders := c.Request.Header.Clone()
-			requestHeaders.Add("Host", hostname)
-
-			data := map[string]any{
-				"startTime":          startTime,
-				"startTimePretty":    startTime.Format(viper.GetString("time-format")),
-				"requestIP":          c.ClientIP(),
-				"requestMethod":      c.Request.Method,
-				"requestUrl":         c.Request.URL,
-				"originalRequestURI": c.GetString("originalURI"),
-				"requestHeaders":     requestHeaders,
-				"requestBody":        base64.StdEncoding.EncodeToString(reqBody),
-				"responseHeaders":    response.Header,
-				"responseBody":       base64.StdEncoding.EncodeToString(resBody),
-			}
+			data := requestData(c, hostname, reqBody)
+			data["responseHeaders"] = response.Header
+			data["responseBody"] = base64.StdEncoding.EncodeToString(resBody)
 
 			c.Set("broadcastRoute", currentListener.HTTPUrl.String())
 			c.Set("broadcastData", data)
@@ -228,5 +218,28 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 		}
 
 		return nil
+	}
+}
+
+func consoleEnabled() bool {
+	return viper.GetBool("admin-console") || viper.GetBool("service-console")
+}
+
+// requestData returns the request fields the console shows for c.
+func requestData(c *gin.Context, hostname string, reqBody []byte) map[string]any {
+	startTime := c.GetTime("startTime")
+
+	requestHeaders := c.Request.Header.Clone()
+	requestHeaders.Add("Host", hostname)
+
+	return map[string]any{
+		"startTime":          startTime,
+		"startTimePretty":    startTime.Format(viper.GetString("time-format")),
+		"requestIP":          c.ClientIP(),
+		"requestMethod":      c.Request.Method,
+		"requestUrl":         c.Request.URL,
+		"originalRequestURI": c.GetString("originalURI"),
+		"requestHeaders":     requestHeaders,
+		"requestBody":        base64.StdEncoding.EncodeToString(reqBody),
 	}
 }

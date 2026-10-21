@@ -142,6 +142,7 @@ func init() {
 	rootCmd.PersistentFlags().IntP("log-to-file-max-age", "", 28, "The maxium number of days to store log output in a file")
 	rootCmd.PersistentFlags().IntP("service-console-max-content-length", "", -1, "The max content length before we stop reading the response body")
 	rootCmd.PersistentFlags().IntP("service-console-history", "", 25, "The number of recent requests kept per service and sent to a console when it connects. 0 disables history")
+	rootCmd.PersistentFlags().IntP("service-console-websocket-messages", "", 200, "The number of recent messages kept per WebSocket connection and sent to a console when it connects. 0 turns off WebSocket inspection")
 
 	rootCmd.PersistentFlags().DurationP("debug-interval", "", 2*time.Second, "Duration to wait between each debug loop output if debug is true")
 	rootCmd.PersistentFlags().DurationP("idle-connection-timeout", "", 5*time.Second, "Duration to wait for activity before closing a connection for all reads and writes")

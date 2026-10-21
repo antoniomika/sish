@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -77,5 +78,52 @@ func TestHandleAssetServesSharedFiles(t *testing.T) {
 		if w.Code != want {
 			t.Errorf("%s returned %d, want %d", path, w.Code, want)
 		}
+	}
+}
+
+func TestBroadcastEventKeepsEventsWithTheirRequest(t *testing.T) {
+	viper.Set("service-console-websocket-messages", 2)
+	t.Cleanup(func() { viper.Set("service-console-websocket-messages", 200) })
+
+	c := NewWebConsole()
+	c.AddRoute("http://ws.example.com", "token")
+
+	first := c.BroadcastRoute("http://ws.example.com", map[string]any{"n": "first"})
+	second := c.BroadcastRoute("http://ws.example.com", map[string]any{"n": "second"})
+	for _, n := range []string{"a", "b", "c"} {
+		c.BroadcastEvent("http://ws.example.com", first, map[string]any{"n": n})
+	}
+	c.BroadcastEvent("http://ws.example.com", 12345, map[string]any{"n": "unknown request"})
+
+	var got []string
+	for _, message := range c.History("http://ws.example.com") {
+		var data map[string]any
+		if err := json.Unmarshal(message, &data); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, data["n"].(string))
+
+		if data["n"] == "b" && uint64(data["requestId"].(float64)) != first {
+			t.Errorf("event b has requestId %v, want %d", data["requestId"], first)
+		}
+	}
+
+	if want := "first b c second"; strings.Join(got, " ") != want {
+		t.Errorf("history is %q, want %q", strings.Join(got, " "), want)
+	}
+	if second <= first {
+		t.Errorf("ids %d and %d don't increase", first, second)
+	}
+}
+
+func TestQueueDropsWhenTheClientFallsBehind(t *testing.T) {
+	client := &WebClient{Send: make(chan []byte, 2), Done: make(chan struct{})}
+
+	for range 5 {
+		client.queue([]byte("x"))
+	}
+
+	if len(client.Send) != 2 || client.dropped.Load() != 3 {
+		t.Errorf("queued %d and dropped %d, want 2 and 3", len(client.Send), client.dropped.Load())
 	}
 }

@@ -159,6 +159,7 @@ button, input, select { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .segmented button:last-child { border-right: 0; }
+.segmented button { white-space: nowrap; }
 .segmented button:hover { color: var(--text); }
 .segmented button[aria-pressed="true"] { background: var(--accent); color: var(--bg); font-weight: bold; }
 
@@ -221,4 +222,21 @@ kbd {
   border-radius: 0.3rem;
   font-family: var(--mono);
   font-size: 11px;
+}
+
+.s-1 { color: var(--cyan); }
+.badge.ws { color: var(--purple); margin-right: 6px; }
+
+.live-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 6px;
+  background: var(--green);
+  vertical-align: middle;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot, .pill.live::before { animation: none; }
 }

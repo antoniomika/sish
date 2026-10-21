@@ -81,6 +81,7 @@
         border-bottom: 1px solid var(--border);
     }
     .section-head h3 { margin: 0; font-family: var(--mono); font-size: 13px; font-weight: bold; }
+    .section-head { flex-wrap: wrap; }
     .section-head .spacer { flex: 1; }
     .section-head .info { color: var(--faint); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
@@ -97,6 +98,35 @@
     .form-table { display: grid; grid-template-columns: minmax(6rem, max-content) minmax(0, 1fr); font-family: var(--mono); font-size: 12.5px; }
     .form-table > div { padding: 5px 12px; border-bottom: 1px solid var(--border); word-break: break-all; }
     .form-table .key { color: var(--muted); }
+
+    .messages { max-height: 46vh; overflow-y: auto; }
+    .msg {
+        display: grid;
+        grid-template-columns: 1.2rem 6.8rem 4.2rem 4.4rem minmax(0, 1fr);
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 4px 12px;
+        border: 0;
+        border-bottom: 1px solid var(--border);
+        background: none;
+        color: inherit;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        text-align: left;
+        cursor: pointer;
+    }
+    .msg:hover { background: var(--surface-2); }
+    .msg[aria-selected="true"] { background: var(--selected); box-shadow: inset 3px 0 0 var(--hover); }
+    .msg .dir { font-weight: bold; }
+    .msg .dir.client { color: var(--cyan); }
+    .msg .dir.server { color: var(--green); }
+    .msg .when, .msg .size { color: var(--muted); white-space: nowrap; }
+    .msg .size { text-align: right; }
+    .msg .preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .msg.control .preview { color: var(--muted); }
+    .note { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12.5px; }
+    .note.warn { color: var(--yellow); }
 
     .j-key { color: var(--pink); }
     .j-str { color: var(--yellow); }
@@ -116,6 +146,8 @@
         .detail-pane { overflow: visible; }
         .list-head, .row { grid-template-columns: 4.2rem minmax(0, 1fr) 3.4rem; padding: 0 12px; }
         .list-head .time, .row .time, .list-head .dur, .row .dur { display: none; }
+        .msg { grid-template-columns: 1.2rem 4.2rem 4rem minmax(0, 1fr); }
+        .msg .when { display: none; }
         .detail { padding: 16px 12px 32px; }
         .input { width: 100%; }
     }
@@ -148,6 +180,7 @@
         <button type="button" data-status="3" aria-pressed="false">3xx</button>
         <button type="button" data-status="4" aria-pressed="false">4xx</button>
         <button type="button" data-status="5" aria-pressed="false">5xx</button>
+        <button type="button" data-status="ws" aria-pressed="false">WS</button>
     </div>
     <span class="spacer"></span>
     <span id="count" class="hint"></span>
@@ -175,6 +208,8 @@
     const { h, base, token, copyText, toast, setStatus, bytes } = sish;
 
     const MAX_ENTRIES = 1000;
+    const MAX_WS_MESSAGES = 2000;
+    const MAX_ORPHANS = 2000;
     const MAX_HIGHLIGHT = 256 * 1024;
     const MAX_HEX = 64 * 1024;
     const NOT_CAPTURED = "_sish_message";
@@ -187,6 +222,11 @@
         paused: false,
         selected: null,
         tab: "request",
+        wsTab: "messages",
+        wsDir: "",
+        wsMsg: null,
+        wsView: null,
+        orphans: new Map(),
         modes: {},
         filter: { q: "", method: "", status: "" },
         objectUrls: [],
@@ -227,6 +267,7 @@
             timePretty: raw.startTimePretty || "",
             request: { headers: raw.requestHeaders || {}, b64: raw.requestBody || "" },
             response: { headers: raw.responseHeaders || {}, b64: raw.responseBody || "" },
+            ws: raw.websocket ? { open: true, messages: [], seqs: new Set(), close: null, errors: [], hidden: 0 } : null,
         };
     }
 
@@ -277,7 +318,11 @@
     function matches(entry) {
         const { q, method, status } = state.filter;
         if (method && entry.method !== method) return false;
-        if (status && String(entry.code)[0] !== status) return false;
+        if (status === "ws") {
+            if (!entry.ws) return false;
+        } else if (status && String(entry.code)[0] !== status) {
+            return false;
+        }
         if (q) {
             const hay = `${entry.method} ${entry.uri} ${entry.status} ${entry.ip}`.toLowerCase();
             if (!hay.includes(q)) return false;
@@ -298,12 +343,22 @@
             },
             h("span", { class: "time", title: entry.timePretty, text: time }),
             h("span", {}, h("span", { class: `badge m-${entry.method}`, text: entry.method })),
-            h("span", { class: "path", title: entry.uri, text: entry.uri }),
-            h("span", {}, h("span", { class: `badge s-${String(entry.code)[0]}`, title: entry.status, text: entry.code })),
-            h("span", { class: "dur num", text: entry.duration }),
+            h("span", { class: "path", title: entry.uri }, entry.ws ? h("span", { class: "badge ws", text: "WS" }) : null, entry.uri),
+            entry.statusCell = h("span", {}, h("span", { class: `badge s-${String(entry.code)[0]}`, title: entry.status, text: entry.code })),
+            entry.durCell = h("span", { class: "dur num", text: entry.duration }),
             h("span", { class: "ip", title: entry.ip, text: entry.ip }),
         );
+        updateRowState(entry);
         return entry.row;
+    }
+
+    // WebSocket rows show whether the connection is still open and, once closed, how long it lasted.
+    function updateRowState(entry) {
+        if (!entry.ws || !entry.statusCell) return;
+        const dot = entry.statusCell.querySelector(".live-dot");
+        if (entry.ws.open && !dot) entry.statusCell.append(h("span", { class: "live-dot", title: "Connection open" }));
+        if (!entry.ws.open && dot) dot.remove();
+        entry.durCell.textContent = entry.ws.open ? "open" : (entry.ws.close && entry.ws.close.duration) || "";
     }
 
     let renderQueued = false;
@@ -342,20 +397,119 @@
     }
 
     function receive(raw) {
+        if (Array.isArray(raw)) {
+            for (const item of raw) receive(item);
+            return;
+        }
+        if (raw.type === "dropped") {
+            toast(`${raw.count} live update${raw.count === 1 ? " was" : "s were"} dropped because this page fell behind`, "error");
+            return;
+        }
+        if (typeof raw.type === "string" && raw.type.startsWith("ws-")) {
+            receiveEvent(raw);
+            return;
+        }
+
         if (typeof raw.id !== "number" || raw.id <= state.floor || state.byId.has(raw.id) || state.pending.has(raw.id)) return;
         const entry = toEntry(raw);
         if (state.paused) {
             state.pending.set(entry.id, entry);
             updatePause();
+        } else {
+            insert(entry);
+            rowFor(entry).classList.add("fresh");
+            renderList();
+        }
+
+        // A page that connects mid-connection can get live WebSocket events before the request they belong to.
+        const early = state.orphans.get(entry.id);
+        if (early) {
+            state.orphans.delete(entry.id);
+            for (const ev of early) applyEvent(entry, ev);
+        }
+    }
+
+    function receiveEvent(ev) {
+        if (typeof ev.requestId !== "number" || ev.requestId <= state.floor) return;
+        const entry = state.byId.get(ev.requestId) || state.pending.get(ev.requestId);
+        if (entry) {
+            if (entry.ws) applyEvent(entry, ev);
             return;
         }
-        insert(entry);
-        rowFor(entry).classList.add("fresh");
-        renderList();
+
+        let orphanCount = 0;
+        for (const list of state.orphans.values()) orphanCount += list.length;
+        if (orphanCount >= MAX_ORPHANS) return;
+        if (!state.orphans.has(ev.requestId)) state.orphans.set(ev.requestId, []);
+        state.orphans.get(ev.requestId).push(ev);
+    }
+
+    function applyEvent(entry, ev) {
+        const ws = entry.ws;
+        if (ws.seqs.has(ev.seq)) return;
+        ws.seqs.add(ev.seq);
+
+        if (ev.type === "ws-message") {
+            const msg = {
+                seq: ev.seq,
+                dir: ev.direction,
+                opcode: ev.opcode,
+                time: new Date(ev.time),
+                size: ev.size || 0,
+                b64: ev.payload || "",
+                truncated: !!ev.truncated,
+                compressed: !!ev.compressed,
+                undecoded: !!ev.undecoded,
+                closeCode: ev.closeCode,
+                closeReason: ev.closeReason,
+                headers: { "Content-Type": [ev.opcode === "binary" ? "application/octet-stream" : "text/plain"] },
+            };
+
+            let i = ws.messages.length;
+            while (i > 0 && ws.messages[i - 1].seq > msg.seq) i--;
+            ws.messages.splice(i, 0, msg);
+            if (ws.messages.length > MAX_WS_MESSAGES) {
+                ws.messages.shift();
+                ws.hidden++;
+            }
+
+            scheduleWs(entry, i === ws.messages.length - 1 ? "append" : "full");
+            return;
+        }
+
+        if (ev.type === "ws-close") {
+            ws.open = false;
+            ws.close = ev;
+            updateRowState(entry);
+        } else if (ev.type === "ws-error") {
+            ws.errors.push(ev);
+        }
+
+        scheduleWs(entry, "full");
+    }
+
+    // Detail updates for a busy socket are batched to one per frame. New messages are appended
+    // to the open list so its scroll position and selection survive.
+    let wsQueued = null;
+    function scheduleWs(entry, mode) {
+        if (state.paused || state.selected !== entry) return;
+        if (wsQueued) {
+            if (mode === "full") wsQueued.mode = "full";
+            return;
+        }
+        wsQueued = { entry, mode };
+        requestAnimationFrame(() => {
+            const { entry: target, mode: how } = wsQueued;
+            wsQueued = null;
+            if (state.selected !== target) return;
+            if (how === "append" && state.wsView && state.wsView.entry === target && state.wsTab === "messages") appendMessages(target);
+            else renderDetail();
+        });
     }
 
     function select(entry) {
         if (state.selected && state.selected.row) state.selected.row.setAttribute("aria-selected", "false");
+        if (state.selected !== entry) state.wsMsg = null;
         state.selected = entry;
         if (entry) {
             rowFor(entry).setAttribute("aria-selected", "true");
@@ -464,7 +618,12 @@
         for (const url of state.objectUrls) URL.revokeObjectURL(url);
         state.objectUrls = [];
 
+        state.wsView = null;
         const entry = state.selected;
+        if (entry && entry.ws) {
+            renderWsDetail(entry);
+            return;
+        }
         if (!entry) {
             els.detail.replaceChildren(h("div", { class: "empty" },
                 h("strong", { text: "No request selected" }),
@@ -503,6 +662,202 @@
             h("div", { class: "tabs", role: "tablist" }, tab("request", "Request", entry.request), tab("response", "Response", entry.response)),
             state.tab === "request" ? partView("request", entry.request) : partView("response", entry.response),
         ));
+    }
+
+    const CLOSE_CODES = { 1000: "normal closure", 1001: "going away", 1002: "protocol error", 1003: "unsupported data", 1006: "closed without a close frame", 1007: "invalid data", 1008: "policy violation", 1009: "message too big", 1011: "server error" };
+
+    function clock(date) {
+        return `${date.toLocaleTimeString([], { hour12: false })}.${String(date.getMilliseconds()).padStart(3, "0")}`;
+    }
+
+    function messageBody(msg) {
+        if (!msg.part) msg.part = { headers: msg.headers, b64: msg.b64 };
+        return decodeBody(msg.part);
+    }
+
+    function preview(msg) {
+        if (msg.undecoded) return "compressed, couldn't decode";
+        if (msg.opcode === "close") {
+            const code = msg.closeCode ? `${msg.closeCode} ${CLOSE_CODES[msg.closeCode] || ""}`.trim() : "no code";
+            return msg.closeReason ? `${code}: ${msg.closeReason}` : code;
+        }
+        const body = messageBody(msg);
+        if (!body.size) return msg.opcode === "ping" || msg.opcode === "pong" ? "" : "empty";
+        if (body.text !== null) return body.text.slice(0, 300).replace(/\s+/g, " ");
+        return [...body.raw.subarray(0, 24)].map((b) => b.toString(16).padStart(2, "0")).join(" ");
+    }
+
+    function messageRow(entry, msg) {
+        const control = !["text", "binary"].includes(msg.opcode);
+        const selected = state.wsMsg === msg;
+        return h("button", {
+                type: "button",
+                class: `msg${control ? " control" : ""}`,
+                role: "option",
+                "aria-selected": String(selected),
+                onclick: () => { state.wsMsg = selected ? null : msg; renderDetail(); },
+            },
+            h("span", { class: `dir ${msg.dir}`, title: msg.dir === "client" ? "Sent by the client" : "Sent by the server", text: msg.dir === "client" ? "↑" : "↓" }),
+            h("span", { class: "when", text: clock(msg.time) }),
+            h("span", {}, h("span", { class: "badge", text: msg.opcode })),
+            h("span", { class: "size", text: bytes(msg.size) }),
+            h("span", { class: "preview", text: preview(msg) }));
+    }
+
+    function visibleMessages(entry) {
+        return entry.ws.messages.filter((m) => !state.wsDir || m.dir === state.wsDir);
+    }
+
+    function appendMessages(entry) {
+        const view = state.wsView;
+        const list = view.list;
+        const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+        const fresh = visibleMessages(entry).filter((m) => m.seq > view.lastSeq);
+        if (fresh.length) {
+            if (view.empty) {
+                list.replaceChildren();
+                view.empty = false;
+            }
+            list.append(...fresh.map((m) => messageRow(entry, m)));
+            view.lastSeq = fresh[fresh.length - 1].seq;
+            while (list.children.length > MAX_WS_MESSAGES) list.firstChild.remove();
+        }
+        view.count.textContent = messageCount(entry);
+        view.tabCount.textContent = String(entry.ws.messages.length + entry.ws.hidden);
+        if (nearBottom) list.scrollTop = list.scrollHeight;
+    }
+
+    function messageCount(entry) {
+        const shown = visibleMessages(entry).length;
+        const total = entry.ws.messages.length;
+        return state.wsDir ? `${shown} of ${total}` : `${total} message${total === 1 ? "" : "s"}`;
+    }
+
+    function messagesView(entry, tabCount) {
+        const ws = entry.ws;
+        const visible = visibleMessages(entry);
+
+        const dirButtons = h("div", { class: "segmented", role: "group", "aria-label": "Direction" },
+            [["", "All"], ["client", "↑ Sent"], ["server", "↓ Received"]].map(([dir, label]) => h("button", {
+                type: "button",
+                "aria-pressed": String(state.wsDir === dir),
+                text: label,
+                onclick: () => { state.wsDir = dir; renderDetail(); },
+            })));
+
+        const notes = [];
+        if (ws.hidden) notes.push(h("div", { class: "note", text: `${ws.hidden} older message${ws.hidden === 1 ? " isn't" : "s aren't"} shown.` }));
+        for (const err of ws.errors) {
+            notes.push(h("div", { class: "note warn", text: `Stopped reading messages from the ${err.direction}: ${err.error}. The connection itself is unaffected.` }));
+        }
+
+        const list = h("div", { class: "messages", role: "listbox", "aria-label": "Messages" });
+        const empty = !visible.length;
+        if (empty) {
+            list.append(h("div", { class: "body-note", text: ws.open ? "No messages yet. They show up here as they pass through the tunnel." : "No messages." }));
+        } else {
+            list.append(...visible.map((m) => messageRow(entry, m)));
+        }
+
+        const count = h("span", { class: "info", text: messageCount(entry) });
+        state.wsView = { entry, list, count, tabCount, empty, lastSeq: visible.length ? visible[visible.length - 1].seq : 0 };
+        requestAnimationFrame(() => {
+            if (state.wsMsg === null) list.scrollTop = list.scrollHeight;
+        });
+
+        const out = [h("div", { class: "section" },
+            h("div", { class: "section-head" }, h("h3", { text: "Messages" }), count, h("span", { class: "spacer" }), dirButtons),
+            notes,
+            list)];
+
+        const msg = state.wsMsg;
+        if (msg && ws.messages.includes(msg)) {
+            const body = messageBody(msg);
+            const preferred = state.modes.ws;
+            const mode = body.modes.includes(preferred) ? preferred : body.modes[0];
+            const facts = [
+                msg.dir === "client" ? "sent by the client" : "sent by the server",
+                clock(msg.time),
+                bytes(msg.size),
+                msg.compressed ? "compressed" : "",
+                msg.truncated ? `first ${bytes(body.size)} shown` : "",
+            ].filter(Boolean).join(" · ");
+
+            out.push(h("div", { class: "section" },
+                h("div", { class: "section-head" },
+                    h("h3", { text: `${msg.opcode[0].toUpperCase()}${msg.opcode.slice(1)} message` }),
+                    h("span", { class: "info", text: facts }),
+                    h("span", { class: "spacer" }),
+                    body.modes.length > 1 ? h("div", { class: "segmented", role: "group", "aria-label": "Message view" },
+                        body.modes.map((m) => h("button", {
+                            type: "button",
+                            "aria-pressed": String(m === mode),
+                            text: m[0].toUpperCase() + m.slice(1),
+                            onclick: () => { state.modes.ws = m; renderDetail(); },
+                        }))) : null),
+                msg.undecoded
+                    ? h("div", { class: "body-note", text: "This message is compressed in a way the console couldn't decode." })
+                    : msg.opcode === "close" ? h("div", { class: "body-note", text: preview(msg) }) : bodyView(body, mode)));
+        }
+
+        return out;
+    }
+
+    function renderWsDetail(entry) {
+        const ws = entry.ws;
+        const tabCount = h("span", { class: "count", text: String(ws.messages.length + ws.hidden) });
+
+        const tab = (id, label, extra) => h("button", {
+            type: "button",
+            role: "tab",
+            "aria-selected": String(state.wsTab === id),
+            onclick: () => { state.wsTab = id; renderDetail(); },
+        }, label, extra);
+
+        let closeText = "";
+        if (!ws.open) {
+            const code = ws.messages.slice().reverse().find((m) => m.opcode === "close" && m.closeCode);
+            closeText = `Closed after ${(ws.close && ws.close.duration) || "?"}` + (code ? ` · ${code.closeCode} ${CLOSE_CODES[code.closeCode] || ""}`.trimEnd() : "");
+        }
+
+        let content;
+        if (state.wsTab === "request") content = partView("request", entry.request);
+        else if (state.wsTab === "response") content = partView("response", entry.response);
+        else content = messagesView(entry, tabCount);
+
+        els.detail.replaceChildren(h("div", { class: "detail" },
+            h("div", { class: "detail-title" },
+                h("span", { class: `badge m-${entry.method}`, text: entry.method }),
+                h("span", { class: "detail-url" }, h("span", { class: "badge ws", text: "WS" }), entry.uri),
+                h("span", { class: "badge s-1", text: entry.status })),
+            h("div", { class: "detail-meta" },
+                h("span", { title: "Started", text: entry.timePretty }),
+                h("span", { title: "Time to upgrade", text: `Upgraded in ${entry.duration}` }),
+                h("span", { title: "Client IP", class: "mono", text: entry.ip }),
+                ws.open ? h("span", {}, "Open", h("span", { class: "live-dot" })) : h("span", { text: closeText })),
+            h("div", { class: "detail-actions" },
+                h("button", { type: "button", class: "btn", onclick: () => copyWebsocat(entry) }, "Copy as websocat"),
+                h("button", { type: "button", class: "btn primary", disabled: true, title: "Replaying a WebSocket connection isn't supported" }, "Replay")),
+            h("div", { class: "tabs", role: "tablist" },
+                tab("messages", "Messages", tabCount),
+                tab("request", "Request", null),
+                tab("response", "Response", null)),
+            content,
+        ));
+    }
+
+    function copyWebsocat(entry) {
+        const skip = new Set(["host", "connection", "upgrade", "content-length", "sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions"]);
+        const args = [];
+        for (const key of Object.keys(entry.request.headers).sort()) {
+            if (skip.has(key.toLowerCase())) continue;
+            for (const value of entry.request.headers[key]) args.push(`-H ${quote(`${key}: ${value}`)}`);
+        }
+        const scheme = location.protocol === "https:" ? "wss:" : "ws:";
+        const command = [`websocat ${quote(`${scheme}//${location.host}${entry.uri}`)}`, ...args].join(" \\\n  ");
+        copyText(command)
+            .then(() => toast("Copied websocat command"))
+            .catch(() => toast("Couldn't copy to the clipboard", "error"));
     }
 
     const quote = (s) => `'${s.replace(/'/g, `'\\''`)}'`;
@@ -578,6 +933,7 @@
             for (const entry of state.pending.values()) insert(entry);
             state.pending.clear();
             renderList();
+            if (state.selected && state.selected.ws) renderDetail();
         }
         updatePause();
     });
@@ -588,6 +944,7 @@
         state.entries = [];
         state.byId.clear();
         state.pending.clear();
+        state.orphans.clear();
         select(null);
         updatePause();
         renderList();

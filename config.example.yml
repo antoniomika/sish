@@ -87,6 +87,7 @@ service-console: false
 service-console-history: 25
 service-console-max-content-length: -1
 service-console-token: ""
+service-console-websocket-messages: 200
 sni-load-balancer: false
 sni-proxy: false
 sni-proxy-https: false
