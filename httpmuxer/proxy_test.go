@@ -3,6 +3,7 @@ package httpmuxer
 import (
 	"bytes"
 	"compress/gzip"
+	"compress/zlib"
 	"encoding/base64"
 	"io"
 	"net/http"
@@ -10,8 +11,10 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/andybalholm/brotli"
 	"github.com/antoniomika/sish/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/klauspost/compress/zstd"
 	"github.com/spf13/viper"
 )
 
@@ -142,5 +145,53 @@ func TestResponseModifierPlainBody(t *testing.T) {
 
 	if !bytes.Equal(clientBody, body) {
 		t.Errorf("expected the body for the client to be untouched, got %q", clientBody)
+	}
+}
+
+func TestResponseModifierOtherEncodings(t *testing.T) {
+	plain := []byte("hello sish")
+
+	var br, zl bytes.Buffer
+
+	bw := brotli.NewWriter(&br)
+	_, _ = bw.Write(plain)
+	_ = bw.Close()
+
+	zw := zlib.NewWriter(&zl)
+	_, _ = zw.Write(plain)
+	_ = zw.Close()
+
+	zenc, err := zstd.NewWriter(nil)
+	if err != nil {
+		t.Fatalf("unable to create zstd writer: %s", err)
+	}
+
+	bodies := map[string][]byte{
+		"br":      br.Bytes(),
+		"deflate": zl.Bytes(),
+		"zstd":    zenc.EncodeAll(plain, nil),
+	}
+
+	for encoding, compressed := range bodies {
+		t.Run(encoding, func(t *testing.T) {
+			consoleBody, clientBody := runResponseModifier(t, encoding, compressed)
+
+			if !bytes.Equal(consoleBody, plain) {
+				t.Errorf("expected the decoded body to be recorded, got %q", consoleBody)
+			}
+
+			if !bytes.Equal(clientBody, compressed) {
+				t.Errorf("expected the body for the client to stay compressed, got %q", clientBody)
+			}
+		})
+	}
+}
+
+// A small compressed body can decode to far more than the limit.
+func TestDecodeConsoleBodyLimit(t *testing.T) {
+	compressed := gzipBytes(t, bytes.Repeat([]byte("a"), 4096))
+
+	if got := decodeConsoleBody(compressed, "gzip", 1024); !bytes.Equal(got, notCapturedResponse) {
+		t.Errorf("expected the not captured body, got %d bytes", len(got))
 	}
 }

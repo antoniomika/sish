@@ -2,7 +2,9 @@ package httpmuxer
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
 	"context"
 	"crypto/tls"
 	"encoding/base64"
@@ -16,8 +18,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/andybalholm/brotli"
 	"github.com/antoniomika/sish/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/klauspost/compress/zstd"
 	"github.com/spf13/viper"
 	"github.com/vulcand/oxy/v2/forward"
 	oxyutils "github.com/vulcand/oxy/v2/utils"
@@ -239,45 +243,199 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 		}
 
 		if consoleEnabled() {
-			var readErr error
-			var resBody []byte
-
-			if viper.GetInt64("service-console-max-content-length") == -1 || (viper.GetInt64("service-console-max-content-length") > -1 && response.ContentLength > -1 && response.ContentLength < viper.GetInt64("service-console-max-content-length")) {
-				resBody, readErr = io.ReadAll(response.Body)
-			}
-
-			if resBody != nil {
-				response.Body = io.NopCloser(bytes.NewBuffer(resBody))
-
-				// A 304 can carry Content-Encoding: gzip with no body. Keep the raw bytes if decoding fails.
-				if readErr == nil && response.Header.Get("Content-Encoding") == "gzip" && len(resBody) > 0 {
-					gzReader, err := gzip.NewReader(bytes.NewBuffer(resBody))
-					if err != nil {
-						log.Println("Error reading gzip data:", err)
-					} else if decodedBody, err := io.ReadAll(gzReader); err != nil {
-						log.Println("Error reading gzip data:", err)
-					} else {
-						resBody = decodedBody
-					}
-				}
-			} else {
-				resBody = []byte("{\"_sish_status\": false, \"_sish_message\": \"response body size exceeds limit for service console\"}")
-			}
+			limit := viper.GetInt64("service-console-max-content-length")
+			encoding := response.Header.Get("Content-Encoding")
 
 			data := requestData(c, hostname, reqBody)
 			data["responseHeaders"] = response.Header
-			data["responseBody"] = base64.StdEncoding.EncodeToString(resBody)
+			data["responseBody"] = base64.StdEncoding.EncodeToString(notCapturedResponse)
 
 			c.Set("broadcastRoute", currentListener.HTTPUrl.String())
 			c.Set("broadcastData", data)
 
-			// A cut-off body is still recorded, and the error makes the
-			// forwarder send a 502 in place of the partial response.
-			return readErr
+			switch {
+			case limit == -1 || (limit > -1 && response.ContentLength > -1 && response.ContentLength < limit):
+				resBody, readErr := io.ReadAll(response.Body)
+				response.Body = io.NopCloser(bytes.NewBuffer(resBody))
+
+				data["responseBody"] = base64.StdEncoding.EncodeToString(decodeConsoleBody(resBody, encoding, limit))
+
+				// A cut-off body is still recorded, and the error makes the
+				// forwarder send a 502 in place of the partial response.
+				return readErr
+			case limit > -1 && response.ContentLength == -1:
+				// Waiting for the whole body would hold up streamed responses,
+				// so it is recorded as it passes through to the client.
+				response.Body = &consoleCapture{
+					ReadCloser:  response.Body,
+					encoding:    encoding,
+					limit:       limit,
+					notCaptured: notCapturedResponse,
+					onClose: func(body []byte) {
+						data["responseBody"] = base64.StdEncoding.EncodeToString(body)
+					},
+				}
+			}
 		}
 
 		return nil
 	}
+}
+
+// notCapturedRequest and notCapturedResponse stand in for bodies the console didn't record.
+var (
+	notCapturedRequest  = []byte("{\"_sish_status\": false, \"_sish_message\": \"request body size exceeds limit for service console\"}")
+	notCapturedResponse = []byte("{\"_sish_status\": false, \"_sish_message\": \"response body size exceeds limit for service console\"}")
+)
+
+// readRequestBody prepares the request body of c for the console. It returns
+// the body when it can be read before forwarding. A body of unknown length is
+// recorded as the tunnel reads it instead, and recordRequestBody adds it to
+// the console data once the request is done.
+func readRequestBody(c *gin.Context) ([]byte, error) {
+	limit := viper.GetInt64("service-console-max-content-length")
+
+	switch {
+	case limit == -1 || (limit > -1 && c.Request.ContentLength > -1 && c.Request.ContentLength < limit):
+		reqBody, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(reqBody))
+
+		return reqBody, nil
+	case limit > -1 && c.Request.ContentLength == -1:
+		capture := &consoleCapture{ReadCloser: c.Request.Body, limit: limit, notCaptured: notCapturedRequest}
+		c.Request.Body = capture
+		c.Set("requestCapture", capture)
+
+		return nil, nil
+	}
+
+	return notCapturedRequest, nil
+}
+
+// recordRequestBody adds a request body recorded by readRequestBody to data.
+// The tunnel can still be reading the body after the response arrives, so
+// this waits until the request is logged.
+func recordRequestBody(keys map[any]any, data map[string]any) {
+	if capture, ok := keys["requestCapture"].(*consoleCapture); ok {
+		data["requestBody"] = base64.StdEncoding.EncodeToString(capture.recorded())
+	}
+}
+
+// consoleCapture records up to limit bytes of a body for the console as it is
+// read, so a body of unknown length doesn't have to be held back first.
+type consoleCapture struct {
+	io.ReadCloser
+
+	encoding    string
+	limit       int64
+	notCaptured []byte
+
+	// onClose, if set, is passed the recorded body when the body is closed.
+	onClose func(body []byte)
+
+	mu   sync.Mutex
+	buf  bytes.Buffer
+	over bool
+	once sync.Once
+}
+
+func (b *consoleCapture) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if !b.over {
+		if int64(b.buf.Len()+n) >= b.limit {
+			b.over = true
+			b.buf = bytes.Buffer{}
+		} else {
+			b.buf.Write(p[:n])
+		}
+	}
+
+	return n, err
+}
+
+func (b *consoleCapture) Close() error {
+	if b.onClose != nil {
+		b.once.Do(func() { b.onClose(b.recorded()) })
+	}
+
+	return b.ReadCloser.Close()
+}
+
+// recorded returns the body read so far without its Content-Encoding, or
+// notCaptured if it reached the limit.
+func (b *consoleCapture) recorded() []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.over {
+		return b.notCaptured
+	}
+
+	return decodeConsoleBody(b.buf.Bytes(), b.encoding, b.limit)
+}
+
+// decodeConsoleBody returns body with its Content-Encoding removed so the
+// console can show it. A body that can't be decoded is returned as-is, and
+// one that decodes past limit is replaced by notCapturedResponse.
+func decodeConsoleBody(body []byte, encoding string, limit int64) []byte {
+	// A 304 can carry a Content-Encoding with no body.
+	if len(body) == 0 {
+		return body
+	}
+
+	var reader io.Reader
+	var err error
+
+	switch strings.ToLower(strings.TrimSpace(encoding)) {
+	case "gzip", "x-gzip":
+		reader, err = gzip.NewReader(bytes.NewReader(body))
+	case "deflate":
+		// Deflate should be zlib wrapped, but some servers send it raw.
+		reader, err = zlib.NewReader(bytes.NewReader(body))
+		if err != nil {
+			reader, err = flate.NewReader(bytes.NewReader(body)), nil
+		}
+	case "br":
+		reader = brotli.NewReader(bytes.NewReader(body))
+	case "zstd":
+		var decoder *zstd.Decoder
+		decoder, err = zstd.NewReader(bytes.NewReader(body), zstd.WithDecoderConcurrency(1))
+		if err == nil {
+			defer decoder.Close()
+			reader = decoder
+		}
+	default:
+		return body
+	}
+
+	if err != nil {
+		log.Printf("Error decoding %s console body: %s", encoding, err)
+		return body
+	}
+
+	if limit > -1 {
+		reader = io.LimitReader(reader, limit)
+	}
+
+	decoded, err := io.ReadAll(reader)
+	if err != nil {
+		log.Printf("Error decoding %s console body: %s", encoding, err)
+		return body
+	}
+
+	if limit > -1 && int64(len(decoded)) >= limit {
+		return notCapturedResponse
+	}
+
+	return decoded
 }
 
 func consoleEnabled() bool {

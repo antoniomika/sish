@@ -4,13 +4,11 @@
 package httpmuxer
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"html/template"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -186,6 +184,8 @@ func Start(state *utils.State) {
 			routeData["responseCode"] = param.StatusCode
 			routeData["responseStatus"] = fmt.Sprintf("%d %s", param.StatusCode, http.StatusText(param.StatusCode))
 
+			recordRequestBody(param.Keys, routeData)
+
 			state.Console.BroadcastRoute(routeInfo, routeData)
 		}
 
@@ -360,22 +360,11 @@ func Start(state *utils.State) {
 			return
 		}
 
-		var err error
-		var reqBody []byte
-
-		if viper.GetInt64("service-console-max-content-length") == -1 || (viper.GetInt64("service-console-max-content-length") > -1 && c.Request.ContentLength > -1 && c.Request.ContentLength < viper.GetInt64("service-console-max-content-length")) {
-			reqBody, err = io.ReadAll(c.Request.Body)
-			if err != nil {
-				log.Println("Error reading request body:", err)
-				c.AbortWithStatus(http.StatusBadRequest)
-				return
-			}
-		}
-
-		if reqBody != nil {
-			c.Request.Body = io.NopCloser(bytes.NewBuffer(reqBody))
-		} else {
-			reqBody = []byte("{\"_sish_status\": false, \"_sish_message\": \"request body size exceeds limit for service console\"}")
+		reqBody, err := readRequestBody(c)
+		if err != nil {
+			log.Println("Error reading request body:", err)
+			c.AbortWithStatus(http.StatusBadRequest)
+			return
 		}
 
 		c.Request = withPublicHost(c.Request, c.GetString("originalHost"))

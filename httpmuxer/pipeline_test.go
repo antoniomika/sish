@@ -91,6 +91,11 @@ func startTunnelBackendWithStreamDone(t *testing.T) (string, <-chan struct{}) {
 					_, _ = io.WriteString(w, "second")
 
 					return
+				case "/upload":
+					received, _ := io.ReadAll(r.Body)
+					_, _ = w.Write(received)
+
+					return
 				case "/drop":
 					_, _ = io.WriteString(w, "partial")
 					w.(http.Flusher).Flush()
@@ -243,6 +248,10 @@ func newTestFrontWithHostHeader(t *testing.T, fwd *httputil.ReverseProxy, sock, 
 		data, _ := c.Get("broadcastData")
 		console, _ := data.(map[string]any)
 
+		if console != nil {
+			recordRequestBody(c.Keys, console)
+		}
+
 		recorded <- frontRecord{
 			status:      c.Writer.Status(),
 			proxySocket: c.GetString("proxySocket"),
@@ -255,8 +264,14 @@ func newTestFrontWithHostHeader(t *testing.T, fwd *httputil.ReverseProxy, sock, 
 			c.Request.Host = hostHeader
 		}
 
+		reqBody, err := readRequestBody(c)
+		if err != nil {
+			c.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
+
 		c.Request = withPublicHost(c.Request, hostname)
-		c.Request = withResponseModifier(c.Request, ResponseModifier(nil, hostname, nil, c, listener))
+		c.Request = withResponseModifier(c.Request, ResponseModifier(nil, hostname, reqBody, c, listener))
 
 		gin.WrapH(listener.Balancer)(c)
 	})
@@ -669,6 +684,116 @@ func TestForwarderPipelineCompleteChunkedResponse(t *testing.T) {
 
 			if string(body) != "firstsecond" {
 				t.Errorf("expected firstsecond, got %q", body)
+			}
+		})
+	}
+}
+
+// With a limit set, a response of unknown length is recorded as it streams to
+// the client, unless it reaches the limit.
+func TestForwarderPipelineLimitedConsoleChunkedResponse(t *testing.T) {
+	limits := map[string]struct {
+		limit    int64
+		recorded []byte
+	}{
+		"under-limit": {1024, []byte("firstsecond")},
+		"over-limit":  {8, notCapturedResponse},
+	}
+
+	for name, tc := range limits {
+		t.Run(name, func(t *testing.T) {
+			enableConsole(t)
+			viper.Set("service-console-max-content-length", tc.limit)
+
+			sock := startTunnelBackend(t)
+			front, recorded := newTestFront(t, NewForwarder(), sock)
+
+			resp, err := getThroughFront(t.Context(), front, "/chunked")
+			if err != nil {
+				t.Fatalf("request failed: %s", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("unable to read response body: %s", err)
+			}
+
+			if string(body) != "firstsecond" {
+				t.Errorf("expected firstsecond, got %q", body)
+			}
+
+			record := nextRecord(t, recorded)
+			if record.console == nil {
+				t.Fatal("expected the console to record the request")
+			}
+
+			consoleBody, err := base64.StdEncoding.DecodeString(record.console["responseBody"].(string))
+			if err != nil {
+				t.Fatalf("unable to decode recorded response body: %s", err)
+			}
+
+			if !bytes.Equal(consoleBody, tc.recorded) {
+				t.Errorf("expected the console to record %q, got %q", tc.recorded, consoleBody)
+			}
+		})
+	}
+}
+
+// With a limit set, a request body of unknown length is recorded as the tunnel
+// reads it, unless it reaches the limit.
+func TestForwarderPipelineLimitedConsoleChunkedRequest(t *testing.T) {
+	limits := map[string]struct {
+		limit    int64
+		recorded []byte
+	}{
+		"under-limit": {1024, []byte("uploaded body")},
+		"over-limit":  {8, notCapturedRequest},
+	}
+
+	for name, tc := range limits {
+		t.Run(name, func(t *testing.T) {
+			enableConsole(t)
+			viper.Set("service-console-max-content-length", tc.limit)
+
+			sock := startTunnelBackend(t)
+			front, recorded := newTestFront(t, NewForwarder(), sock)
+
+			req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, front.URL+"/upload", io.NopCloser(strings.NewReader("uploaded body")))
+			if err != nil {
+				t.Fatalf("unable to create request: %s", err)
+			}
+
+			req.Host = "sub.example.com"
+			req.ContentLength = -1
+
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("request failed: %s", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				t.Fatalf("unable to read response body: %s", err)
+			}
+
+			if string(body) != "uploaded body" {
+				t.Errorf("expected the tunnel to receive the whole body, got %q", body)
+			}
+
+			record := nextRecord(t, recorded)
+			if record.console == nil {
+				t.Fatal("expected the console to record the request")
+			}
+
+			consoleBody, err := base64.StdEncoding.DecodeString(record.console["requestBody"].(string))
+			if err != nil {
+				t.Fatalf("unable to decode recorded request body: %s", err)
+			}
+
+			if !bytes.Equal(consoleBody, tc.recorded) {
+				t.Errorf("expected the console to record %q, got %q", tc.recorded, consoleBody)
 			}
 		})
 	}
