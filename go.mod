@@ -9,7 +9,7 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gin-gonic/gin v1.12.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/jpillora/ipfilter v1.5.9
+	github.com/jpillora/ipfilter v1.5.10
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/picosh/pdocs v0.0.0-20260415144233-acc53e8c9998
 	github.com/pires/go-proxyproto v0.15.0
@@ -18,7 +18,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/vulcand/oxy/v2 v2.2.1
-	golang.org/x/crypto v0.57.0
+	golang.org/x/crypto v0.58.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
@@ -74,8 +74,8 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/arch v0.31.0 // indirect
 	golang.org/x/net v0.60.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
