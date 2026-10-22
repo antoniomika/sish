@@ -163,7 +163,7 @@
 </header>
 
 <div class="toolbar">
-    <input id="search" class="input" type="search" placeholder="Filter by path, status or IP" aria-label="Filter requests" autocomplete="off">
+    <input id="search" class="input" type="search" placeholder="Filter by path, status or IP" title="Separate terms with spaces. Quote a phrase to match it exactly. Prefix a term with - to exclude it." aria-label="Filter requests" autocomplete="off">
     <select id="method" class="select" aria-label="Method">
         <option value="">All methods</option>
         <option>GET</option>
@@ -228,7 +228,7 @@
         wsView: null,
         orphans: new Map(),
         modes: {},
-        filter: { q: "", method: "", status: "" },
+        filter: { match: null, method: "", status: "" },
         objectUrls: [],
     };
 
@@ -316,17 +316,14 @@
     }
 
     function matches(entry) {
-        const { q, method, status } = state.filter;
+        const { match, method, status } = state.filter;
         if (method && entry.method !== method) return false;
         if (status === "ws") {
             if (!entry.ws) return false;
         } else if (status && String(entry.code)[0] !== status) {
             return false;
         }
-        if (q) {
-            const hay = `${entry.method} ${entry.uri} ${entry.status} ${entry.ip}`.toLowerCase();
-            if (!hay.includes(q)) return false;
-        }
+        if (match && !match(`${entry.method} ${entry.uri} ${entry.status} ${entry.ip}`)) return false;
         return true;
     }
 
@@ -951,7 +948,7 @@
     });
 
     els.search.addEventListener("input", () => {
-        state.filter.q = els.search.value.trim().toLowerCase();
+        state.filter.match = sish.textFilter(els.search.value);
         renderList();
     });
 

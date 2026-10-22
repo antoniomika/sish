@@ -70,7 +70,7 @@
                 <button type="button" data-view="clients">Clients</button>
                 <button type="button" data-view="routes">Routes</button>
             </div>
-            <input id="search" class="input" type="search" aria-label="Filter" autocomplete="off">
+            <input id="search" class="input" type="search" title="Separate terms with spaces. Quote a phrase to match it exactly. Prefix a term with - to exclude it." aria-label="Filter" autocomplete="off">
             <span class="spacer"></span>
             <span id="updated" class="hint faint"></span>
             <label class="toggle"><input type="checkbox" id="auto" checked> Auto refresh</label>
@@ -118,7 +118,7 @@
 
     const TYPE_ORDER = ["HTTP", "TCP", "Alias"];
 
-    const state = { view: location.hash === "#routes" ? "routes" : "clients", clients: [], expanded: new Set(), confirming: null, q: "", loadedAt: null, busy: false };
+    const state = { view: location.hash === "#routes" ? "routes" : "clients", clients: [], expanded: new Set(), confirming: null, match: null, loadedAt: null, busy: false };
 
     const els = {
         stats: document.getElementById("stats"),
@@ -165,16 +165,13 @@
     }
 
     function matches(client) {
-        if (!state.q) return true;
-        const hay = [client.remoteAddr, client.user, client.pubKeyFingerprint, client.version, ...client.routes.map((r) => `${r.name} ${r.targets.join(" ")}`)]
-            .join(" ")
-            .toLowerCase();
-        return hay.includes(state.q);
+        if (!state.match) return true;
+        return state.match([client.remoteAddr, client.user, client.pubKeyFingerprint, client.version, ...client.routes.map((r) => `${r.name} ${r.targets.join(" ")}`)].join(" "));
     }
 
     function routeMatches(route, client) {
-        if (!state.q) return true;
-        return [route.type, route.name, ...route.targets, client.remoteAddr, client.user].join(" ").toLowerCase().includes(state.q);
+        if (!state.match) return true;
+        return state.match([route.type, route.name, ...route.targets, client.remoteAddr, client.user].join(" "));
     }
 
     function confirmButton(key, label, action) {
@@ -396,7 +393,7 @@
     }
 
     els.search.addEventListener("input", () => {
-        state.q = els.search.value.trim().toLowerCase();
+        state.match = sish.textFilter(els.search.value);
         render();
     });
     els.refresh.addEventListener("click", load);

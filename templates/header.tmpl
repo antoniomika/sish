@@ -91,7 +91,25 @@
                 return `${Math.floor(hrs / 24)}d ${hrs % 24}h`;
             }
 
-            return { token, base, h, api, copyText, toast, setStatus, bytes, since };
+            // Whitespace-separated terms must all appear in the text, and a term prefixed with "-" must not.
+            // A quoted term matches as one phrase; an unclosed quote runs to the end so typing doesn't flicker.
+            // Returns null for an empty query so callers can skip filtering.
+            function textFilter(query) {
+                const include = [];
+                const exclude = [];
+                for (const [, neg, phrase, word] of query.toLowerCase().matchAll(/(-?)(?:"([^"]*)"?|(\S*))/g)) {
+                    const term = phrase ?? word;
+                    if (!term.trim()) continue;
+                    (neg ? exclude : include).push(term);
+                }
+                if (!include.length && !exclude.length) return null;
+                return (text) => {
+                    const hay = text.toLowerCase();
+                    return include.every((t) => hay.includes(t)) && !exclude.some((t) => hay.includes(t));
+                };
+            }
+
+            return { token, base, h, api, copyText, toast, setStatus, bytes, since, textFilter };
         })();
     </script>
 </head>
