@@ -175,6 +175,11 @@ func (c *WebConsole) HandleTemplate(proxyUrl string, hostIsRoot bool, userIsAdmi
 
 // HandleWebSocket handles the websocket route.
 func (c *WebConsole) HandleWebSocket(proxyUrl string, g *gin.Context) {
+	// The upgrade hijacks the connection past gin's writer, which would
+	// otherwise log the 404 gin starts unrouted requests with. A failed
+	// upgrade writes its own status over this one.
+	g.Status(http.StatusSwitchingProtocols)
+
 	conn, err := upgrader.Upgrade(g.Writer, g.Request, nil)
 	if err != nil {
 		log.Println(err)
