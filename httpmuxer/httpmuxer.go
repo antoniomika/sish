@@ -131,15 +131,14 @@ func Start(state *utils.State) {
 		}
 
 		originalHost := param.Keys["originalHost"].(string)
-		originalURI := param.Keys["originalURI"].(string)
 
-		if viper.GetString("admin-console-token") != "" && strings.Contains(originalURI, viper.GetString("admin-console-token")) {
-			originalURI = strings.Replace(originalURI, viper.GetString("admin-console-token"), "[REDACTED]", 1)
+		// Tunnels without a configured service console token get their own.
+		var routeToken string
+		if holder, ok := param.Keys["httpHolder"].(*utils.HTTPHolder); ok && holder != nil {
+			routeToken, _ = state.Console.RouteToken(holder.HTTPUrl.String())
 		}
 
-		if viper.GetString("service-console-token") != "" && strings.Contains(originalURI, viper.GetString("service-console-token")) {
-			originalURI = strings.Replace(originalURI, viper.GetString("service-console-token"), "[REDACTED]", 1)
-		}
+		originalURI := redactURI(param.Keys["originalURI"].(string), viper.GetString("admin-console-token"), viper.GetString("service-console-token"), routeToken)
 
 		logLine := fmt.Sprintf("%v | %s |%s %3d %s| %13v | %15s |%s %-7s %s %s\n%s",
 			param.TimeStamp.Format(viper.GetString("time-format")),
@@ -539,4 +538,36 @@ func Start(state *utils.State) {
 	}()
 
 	log.Fatal(httpServer.Serve(httpListener))
+}
+
+// redactURI hides console tokens in uri before it is logged. Each of tokens is
+// hidden wherever it appears, and so is any x-authorization parameter, which
+// covers tokens that are wrong or belong to a route that has since closed.
+func redactURI(uri string, tokens ...string) string {
+	for _, token := range tokens {
+		if token != "" {
+			uri = strings.ReplaceAll(uri, token, "[REDACTED]")
+		}
+	}
+
+	path, query, ok := strings.Cut(uri, "?")
+	if !ok {
+		return uri
+	}
+
+	params := strings.Split(query, "&")
+	for i, param := range params {
+		key, _, _ := strings.Cut(param, "=")
+
+		name, err := url.QueryUnescape(key)
+		if err != nil {
+			name = key
+		}
+
+		if name == "x-authorization" {
+			params[i] = key + "=[REDACTED]"
+		}
+	}
+
+	return path + "?" + strings.Join(params, "&")
 }
