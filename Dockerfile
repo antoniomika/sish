@@ -10,8 +10,8 @@ RUN apk add --no-cache git ca-certificates
 
 COPY go.* ./
 
-RUN --mount=type=cache,target=/go/pkg/,rw \
-  --mount=type=cache,target=/root/.cache/,rw \
+RUN --mount=type=cache,target=/go/pkg/mod,rw \
+  --mount=type=cache,target=/root/.cache/go-build,rw \
   go mod download
 
 FROM builder AS build-image
@@ -28,8 +28,8 @@ ARG TARGETARCH
 
 ENV GOOS=${TARGETOS} GOARCH=${TARGETARCH}
 
-RUN --mount=type=cache,target=/go/pkg/,rw \
-  --mount=type=cache,target=/root/.cache/,rw \
+RUN --mount=type=cache,target=/go/pkg/mod,rw \
+  --mount=type=cache,target=/root/.cache/go-build,rw \
   go build -o /go/bin/app -ldflags="-s -w -X github.com/${REPOSITORY}/cmd.Version=${VERSION} -X github.com/${REPOSITORY}/cmd.Commit=${COMMIT} -X github.com/${REPOSITORY}/cmd.Date=${DATE}"
 
 ENTRYPOINT ["/go/bin/app"]
