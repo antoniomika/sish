@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/antoniomika/sish/utils"
@@ -22,9 +23,13 @@ import (
 	oxyutils "github.com/vulcand/oxy/v2/utils"
 )
 
+// maxTLSTransports bounds how many server names one forwarder keeps
+// transports for, since a wildcard listener can see any number of hosts.
+const maxTLSTransports = 256
+
 // RoundTripper returns the specific handler for unix connections. This
 // will allow us to use our created sockets cleanly.
-func RoundTripper() *http.Transport {
+func RoundTripper() http.RoundTripper {
 	dialer := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		realAddr, err := base64.StdEncoding.DecodeString(strings.Split(addr, ":")[0])
 		if err != nil {
@@ -40,10 +45,64 @@ func RoundTripper() *http.Transport {
 		InsecureSkipVerify: !viper.GetBool("verify-ssl"),
 	}
 
-	return &http.Transport{
-		DialContext:     dialer,
-		TLSClientConfig: tlsConfig,
+	return &tunnelTransport{
+		base: &http.Transport{
+			DialContext:     dialer,
+			TLSClientConfig: tlsConfig,
+		},
+		byName: map[string]*http.Transport{},
 	}
+}
+
+// tunnelTransport sends HTTPS requests to a tunnel with the request's host as
+// the TLS server name. The URL host is the encoded socket address, which is
+// what the transport would use otherwise. Each name gets its own transport so
+// a connection made for one host is never reused for another.
+type tunnelTransport struct {
+	base *http.Transport
+
+	mu     sync.Mutex
+	byName map[string]*http.Transport
+}
+
+func (t *tunnelTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if req.URL.Scheme != "https" || req.Host == "" {
+		return t.base.RoundTrip(req)
+	}
+
+	return t.forName(tlsServerName(req.Host)).RoundTrip(req)
+}
+
+func (t *tunnelTransport) forName(name string) *http.Transport {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if transport, ok := t.byName[name]; ok {
+		return transport
+	}
+
+	if len(t.byName) >= maxTLSTransports {
+		for evicted, transport := range t.byName {
+			transport.CloseIdleConnections()
+			delete(t.byName, evicted)
+			break
+		}
+	}
+
+	transport := t.base.Clone()
+	transport.TLSClientConfig.ServerName = name
+	t.byName[name] = transport
+
+	return transport
+}
+
+// tlsServerName returns host without its port or IPv6 brackets.
+func tlsServerName(host string) string {
+	if name, _, err := net.SplitHostPort(host); err == nil {
+		return name
+	}
+
+	return strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
 }
 
 // responseModifierKey is the request context key for the response modifier
