@@ -39,6 +39,26 @@ type SSHConnection struct {
 	SetupLock              *sync.Mutex
 	Deadline               *time.Time
 	ConnectedAt            time.Time
+	sessionOnce            sync.Once
+	execOnce               sync.Once
+}
+
+// OpenSession closes Session to mark the connection's session as open. A
+// connection carries one session, so it returns false if one is already open.
+func (s *SSHConnection) OpenSession() bool {
+	opened := false
+	s.sessionOnce.Do(func() {
+		close(s.Session)
+		opened = true
+	})
+	return opened
+}
+
+// ExecReceived closes Exec once the client has sent its shell or exec request.
+func (s *SSHConnection) ExecReceived() {
+	s.execOnce.Do(func() {
+		close(s.Exec)
+	})
 }
 
 // SendMessage sends a console message to the connection. If block is true, it

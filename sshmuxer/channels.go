@@ -124,7 +124,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 					log.Println("Error replying to socket request:", err)
 				}
 
-				close(sshConn.Exec)
+				sshConn.ExecReceived()
 			case "exec":
 				payloadString := string(req.Payload[4:])
 				commandFlags := strings.Fields(payloadString)
@@ -275,7 +275,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 					}
 				}
 
-				close(sshConn.Exec)
+				sshConn.ExecReceived()
 			default:
 				if viper.GetBool("debug") {
 					log.Println("Sub Channel Type", req.Type, req.WantReply, string(req.Payload))

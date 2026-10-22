@@ -87,7 +87,14 @@ func handleChannels(chans <-chan ssh.NewChannel, sshConn *utils.SSHConnection, s
 func handleChannel(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	switch channel := newChannel.ChannelType(); channel {
 	case "session":
-		close(sshConn.Session)
+		if !sshConn.OpenSession() {
+			err := newChannel.Reject(ssh.Prohibited, "only one session is allowed per connection")
+			if err != nil {
+				log.Println("Error rejecting session channel:", err)
+			}
+			return
+		}
+
 		handleSession(newChannel, sshConn, state)
 	case "direct-tcpip":
 		handleAlias(newChannel, sshConn, state)
