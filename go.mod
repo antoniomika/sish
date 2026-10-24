@@ -3,7 +3,7 @@ module github.com/antoniomika/sish
 go 1.27
 
 require (
-	github.com/andybalholm/brotli v1.2.0
+	github.com/andybalholm/brotli v1.2.6
 	github.com/antoniomika/multilistener v0.0.0-20240307222635-f0dc097d8acc
 	github.com/antoniomika/syncmap v1.0.0
 	github.com/caddyserver/certmagic v0.25.6
@@ -11,7 +11,7 @@ require (
 	github.com/gin-gonic/gin v1.12.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jpillora/ipfilter v1.5.10
-	github.com/klauspost/compress v1.19.2
+	github.com/klauspost/compress v1.20.3
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/picosh/pdocs v0.0.0-20260415144233-acc53e8c9998
 	github.com/pires/go-proxyproto v0.15.0
