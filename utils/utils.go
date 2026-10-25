@@ -690,7 +690,8 @@ func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
 		return false, "", nil
 	}
 
-	records, err := net.LookupTXT(fmt.Sprintf("%s.%s", sishDNSPrefix, addr))
+	// The trailing dot keeps the resolver from retrying the name under its search domains.
+	records, err := net.LookupTXT(fmt.Sprintf("%s.%s.", sishDNSPrefix, strings.TrimSuffix(addr, ".")))
 
 	for _, v := range records {
 		match := sshConn.SSHConn.Permissions.Extensions["pubKeyFingerprint"] == v
