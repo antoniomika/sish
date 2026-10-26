@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -427,10 +428,23 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			}
 
 			go func() {
+				// RFC 4254 requires the originator address of a
+				// forwarded-tcpip channel to be an IP address. The requested
+				// bind address can be a hostname (localhost, HTTP subdomain
+				// routes), which strict clients such as golang.org/x/crypto/ssh
+				// reject, breaking every forwarded connection. The real
+				// originator is not recoverable at this layer (the connection
+				// arrives through a unix socket hop), so fall back to the
+				// loopback address: the literal peer here is sish's own
+				// internal dispatcher.
+				originAddr := originalAddress
+				if _, err := netip.ParseAddr(originAddr); err != nil {
+					originAddr = "127.0.0.1"
+				}
 				resp := &forwardedTCPPayload{
 					Addr:       originalAddress,
 					Port:       portChannelForwardReplyPayload.Rport,
-					OriginAddr: originalAddress,
+					OriginAddr: originAddr,
 					OriginPort: portChannelForwardReplyPayload.Rport,
 				}
 
