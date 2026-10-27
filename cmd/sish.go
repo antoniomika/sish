@@ -169,7 +169,7 @@ func initConfig() {
 	if err != nil {
 		slog.Error(
 			"unable to bind pflags",
-			"error", err,
+			"err", err,
 		)
 	}
 
@@ -211,9 +211,12 @@ func initConfig() {
 
 	handlerOptions := &slog.HandlerOptions{AddSource: true, Level: logLevel}
 
-	var handler slog.Handler = slog.NewTextHandler(multiWriter, handlerOptions)
+	var handler slog.Handler
 	if viper.GetString("log-format") == "json" {
+		handlerOptions.ReplaceAttr = utils.ReplaceJSONAttr
 		handler = slog.NewJSONHandler(multiWriter, handlerOptions)
+	} else {
+		handler = slog.NewTextHandler(multiWriter, handlerOptions)
 	}
 
 	logger := slog.New(handler)

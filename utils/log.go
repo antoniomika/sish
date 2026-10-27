@@ -26,6 +26,16 @@ func Fatal(msg string, args ...any) {
 	os.Exit(1)
 }
 
+// ReplaceJSONAttr writes durations as strings in JSON logs, the way the text
+// handler shows them.
+func ReplaceJSONAttr(_ []string, a slog.Attr) slog.Attr {
+	if a.Value.Kind() == slog.KindDuration {
+		return slog.String(a.Key, a.Value.Duration().String())
+	}
+
+	return a
+}
+
 // ZapLogger returns a zap logger that writes to the default slog logger, for
 // libraries such as certmagic that log through zap.
 func ZapLogger() *zap.Logger {
@@ -65,7 +75,12 @@ func (c slogCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 	}
 
 	for _, key := range slices.Sorted(maps.Keys(enc.Fields)) {
-		r.AddAttrs(slog.Any(key, enc.Fields[key]))
+		attrKey := key
+		if key == "error" {
+			attrKey = "err"
+		}
+
+		r.AddAttrs(slog.Any(attrKey, enc.Fields[key]))
 	}
 
 	return slog.Default().Handler().Handle(context.Background(), r)

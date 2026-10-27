@@ -32,7 +32,7 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 		if err != nil {
 			slog.Error(
 				"error initializing http balancer",
-				"error", err,
+				"err", err,
 			)
 			return nil, nil, "", err
 		}
@@ -60,7 +60,7 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 	if err != nil {
 		slog.Error(
 			"error adding server to balancer",
-			"error", err,
+			"err", err,
 		)
 	}
 

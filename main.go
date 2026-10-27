@@ -13,7 +13,7 @@ func main() {
 	if err != nil {
 		slog.Error(
 			"unable to execute root command",
-			"error", err,
+			"err", err,
 		)
 	}
 }

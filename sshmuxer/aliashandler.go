@@ -29,7 +29,7 @@ func handleAliasListener(check *channelForwardMsg, stringPort string, requestMes
 		if err != nil {
 			slog.Error(
 				"error initializing alias balancer",
-				"error", err,
+				"err", err,
 			)
 			return nil, nil, "", "", err
 		}
@@ -53,7 +53,7 @@ func handleAliasListener(check *channelForwardMsg, stringPort string, requestMes
 	if err != nil {
 		slog.Error(
 			"error adding server to balancer",
-			"error", err,
+			"err", err,
 		)
 	}
 

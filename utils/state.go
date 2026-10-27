@@ -41,6 +41,7 @@ type ListenerHolder struct {
 	SSHConn      *SSHConnection
 	OriginalAddr string
 	OriginalPort uint32
+	BoundPort    uint32
 }
 
 // HTTPHolder holds proxy and connection info.
@@ -105,7 +106,7 @@ func (tH *TCPHolder) Handle(state *State) {
 				if err != nil {
 					slog.Error(
 						"unable to close connection",
-						"error", err,
+						"err", err,
 					)
 				}
 
@@ -128,14 +129,14 @@ func (tH *TCPHolder) Handle(state *State) {
 				if tlsHello == nil {
 					slog.Error(
 						"unable to read tls hello",
-						"error", err,
+						"err", err,
 					)
 
 					err := cl.Close()
 					if err != nil {
 						slog.Error(
 							"unable to close connection",
-							"error", err,
+							"err", err,
 						)
 					}
 
@@ -148,14 +149,14 @@ func (tH *TCPHolder) Handle(state *State) {
 				if err != nil {
 					slog.Error(
 						"unable to read buffered data",
-						"error", err,
+						"err", err,
 					)
 
 					err := cl.Close()
 					if err != nil {
 						slog.Error(
 							"unable to close connection",
-							"error", err,
+							"err", err,
 						)
 					}
 
@@ -186,7 +187,7 @@ func (tH *TCPHolder) Handle(state *State) {
 					if err != nil {
 						slog.Error(
 							"unable to close connection",
-							"error", err,
+							"err", err,
 						)
 					}
 
@@ -200,14 +201,14 @@ func (tH *TCPHolder) Handle(state *State) {
 			if err != nil {
 				slog.Error(
 					"unable to load connection location",
-					"error", err,
+					"err", err,
 				)
 
 				err := cl.Close()
 				if err != nil {
 					slog.Error(
 						"unable to close connection",
-						"error", err,
+						"err", err,
 					)
 				}
 
@@ -218,14 +219,14 @@ func (tH *TCPHolder) Handle(state *State) {
 			if err != nil {
 				slog.Error(
 					"unable to decode connection location",
-					"error", err,
+					"err", err,
 				)
 
 				err := cl.Close()
 				if err != nil {
 					slog.Error(
 						"unable to close connection",
-						"error", err,
+						"err", err,
 					)
 				}
 
@@ -257,14 +258,14 @@ func (tH *TCPHolder) Handle(state *State) {
 			if err != nil {
 				slog.Error(
 					"unable to connect to tcp balancer",
-					"error", err,
+					"err", err,
 				)
 
 				err := cl.Close()
 				if err != nil {
 					slog.Error(
 						"unable to close connection",
-						"error", err,
+						"err", err,
 					)
 				}
 
@@ -307,7 +308,7 @@ func (tH *TCPHolder) Handle(state *State) {
 				if err != nil && viper.GetBool("debug") {
 					slog.Error(
 						"error writing to conn",
-						"error", err,
+						"err", err,
 					)
 				}
 			}
@@ -317,14 +318,14 @@ func (tH *TCPHolder) Handle(state *State) {
 				if err != nil {
 					slog.Error(
 						"unable to write to conn",
-						"error", err,
+						"err", err,
 					)
 
 					err := cl.Close()
 					if err != nil {
 						slog.Error(
 							"unable to close connection",
-							"error", err,
+							"err", err,
 						)
 					}
 

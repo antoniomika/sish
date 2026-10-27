@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -857,7 +859,34 @@ func TestEngineRecoversOtherPanics(t *testing.T) {
 		t.Errorf("expected status 500, got %d", recorder.Code)
 	}
 
-	if out := logs(); !strings.Contains(out, `msg="panic recovered" error=boom`) {
+	if out := logs(); !strings.Contains(out, `msg="panic recovered" err=boom`) {
 		t.Errorf("expected the panic to be logged, got:\n%s", out)
+	}
+}
+
+// The request log gets error messages without gin's numbering.
+func TestRecordErrors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var recorded any
+	engine := gin.New()
+	engine.Use(func(c *gin.Context) {
+		c.Next()
+		recorded = c.Keys["requestErrors"]
+	}, recordErrors)
+	engine.GET("/fail", func(c *gin.Context) {
+		_ = c.Error(errors.New("first"))
+		_ = c.AbortWithError(http.StatusNotFound, errors.New("second"))
+	})
+	engine.GET("/ok", func(c *gin.Context) {})
+
+	engine.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/fail", nil))
+	if got, _ := recorded.([]string); !slices.Equal(got, []string{"first", "second"}) {
+		t.Errorf("expected the two error messages, got %#v", recorded)
+	}
+
+	engine.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/ok", nil))
+	if recorded != nil {
+		t.Errorf("expected no errors for a successful request, got %#v", recorded)
 	}
 }

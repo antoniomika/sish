@@ -130,7 +130,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 				if err != nil {
 					slog.Error(
 						"error replying to socket request",
-						"error", err,
+						"err", err,
 					)
 				}
 
@@ -196,7 +196,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						if err != nil {
 							slog.Error(
 								"unable to detect strip path setting",
-								"error", err,
+								"err", err,
 							)
 						} else {
 							sshConn.StripPath = nstripPath
@@ -219,7 +219,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						if err != nil {
 							slog.Error(
 								"unable to detect sni proxy setting",
-								"error", err,
+								"err", err,
 							)
 						}
 
@@ -256,7 +256,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						if err != nil {
 							slog.Error(
 								"unable to detect tcp alias setting",
-								"error", err,
+								"err", err,
 							)
 						}
 
@@ -275,7 +275,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						if err != nil {
 							slog.Error(
 								"unable to detect auto close setting",
-								"error", err,
+								"err", err,
 							)
 						}
 
@@ -297,7 +297,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						if err != nil {
 							slog.Error(
 								"unable to detect force https setting",
-								"error", err,
+								"err", err,
 							)
 						}
 						sshConn.ForceHTTPS = forceHTTPS
@@ -314,7 +314,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						if err != nil {
 							slog.Error(
 								"unable to detect tcp alias setting",
-								"error", err,
+								"err", err,
 							)
 						}
 
@@ -378,7 +378,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						if err != nil {
 							slog.Error(
 								"unable to parse deadline",
-								"error", err,
+								"err", err,
 								"param", param,
 							)
 							break
@@ -399,7 +399,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 				if err != nil {
 					slog.Error(
 						"error replying to socket request",
-						"error", err,
+						"err", err,
 					)
 				}
 
@@ -409,7 +409,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 				if err != nil {
 					slog.Error(
 						"error replying to socket request",
-						"error", err,
+						"err", err,
 					)
 				}
 
@@ -450,7 +450,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 	if err != nil {
 		slog.Error(
 			"error unmarshaling information",
-			"error", err,
+			"err", err,
 		)
 		sshConn.CleanUp(state)
 		return
@@ -503,7 +503,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 	if err != nil {
 		slog.Error(
 			"error selecting next server",
-			"error", err,
+			"err", err,
 		)
 		sshConn.CleanUp(state)
 		return
@@ -513,7 +513,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 	if err != nil {
 		slog.Error(
 			"error decoding server",
-			"error", err,
+			"err", err,
 		)
 		sshConn.CleanUp(state)
 		return
@@ -553,7 +553,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 	if err != nil {
 		slog.Error(
 			"error connecting to alias",
-			"error", err,
+			"err", err,
 		)
 		sshConn.CleanUp(state)
 		return
@@ -568,7 +568,7 @@ func writeToSession(connection ssh.Channel, c string) {
 	if err != nil {
 		slog.Debug(
 			"error trying to write message to session",
-			"error", err,
+			"err", err,
 		)
 	}
 }

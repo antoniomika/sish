@@ -30,7 +30,7 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 		if err != nil {
 			slog.Error(
 				"error closing connection",
-				"error", err,
+				"err", err,
 			)
 		}
 
@@ -74,14 +74,14 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 	if err != nil {
 		slog.Error(
 			"unable to load connection location",
-			"error", err,
+			"err", err,
 		)
 
 		err := teeConn.Close()
 		if err != nil {
 			slog.Error(
 				"error closing teeConn",
-				"error", err,
+				"err", err,
 			)
 		}
 
@@ -92,14 +92,14 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 	if err != nil {
 		slog.Error(
 			"unable to decode connection location",
-			"error", err,
+			"err", err,
 		)
 
 		err := teeConn.Close()
 		if err != nil {
 			slog.Error(
 				"error closing teeConn",
-				"error", err,
+				"err", err,
 			)
 		}
 
@@ -131,14 +131,14 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 	if err != nil {
 		slog.Error(
 			"error connecting to tcp balancer",
-			"error", err,
+			"err", err,
 		)
 
 		err := teeConn.Close()
 		if err != nil {
 			slog.Error(
 				"error closing teeConn",
-				"error", err,
+				"err", err,
 			)
 		}
 

@@ -108,7 +108,7 @@ func (s *SSHConnection) FormatLog(level slog.Level, text, msg string, args ...an
 
 	r := slog.NewRecord(time.Now(), level, msg, 0)
 	r.Add(args...)
-	_ = slog.NewJSONHandler(&buf, nil).Handle(context.Background(), r)
+	_ = slog.NewJSONHandler(&buf, &slog.HandlerOptions{ReplaceAttr: ReplaceJSONAttr}).Handle(context.Background(), r)
 
 	return strings.TrimSuffix(buf.String(), "\n") + "\r\n"
 }
@@ -149,10 +149,10 @@ func (s *SSHConnection) CleanUp(state *State) {
 		close(s.Close)
 
 		err := s.SSHConn.Close()
-		if err != nil {
+		if err != nil && !errors.Is(err, net.ErrClosed) {
 			slog.Error(
 				"error closing SSH connection",
-				"error", err,
+				"err", err,
 			)
 		}
 
@@ -303,7 +303,7 @@ func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 			slog.Error(
 				"error closing reader",
-				"error", err,
+				"err", err,
 			)
 		}
 
@@ -311,7 +311,7 @@ func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 			slog.Error(
 				"error closing writer",
-				"error", err,
+				"err", err,
 			)
 		}
 	}
@@ -331,7 +331,7 @@ func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 		if err != nil {
 			slog.Debug(
 				"error copying to reader",
-				"error", err,
+				"err", err,
 			)
 		}
 
@@ -343,7 +343,7 @@ func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 		if err != nil {
 			slog.Debug(
 				"error copying to writer",
-				"error", err,
+				"err", err,
 			)
 		}
 

@@ -181,7 +181,7 @@ func (c *WebConsole) HandleWebSocket(proxyUrl string, g *gin.Context) {
 	if err != nil {
 		slog.Error(
 			"error handling websockets",
-			"error", err,
+			"err", err,
 		)
 		return
 	}
@@ -238,7 +238,7 @@ func (c *WebConsole) HandleDisconnectRoute(proxyUrl string, g *gin.Context) {
 	if err != nil {
 		slog.Error(
 			"error decoding route name",
-			"error", err,
+			"err", err,
 		)
 
 		_ = g.AbortWithError(http.StatusInternalServerError, err)
@@ -256,7 +256,7 @@ func (c *WebConsole) HandleDisconnectRoute(proxyUrl string, g *gin.Context) {
 			if err != nil {
 				slog.Error(
 					"error closing listener",
-					"error", err,
+					"err", err,
 				)
 			}
 		}
@@ -298,7 +298,7 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 					if err != nil {
 						slog.Error(
 							"error decoding server host",
-							"error", err,
+							"err", err,
 						)
 						continue
 					}
@@ -328,7 +328,7 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 						if err != nil {
 							slog.Error(
 								"error decoding server host",
-								"error", err,
+								"err", err,
 							)
 							continue
 						}
@@ -442,7 +442,7 @@ func (c *WebConsole) RemoveRoute(route string) {
 		if err != nil {
 			slog.Error(
 				"error closing websocket connection",
-				"error", err,
+				"err", err,
 			)
 		}
 	}
@@ -508,7 +508,7 @@ func (c *WebConsole) BroadcastRoute(route string, data map[string]any) uint64 {
 	if err != nil {
 		slog.Error(
 			"unable to marshal console data",
-			"error", err,
+			"err", err,
 		)
 		return 0
 	}
@@ -536,7 +536,7 @@ func (c *WebConsole) BroadcastEvent(route string, requestID uint64, data map[str
 	if err != nil {
 		slog.Error(
 			"unable to marshal console data",
-			"error", err,
+			"err", err,
 		)
 		return
 	}
@@ -639,7 +639,7 @@ func (c *WebClient) Handle() {
 		if err != nil {
 			slog.Error(
 				"error closing websocket connection",
-				"error", err,
+				"err", err,
 			)
 		}
 

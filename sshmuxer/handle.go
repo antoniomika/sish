@@ -35,7 +35,7 @@ func handleRequest(newRequest *ssh.Request, sshConn *utils.SSHConnection, state 
 		if err != nil {
 			slog.Error(
 				"error replying to socket request",
-				"error", err,
+				"err", err,
 			)
 		}
 	default:
@@ -43,7 +43,7 @@ func handleRequest(newRequest *ssh.Request, sshConn *utils.SSHConnection, state 
 		if err != nil {
 			slog.Error(
 				"error replying to socket request",
-				"error", err,
+				"err", err,
 			)
 		}
 	}
@@ -73,12 +73,10 @@ func checkSession(_ *ssh.Request, sshConn *utils.SSHConnection, state *utils.Sta
 		}()
 
 		err := sshConn.SSHConn.Wait()
-		if err != nil {
-			slog.Error(
-				"waited for ssh conn without session",
-				"error", err,
-			)
-		}
+		sshConn.Logger().Debug(
+			"connection without session closed",
+			"err", err,
+		)
 		sshConn.CleanUp(state)
 		return
 	}
@@ -104,7 +102,7 @@ func handleChannel(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 			if err != nil {
 				slog.Error(
 					"error rejecting session channel",
-					"error", err,
+					"err", err,
 				)
 			}
 			return
@@ -118,7 +116,7 @@ func handleChannel(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 		if err != nil {
 			slog.Error(
 				"error rejecting socket channel",
-				"error", err,
+				"err", err,
 			)
 		}
 	}

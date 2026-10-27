@@ -34,7 +34,7 @@ func Start() {
 		utils.Fatal(
 			"unable to parse address",
 			"address", viper.GetString("http-address"),
-			"error", err,
+			"err", err,
 		)
 	}
 
@@ -43,7 +43,7 @@ func Start() {
 		utils.Fatal(
 			"unable to parse address",
 			"address", viper.GetString("https-address"),
-			"error", err,
+			"err", err,
 		)
 	}
 
@@ -52,7 +52,7 @@ func Start() {
 		utils.Fatal(
 			"unable to parse address",
 			"address", viper.GetString("ssh-address"),
-			"error", err,
+			"err", err,
 		)
 	}
 
@@ -61,7 +61,7 @@ func Start() {
 		utils.Fatal(
 			"unable to parse port",
 			"port", httpPortString,
-			"error", err,
+			"err", err,
 		)
 	}
 
@@ -70,7 +70,7 @@ func Start() {
 		utils.Fatal(
 			"unable to parse port",
 			"port", httpsPortString,
-			"error", err,
+			"err", err,
 		)
 	}
 
@@ -79,7 +79,7 @@ func Start() {
 		utils.Fatal(
 			"unable to parse port",
 			"port", sshPortString,
-			"error", err,
+			"err", err,
 		)
 	}
 
@@ -201,7 +201,7 @@ func Start() {
 		utils.Fatal(
 			"unable to listen",
 			"address", viper.GetString("ssh-address"),
-			"error", err,
+			"err", err,
 		)
 	}
 
@@ -223,7 +223,7 @@ func Start() {
 		if err != nil {
 			slog.Error(
 				"error closing listener",
-				"error", err,
+				"err", err,
 			)
 		}
 
@@ -243,7 +243,7 @@ func Start() {
 		if err != nil {
 			slog.Error(
 				"error accepting from listener",
-				"error", err,
+				"err", err,
 			)
 			continue
 		}
@@ -264,7 +264,7 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 		if err != nil {
 			slog.Error(
 				"error closing new conn",
-				"error", err,
+				"err", err,
 			)
 		}
 
@@ -294,7 +294,7 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 				if err != nil {
 					slog.Error(
 						"error closing unauthenticated connection",
-						"error", err,
+						"err", err,
 					)
 				}
 			}
@@ -316,7 +316,7 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 		if err != nil {
 			slog.Error(
 				"error closing connection",
-				"error", err,
+				"err", err,
 			)
 		}
 		return
@@ -350,7 +350,7 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 		if err != nil {
 			slog.Debug(
 				"closing SSH connection",
-				"error", err,
+				"err", err,
 			)
 		}
 
@@ -408,7 +408,7 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 				if err != nil {
 					slog.Error(
 						"unable to set deadline",
-						"error", err,
+						"err", err,
 					)
 				}
 
@@ -418,7 +418,7 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 					if err != nil {
 						slog.Error(
 							"error retrieving keepalive response",
-							"error", err,
+							"err", err,
 						)
 						return
 					}

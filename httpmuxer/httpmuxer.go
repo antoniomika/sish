@@ -58,11 +58,21 @@ func recoverAbort(c *gin.Context) {
 	c.Next()
 }
 
+// recordErrors keeps the request's error messages, without gin's numbering, for
+// the request log.
+func recordErrors(c *gin.Context) {
+	c.Next()
+
+	if len(c.Errors) > 0 {
+		c.Set("requestErrors", c.Errors.Errors())
+	}
+}
+
 // recoverPanic logs a panic from a request handler and fails the request.
 func recoverPanic(c *gin.Context, rec any) {
 	slog.Error(
 		"panic recovered",
-		"error", rec,
+		"err", rec,
 		"stack", string(debug.Stack()),
 	)
 
@@ -183,10 +193,13 @@ func Start(state *utils.State) {
 			"url", originalHost + originalURI,
 			"latency", param.Latency,
 			"clientIP", param.ClientIP,
-			"error", strings.TrimSpace(param.ErrorMessage),
 			"tunnelType", "http",
 			"tunnelId", tunnelId,
 			"connectionType", connectionType,
+		}
+
+		if requestErrors, ok := param.Keys["requestErrors"].([]string); ok {
+			requestAttrs = append(requestAttrs, "err", strings.Join(requestErrors, "; "))
 		}
 
 		slog.Info("http request", requestAttrs...)
@@ -229,7 +242,7 @@ func Start(state *utils.State) {
 		}
 
 		return logLine
-	}), gin.CustomRecoveryWithWriter(nil, recoverPanic), recoverAbort, func(c *gin.Context) {
+	}), recordErrors, gin.CustomRecoveryWithWriter(nil, recoverPanic), recoverAbort, func(c *gin.Context) {
 		c.Set("originalHost", c.Request.Host)
 		c.Set("originalURI", c.Request.RequestURI)
 		c.Set("originalPath", c.Request.URL.Path)
@@ -406,7 +419,7 @@ func Start(state *utils.State) {
 			if err != nil {
 				slog.Error(
 					"error reading request body",
-					"error", err,
+					"err", err,
 				)
 				c.AbortWithStatus(http.StatusBadRequest)
 				return
@@ -490,7 +503,7 @@ func Start(state *utils.State) {
 				utils.Fatal(
 					"unable to listen",
 					"address", httpsServer.Addr,
-					"error", err,
+					"err", err,
 				)
 			}
 
@@ -522,7 +535,7 @@ func Start(state *utils.State) {
 				if err != nil {
 					utils.Fatal(
 						"unable to initialize tcp balancer",
-						"error", err,
+						"err", err,
 					)
 				}
 
@@ -533,7 +546,7 @@ func Start(state *utils.State) {
 				if err != nil {
 					utils.Fatal(
 						"unable to add empty balancer server",
-						"error", err,
+						"err", err,
 					)
 				}
 
@@ -558,7 +571,7 @@ func Start(state *utils.State) {
 				if err != nil {
 					slog.Error(
 						"error closing https listener",
-						"error", err,
+						"err", err,
 					)
 				}
 			}()
@@ -566,7 +579,7 @@ func Start(state *utils.State) {
 			err = httpsServer.ServeTLS(httpsListener, "", "")
 			utils.Fatal(
 				"https server stopped",
-				"error", err,
+				"err", err,
 			)
 		}()
 	}
@@ -583,7 +596,7 @@ func Start(state *utils.State) {
 		utils.Fatal(
 			"unable to listen",
 			"address", httpServer.Addr,
-			"error", err,
+			"err", err,
 		)
 	}
 
@@ -603,7 +616,7 @@ func Start(state *utils.State) {
 		if err != nil {
 			slog.Error(
 				"error closing http listener",
-				"error", err,
+				"err", err,
 			)
 		}
 	}()
@@ -611,7 +624,7 @@ func Start(state *utils.State) {
 	err = httpServer.Serve(httpListener)
 	utils.Fatal(
 		"http server stopped",
-		"error", err,
+		"err", err,
 	)
 }
 

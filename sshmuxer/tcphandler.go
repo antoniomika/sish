@@ -38,7 +38,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		if err != nil {
 			slog.Error(
 				"error listening on address",
-				"error", err,
+				"err", err,
 			)
 			return nil, nil, "", nil, "", "", err
 		}
@@ -92,7 +92,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		if err != nil {
 			slog.Error(
 				"error initializing tcp balancer",
-				"error", err,
+				"err", err,
 			)
 			return nil, nil, "", nil, "", "", err
 		}
@@ -112,7 +112,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 	if err != nil {
 		slog.Error(
 			"unable to add server to balancer",
-			"error", err,
+			"err", err,
 		)
 	}
 

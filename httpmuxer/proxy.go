@@ -40,7 +40,7 @@ func RoundTripper() http.RoundTripper {
 		if err != nil {
 			slog.Error(
 				"unable to parse socket",
-				"error", err,
+				"err", err,
 			)
 		}
 
@@ -168,7 +168,7 @@ func (b *loggingBody) Read(p []byte) (int, error) {
 		slog.Error(
 			"error reading response body",
 			"host", b.host,
-			"error", err,
+			"err", err,
 		)
 	}
 
@@ -194,7 +194,7 @@ func NewForwarder() *httputil.ReverseProxy {
 			slog.Error(
 				"error switching protocols",
 				"host", publicHost(req),
-				"error", err,
+				"err", err,
 			)
 			return
 		}
@@ -247,7 +247,7 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 			if err != nil {
 				slog.Error(
 					"error loading proxy info from request",
-					"error", err,
+					"err", err,
 				)
 			}
 
@@ -445,7 +445,7 @@ func decodeConsoleBody(body []byte, encoding string, limit int64) []byte {
 		slog.Error(
 			"error decoding console body",
 			"encoding", encoding,
-			"error", err,
+			"err", err,
 		)
 		return body
 	}
@@ -459,7 +459,7 @@ func decodeConsoleBody(body []byte, encoding string, limit int64) []byte {
 		slog.Error(
 			"error decoding console body",
 			"encoding", encoding,
-			"error", err,
+			"err", err,
 		)
 		return body
 	}

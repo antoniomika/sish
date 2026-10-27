@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -33,7 +34,7 @@ func TestZapLoggerWritesToSlog(t *testing.T) {
 		"logger":      "certmagic",
 		"issuer":      "acme",
 		"identifiers": []any{"example.com"},
-		"error":       "rate limited",
+		"err":         "rate limited",
 	}
 	for key, value := range expected {
 		got, _ := json.Marshal(record[key])
@@ -57,7 +58,7 @@ func TestFormatLog(t *testing.T) {
 		t.Errorf("expected a message without msg to be dropped, got %q", got)
 	}
 
-	got := conn.FormatLog(slog.LevelWarn, "rich text\r\n", "port unavailable", "port", 80)
+	got := conn.FormatLog(slog.LevelWarn, "rich text\r\n", "port unavailable", "port", 80, "latency", 1500*time.Millisecond)
 	if !strings.HasSuffix(got, "}\r\n") || strings.Count(got, "\n") != 1 {
 		t.Fatalf("expected one JSON line ending in CRLF, got %q", got)
 	}
@@ -67,7 +68,7 @@ func TestFormatLog(t *testing.T) {
 		t.Fatalf("expected a JSON record, got %q: %v", got, err)
 	}
 
-	if record["level"] != "WARN" || record["msg"] != "port unavailable" || record["port"] != float64(80) {
+	if record["level"] != "WARN" || record["msg"] != "port unavailable" || record["port"] != float64(80) || record["latency"] != "1.5s" {
 		t.Errorf("unexpected record %v", record)
 	}
 }

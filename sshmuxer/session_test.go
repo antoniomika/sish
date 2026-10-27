@@ -193,9 +193,21 @@ func TestSessionJSONLogs(t *testing.T) {
 		}
 	}
 
-	// Requesting port 0 also reports the port as unavailable.
-	got = slices.DeleteFunc(got, func(msg string) bool { return msg == "port unavailable" })
 	if !slices.Equal(got, expected) {
 		t.Errorf("expected records %v, got %v", expected, got)
+	}
+}
+
+// Clients cancel a forward for port 0 by the port they were given.
+func TestCancelRandomPortForward(t *testing.T) {
+	client := dialTestServer(t, startTestServer(t))
+
+	listener, err := client.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := listener.Close(); err != nil {
+		t.Fatalf("cancelling the forward failed: %v", err)
 	}
 }
