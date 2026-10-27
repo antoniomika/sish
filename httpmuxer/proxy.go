@@ -49,10 +49,20 @@ func RoundTripper() http.RoundTripper {
 		InsecureSkipVerify: !viper.GetBool("verify-ssl"),
 	}
 
+	// Each new connection opens an SSH channel, a round trip to the client, so
+	// keep enough idle ones for concurrent requests. They have to expire before
+	// the idle timeout in CopyBoth closes the tunnel side.
+	idleTimeout := 90 * time.Second
+	if viper.GetBool("idle-connection") {
+		idleTimeout = viper.GetDuration("idle-connection-timeout") / 2
+	}
+
 	return &tunnelTransport{
 		base: &http.Transport{
-			DialContext:     dialer,
-			TLSClientConfig: tlsConfig,
+			DialContext:         dialer,
+			TLSClientConfig:     tlsConfig,
+			MaxIdleConnsPerHost: 64,
+			IdleConnTimeout:     idleTimeout,
 		},
 		byName: map[string]*http.Transport{},
 	}

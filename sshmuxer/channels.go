@@ -275,8 +275,18 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 					}
 				}
 
+				err := req.Reply(true, nil)
+				if err != nil {
+					log.Println("Error replying to socket request:", err)
+				}
+
 				sshConn.ExecReceived()
 			default:
+				err := req.Reply(req.Type == "pty-req", nil)
+				if err != nil {
+					log.Println("Error replying to socket request:", err)
+				}
+
 				if viper.GetBool("debug") {
 					log.Println("Sub Channel Type", req.Type, req.WantReply, string(req.Payload))
 				}

@@ -42,8 +42,10 @@ force-requested-subdomains: false
 force-tcp-address: false
 geodb: false
 http-address: localhost:80
+http-idle-timeout: 2m
 http-load-balancer: false
 http-port-override: 0
+http-read-header-timeout: 30s
 http-request-port-override: 0
 https: false
 https-address: localhost:443
@@ -85,7 +87,7 @@ redirect-root-location: https://github.com/antoniomika/sish
 rewrite-host-header: true
 service-console: false
 service-console-history: 25
-service-console-max-content-length: -1
+service-console-max-content-length: 1048576
 service-console-token: ""
 service-console-websocket-messages: 200
 sni-load-balancer: false

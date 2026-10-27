@@ -359,11 +359,17 @@ func Start(state *utils.State) {
 			return
 		}
 
-		reqBody, err := readRequestBody(c)
-		if err != nil {
-			log.Println("Error reading request body:", err)
-			c.AbortWithStatus(http.StatusBadRequest)
-			return
+		// Only the console uses the body, and reading it holds the whole
+		// request in memory before forwarding.
+		var reqBody []byte
+		if consoleEnabled() {
+			body, err := readRequestBody(c)
+			if err != nil {
+				log.Println("Error reading request body:", err)
+				c.AbortWithStatus(http.StatusBadRequest)
+				return
+			}
+			reqBody = body
 		}
 
 		c.Request = withPublicHost(c.Request, c.GetString("originalHost"))
@@ -426,11 +432,8 @@ func Start(state *utils.State) {
 		tlsConfig := certManager.TLSConfig()
 		tlsConfig.NextProtos = append([]string{"h2", "http/1.1"}, tlsConfig.NextProtos...)
 
-		httpsServer := &http.Server{
-			Addr:      viper.GetString("https-address"),
-			TLSConfig: tlsConfig,
-			Handler:   handler,
-		}
+		httpsServer := newServer(viper.GetString("https-address"), handler)
+		httpsServer.TLSConfig = tlsConfig
 
 		go func() {
 			// We'll replace this with a custom listener
@@ -504,10 +507,7 @@ func Start(state *utils.State) {
 		}()
 	}
 
-	httpServer := &http.Server{
-		Addr:    viper.GetString("http-address"),
-		Handler: handler,
-	}
+	httpServer := newServer(viper.GetString("http-address"), handler)
 	if acmeIssuer != nil {
 		httpServer.Handler = acmeIssuer.HTTPChallengeHandler(handler)
 	}
@@ -538,6 +538,17 @@ func Start(state *utils.State) {
 	}()
 
 	log.Fatal(httpServer.Serve(httpListener))
+}
+
+// newServer returns a server for visitor traffic. Read and write timeouts stay
+// unset so long transfers and upgraded connections aren't cut off.
+func newServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: viper.GetDuration("http-read-header-timeout"),
+		IdleTimeout:       viper.GetDuration("http-idle-timeout"),
+	}
 }
 
 // redactURI hides console tokens in uri before it is logged. Each of tokens is

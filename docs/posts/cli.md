@@ -68,8 +68,10 @@ Flags:
       --geodb                                                   Use a geodb to verify country IP address association for IP filtering
   -h, --help                                                    help for sish
   -i, --http-address string                                     The address to listen for HTTP connections (default "localhost:80")
+      --http-idle-timeout duration                              Duration to keep an idle HTTP keep-alive connection from a visitor open. 0 keeps it open forever (default 2m0s)
       --http-load-balancer                                      Enable the HTTP load balancer (multiple clients can bind the same domain)
       --http-port-override int                                  The port to use for http command output. This does not affect ports used for connecting, it's for cosmetic use only
+      --http-read-header-timeout duration                       Duration to wait for a visitor to send HTTP request headers, which also bounds the TLS handshake. 0 waits forever (default 30s)
       --http-request-port-override int                          The port to use for http requests. Will default to 80, then http-port-override. Otherwise will use this value
       --https                                                   Listen for HTTPS connections. Requires a correct --https-certificate-directory
   -t, --https-address string                                    The address to listen for HTTPS connections (default "localhost:443")
@@ -114,7 +116,7 @@ Flags:
       --rewrite-host-header                                     Force rewrite the host header if the user provides host-header=host.com (default true)
       --service-console                                         Enable the service console for each service and send the info to connected clients
       --service-console-history int                             The number of recent requests kept per service and sent to a console when it connects. 0 disables history (default 25)
-      --service-console-max-content-length int                  The max content length before we stop reading the response body (default -1)
+      --service-console-max-content-length int                  The max size in bytes of a request body, response body, or WebSocket message the console records. -1 records everything (default 1048576)
   -m, --service-console-token string                            The token to use for service console access. Auto generated if empty for each connected tunnel
       --service-console-websocket-messages int                  The number of recent messages kept per WebSocket connection and sent to a console when it connects. 0 turns off WebSocket inspection (default 200)
       --sni-load-balancer                                       Enable the SNI load balancer (multiple clients can bind the same SNI domain/port)
