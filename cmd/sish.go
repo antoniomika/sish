@@ -12,7 +12,6 @@ import (
 	"github.com/antoniomika/sish/sshmuxer"
 	"github.com/antoniomika/sish/utils"
 	"github.com/fsnotify/fsnotify"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -76,6 +75,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("append-user-to-subdomain-separator", "", "-", "The token to use for separating username and subdomain selection in a virtualhost")
 	rootCmd.PersistentFlags().StringP("time-format", "", "2006/01/02 - 15:04:05", "The time format to use for both HTTP and general log messages")
 	rootCmd.PersistentFlags().StringP("log-to-file-path", "", "/tmp/sish.log", "The file to write log output to")
+	rootCmd.PersistentFlags().StringP("log-format", "", "text", "The format of log output. Can either be text or json")
 	rootCmd.PersistentFlags().StringP("bind-hosts", "", "", "A comma separated list of other hosts a user can bind. Requested hosts should be subdomains of a host in this list")
 	rootCmd.PersistentFlags().StringP("load-templates-directory", "", "", "A directory and glob for templates to load instead of the built-in ones (ie templates/*)")
 	rootCmd.PersistentFlags().StringP("welcome-message", "", "Press Ctrl-C to close the session.", "Message displayed to users upon connection")
@@ -206,13 +206,17 @@ func initConfig() {
 
 	logLevel := slog.LevelInfo
 	if viper.GetBool("debug") {
-		logrus.SetLevel(logrus.DebugLevel)
 		logLevel = slog.LevelDebug
 	}
 
-	logger := slog.New(
-		slog.NewTextHandler(multiWriter, &slog.HandlerOptions{AddSource: true, Level: logLevel}),
-	)
+	handlerOptions := &slog.HandlerOptions{AddSource: true, Level: logLevel}
+
+	var handler slog.Handler = slog.NewTextHandler(multiWriter, handlerOptions)
+	if viper.GetString("log-format") == "json" {
+		handler = slog.NewJSONHandler(multiWriter, handlerOptions)
+	}
+
+	logger := slog.New(handler)
 
 	hostname, err := os.Hostname()
 	if err == nil && hostname != "" {
@@ -234,9 +238,7 @@ func initConfig() {
 		slog.Info("reloaded configuration file")
 	})
 
-	logrus.SetOutput(multiWriter)
-
-	utils.Setup(multiWriter)
+	utils.Setup()
 }
 
 // Execute executes the root command.

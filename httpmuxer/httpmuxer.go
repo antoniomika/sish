@@ -9,11 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -34,7 +36,7 @@ type abortedKey struct{}
 
 // recoverAbort stops the http.ErrAbortHandler the proxy raises for a cut-off
 // response, so the access log line and the console broadcast still happen,
-// and flags the request for reraiseAbort. Other panics go on to gin.Recovery.
+// and flags the request for reraiseAbort. Other panics go on to recoverPanic.
 func recoverAbort(c *gin.Context) {
 	defer func() {
 		rec := recover()
@@ -54,6 +56,17 @@ func recoverAbort(c *gin.Context) {
 	}()
 
 	c.Next()
+}
+
+// recoverPanic logs a panic from a request handler and fails the request.
+func recoverPanic(c *gin.Context, rec any) {
+	slog.Error(
+		"panic recovered",
+		"error", rec,
+		"stack", string(debug.Stack()),
+	)
+
+	c.AbortWithStatus(http.StatusInternalServerError)
 }
 
 // reraiseAbort serves engine and raises http.ErrAbortHandler again for a
@@ -79,7 +92,14 @@ func Start(state *utils.State) {
 		releaseMode = gin.DebugMode
 	}
 	gin.SetMode(releaseMode)
-	gin.DefaultWriter = state.LogWriter
+	// Requests are logged through slog in the formatter below.
+	gin.DefaultWriter = io.Discard
+	gin.DebugPrintFunc = func(format string, values ...any) {
+		slog.Debug(
+			"gin",
+			"message", strings.TrimSpace(fmt.Sprintf(format, values...)),
+		)
+	}
 	gin.ForceConsoleColor()
 
 	r := gin.New()
@@ -133,9 +153,10 @@ func Start(state *utils.State) {
 		originalHost := param.Keys["originalHost"].(string)
 
 		// Tunnels without a configured service console token get their own.
-		var routeToken string
+		var routeToken, tunnelId string
 		if holder, ok := param.Keys["httpHolder"].(*utils.HTTPHolder); ok && holder != nil {
 			routeToken, _ = state.Console.RouteToken(holder.HTTPUrl.String())
+			tunnelId = holder.TunnelId()
 		}
 
 		originalURI := redactURI(param.Keys["originalURI"].(string), viper.GetString("admin-console-token"), viper.GetString("service-console-token"), routeToken)
@@ -151,6 +172,25 @@ func Start(state *utils.State) {
 			param.ErrorMessage,
 		)
 
+		connectionType := "http"
+		if param.Request.TLS != nil {
+			connectionType = "https"
+		}
+
+		requestAttrs := []any{
+			"status", param.StatusCode,
+			"method", param.Method,
+			"url", originalHost + originalURI,
+			"latency", param.Latency,
+			"clientIP", param.ClientIP,
+			"error", strings.TrimSpace(param.ErrorMessage),
+			"tunnelType", "http",
+			"tunnelId", tunnelId,
+			"connectionType", connectionType,
+		}
+
+		slog.Info("http request", requestAttrs...)
+
 		if viper.GetBool("log-to-client") && param.Keys["httpHolder"] != nil {
 			currentListener := param.Keys["httpHolder"].(*utils.HTTPHolder)
 
@@ -159,10 +199,10 @@ func Start(state *utils.State) {
 				sshConnTmp, ok := currentListener.SSHConnections.Load(proxySock)
 				if ok {
 					sshConn := sshConnTmp
-					sshConn.SendMessage(strings.TrimSpace(logLine), true)
+					sshConn.SendLog(slog.LevelInfo, strings.TrimSpace(logLine), "http request", requestAttrs...)
 				} else {
 					currentListener.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
-						sshConn.SendMessage(strings.TrimSpace(logLine), true)
+						sshConn.SendLog(slog.LevelInfo, strings.TrimSpace(logLine), "http request", requestAttrs...)
 						return true
 					})
 				}
@@ -189,7 +229,7 @@ func Start(state *utils.State) {
 		}
 
 		return logLine
-	}), gin.Recovery(), recoverAbort, func(c *gin.Context) {
+	}), gin.CustomRecoveryWithWriter(nil, recoverPanic), recoverAbort, func(c *gin.Context) {
 		c.Set("originalHost", c.Request.Host)
 		c.Set("originalURI", c.Request.RequestURI)
 		c.Set("originalPath", c.Request.URL.Path)
@@ -279,13 +319,7 @@ func Start(state *utils.State) {
 		}
 
 		if currentListener == nil {
-			err := c.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", hostname))
-			if err != nil {
-				slog.Error(
-					"aborting with error",
-					"error", err,
-				)
-			}
+			_ = c.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", hostname))
 			return
 		}
 
@@ -397,6 +431,8 @@ func Start(state *utils.State) {
 		certmagic.Default.Storage = &certmagic.FileStorage{
 			Path: filepath.Join(viper.GetString("https-certificate-directory"), "certmagic"),
 		}
+		certmagic.Default.Logger = utils.ZapLogger()
+		certmagic.DefaultACME.Logger = certmagic.Default.Logger
 
 		certManager := certmagic.NewDefault()
 

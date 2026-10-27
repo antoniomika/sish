@@ -16,10 +16,10 @@ require (
 	github.com/picosh/pdocs v0.0.0-20260415144233-acc53e8c9998
 	github.com/pires/go-proxyproto v0.15.0
 	github.com/radovskyb/watcher v1.0.7
-	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/vulcand/oxy/v2 v2.2.1
+	go.uber.org/zap v1.28.0
 	golang.org/x/crypto v0.58.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
@@ -71,7 +71,6 @@ require (
 	go.abhg.dev/goldmark/toc v0.12.0 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.9.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.28.0 // indirect
 	go.uber.org/zap/exp v0.3.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/arch v0.31.0 // indirect

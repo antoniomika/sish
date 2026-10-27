@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"io"
 	"io/fs"
 	"log/slog"
 	mathrand "math/rand"
@@ -59,16 +58,10 @@ var (
 
 	// bannedAliasList is a list of aliases that cannot be bound.
 	bannedAliasList = []string{""}
-
-	// multiWriter is the writer that can be used for writing to multiple locations.
-	multiWriter io.Writer
 )
 
-// Setup main utils. This initializes, whitelists, blacklists,
-// and log writers.
-func Setup(logWriter io.Writer) {
-	multiWriter = logWriter
-
+// Setup main utils. This initializes whitelists and blacklists.
+func Setup() {
 	upperList := func(stringList string) []string {
 		list := strings.FieldsFunc(stringList, CommaSplitFields)
 		for k, v := range list {
@@ -837,7 +830,13 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 					bindErr = fmt.Errorf("unable to bind requested port")
 				}
 
-				sshConn.SendMessage(aurora.Sprintf("The TCP port %d is unavailable.%s", aurora.Red(bindPort), extra), true)
+				sshConn.SendLog(
+					slog.LevelWarn,
+					aurora.Sprintf("The TCP port %d is unavailable.%s", aurora.Red(bindPort), extra),
+					"port unavailable",
+					"port", bindPort,
+					"assigningRandom", extra != "",
+				)
 			}
 		}
 
@@ -949,7 +948,13 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 					bindErr = fmt.Errorf("unable to bind requested subdomain")
 				}
 
-				sshConn.SendMessage(aurora.Sprintf("The subdomain %s is unavailable.%s", aurora.Red(host), extra), true)
+				sshConn.SendLog(
+					slog.LevelWarn,
+					aurora.Sprintf("The subdomain %s is unavailable.%s", aurora.Red(host), extra),
+					"subdomain unavailable",
+					"subdomain", host,
+					"assigningRandom", extra != "",
+				)
 			}
 		}
 
@@ -1083,7 +1088,13 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 					bindErr = fmt.Errorf("unable to bind requested subdomain")
 				}
 
-				sshConn.SendMessage(aurora.Sprintf("The subdomain %s is unavailable.%s", aurora.Red(host), extra), true)
+				sshConn.SendLog(
+					slog.LevelWarn,
+					aurora.Sprintf("The subdomain %s is unavailable.%s", aurora.Red(host), extra),
+					"subdomain unavailable",
+					"subdomain", host,
+					"assigningRandom", extra != "",
+				)
 			}
 		}
 
@@ -1170,7 +1181,13 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 					bindErr = fmt.Errorf("unable to bind requested alias")
 				}
 
-				sshConn.SendMessage(aurora.Sprintf("The alias %s is unavailable.%s", aurora.Red(alias), extra), true)
+				sshConn.SendLog(
+					slog.LevelWarn,
+					aurora.Sprintf("The alias %s is unavailable.%s", aurora.Red(alias), extra),
+					"alias unavailable",
+					"alias", alias,
+					"assigningRandom", extra != "",
+				)
 			}
 		}
 

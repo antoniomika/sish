@@ -61,6 +61,7 @@ idle-connection-timeout: 5s
 load-templates: true
 load-templates-directory: ""
 localhost-as-all: true
+log-format: text
 log-to-client: false
 log-to-file: false
 log-to-file-compress: false

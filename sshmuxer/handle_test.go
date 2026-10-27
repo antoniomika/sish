@@ -3,7 +3,6 @@ package sshmuxer
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/netip"
@@ -39,8 +38,9 @@ func TestMain(m *testing.M) {
 	viper.Set("cleanup-unauthed", false)
 	viper.Set("ping-client", false)
 	viper.Set("idle-connection", false)
+	viper.Set("welcome-message", "welcome")
 
-	utils.Setup(io.Discard)
+	utils.Setup()
 
 	code := m.Run()
 

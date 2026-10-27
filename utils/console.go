@@ -167,13 +167,7 @@ func (c *WebConsole) HandleTemplate(proxyUrl string, hostIsRoot bool, userIsAdmi
 		return
 	}
 
-	err := g.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", proxyUrl))
-	if err != nil {
-		slog.Error(
-			"aborting with error",
-			"error", err,
-		)
-	}
+	_ = g.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", proxyUrl))
 }
 
 // HandleWebSocket handles the websocket route.
@@ -247,13 +241,7 @@ func (c *WebConsole) HandleDisconnectRoute(proxyUrl string, g *gin.Context) {
 			"error", err,
 		)
 
-		err := g.AbortWithError(http.StatusInternalServerError, err)
-		if err != nil {
-			slog.Error(
-				"aborting with error",
-				"error", err,
-			)
-		}
+		_ = g.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 

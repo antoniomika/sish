@@ -1,9 +1,12 @@
 package sshmuxer
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"testing"
 	"time"
 
@@ -128,5 +131,71 @@ func TestSessionRequestsReplied(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("a session request never got a reply")
+	}
+}
+
+// A client that asks for json gets every message as a JSON record, including
+// the welcome message and options given before log-format.
+func TestSessionJSONLogs(t *testing.T) {
+	client := dialTestServer(t, startTestServer(t))
+
+	session, err := client.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := session.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := session.Start("auto-close=false log-format=json"); err != nil {
+		t.Fatal(err)
+	}
+
+	listener, err := client.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+
+	records := make(chan map[string]any)
+	go func() {
+		defer close(records)
+
+		scanner := bufio.NewScanner(out)
+		for scanner.Scan() {
+			var record map[string]any
+			if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+				t.Errorf("line %q is not a JSON record: %v", scanner.Text(), err)
+				return
+			}
+			records <- record
+		}
+	}()
+
+	expected := []string{"welcome", "option set auto-close", "option set log-format", "forwarding started"}
+	var got []string
+	for !slices.Contains(got, "forwarding started") {
+		select {
+		case record, ok := <-records:
+			if !ok {
+				t.Fatalf("session ended after %v", got)
+			}
+
+			msg, _ := record["msg"].(string)
+			if option, ok := record["option"].(string); ok {
+				msg += " " + option
+			}
+			got = append(got, msg)
+		case <-time.After(5 * time.Second):
+			t.Fatalf("timed out after %v", got)
+		}
+	}
+
+	// Requesting port 0 also reports the port as unavailable.
+	got = slices.DeleteFunc(got, func(msg string) bool { return msg == "port unavailable" })
+	if !slices.Equal(got, expected) {
+		t.Errorf("expected records %v, got %v", expected, got)
 	}
 }

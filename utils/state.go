@@ -8,7 +8,6 @@ import (
 	"net"
 	"net/http/httputil"
 	"net/url"
-	"time"
 
 	"github.com/antoniomika/syncmap"
 	"github.com/jpillora/ipfilter"
@@ -33,18 +32,6 @@ const (
 	// ProcessListener represents a process specific listener.
 	ProcessListener
 )
-
-// LogWriter represents a writer that is used for writing logs in multiple locations.
-type LogWriter struct {
-	TimeFmt     string
-	MultiWriter io.Writer
-}
-
-// Write implements the write function for the LogWriter. It will add a time in a
-// specific format to logs.
-func (w LogWriter) Write(bytes []byte) (int, error) {
-	return fmt.Fprintf(w.MultiWriter, "%v | %s", time.Now().Format(w.TimeFmt), string(bytes))
-}
 
 // ListenerHolder represents a generic listener.
 type ListenerHolder struct {
@@ -251,17 +238,19 @@ func (tH *TCPHolder) Handle(state *State) {
 
 			sshConn := ListenerOwner(tH.SSHConnections, hostAddr)
 
-			state.LogConnection(ConnectionEvent{
+			ev := ConnectionEvent{
 				SSHConn:        sshConn,
 				TunnelType:     "tcp",
 				TunnelId:       tH.TunnelId(),
 				ConnectionType: "tcp",
 				RemoteAddr:     cl.RemoteAddr().String(),
 				LocalAddr:      cl.LocalAddr().String(),
-			})
+			}
+
+			state.LogConnection(ev)
 
 			if viper.GetBool("log-to-client") && sshConn != nil {
-				sshConn.SendMessage(logLine, true)
+				sshConn.SendConnection(logLine, ev)
 			}
 
 			conn, err := net.Dial("unix", hostAddr)
@@ -369,7 +358,6 @@ type State struct {
 	AliasListeners *syncmap.Map[string, *AliasHolder]
 	TCPListeners   *syncmap.Map[string, *TCPHolder]
 	IPFilter       *ipfilter.IPFilter
-	LogWriter      io.Writer
 	Ports          *Ports
 }
 
@@ -383,7 +371,6 @@ func NewState() *State {
 		TCPListeners:   syncmap.New[string, *TCPHolder](),
 		IPFilter:       Filter,
 		Console:        NewWebConsole(),
-		LogWriter:      multiWriter,
 		Ports:          &Ports{},
 	}
 }
@@ -401,15 +388,18 @@ type ConnectionEvent struct {
 
 // LogConnection logs a visitor connection that a tunnel accepted.
 func (s *State) LogConnection(ev ConnectionEvent) {
-	slog.Info(
-		"accepted connection",
+	slog.Info("accepted connection", ev.attrs()...)
+}
+
+func (ev ConnectionEvent) attrs() []any {
+	return []any{
 		"remoteAddr", ev.RemoteAddr,
 		"localAddr", ev.LocalAddr,
 		"tunnelType", ev.TunnelType,
 		"tunnelId", ev.TunnelId,
 		"connectionType", ev.ConnectionType,
 		"user", ev.SSHConn.User(),
-	)
+	}
 }
 
 // ListenerOwner returns the client in conns that has a listener on addr, or nil.

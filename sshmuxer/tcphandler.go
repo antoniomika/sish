@@ -127,7 +127,13 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 	}
 
 	listenPort := tH.Listener.Addr().(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port
-	requestMessages += fmt.Sprintf("%s: %s:%d\r\n", aurora.BgBlue(connType), domainName, listenPort)
+	requestMessages += sshConn.FormatLog(
+		slog.LevelInfo,
+		fmt.Sprintf("%s: %s:%d\r\n", aurora.BgBlue(connType), domainName, listenPort),
+		"forwarding started",
+		"forwardingType", connType,
+		"addr", fmt.Sprintf("%s:%d", domainName, listenPort),
+	)
 	sshConn.Logger().Info(
 		"forwarding started",
 		"forwardingType", connType,

@@ -110,7 +110,13 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 
 			consoleURL := fmt.Sprintf("%s://%s%s%s%s", scheme, userPass, pH.HTTPUrl.Host, portString, pathParam)
 
-			requestMessages += fmt.Sprintf("Service console can be accessed here: %s/_sish/console?x-authorization=%s\r\n", consoleURL, routeToken)
+			consoleURL = fmt.Sprintf("%s/_sish/console?x-authorization=%s", consoleURL, routeToken)
+			requestMessages += sshConn.FormatLog(
+				slog.LevelInfo,
+				fmt.Sprintf("Service console can be accessed here: %s\r\n", consoleURL),
+				"service console",
+				"url", consoleURL,
+			)
 		}
 	}
 
@@ -120,7 +126,14 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 			httpPortString = fmt.Sprintf(":%d", state.Ports.HTTPPort)
 		}
 
-		requestMessages += fmt.Sprintf("%s: http://%s%s%s%s\r\n", aurora.BgBlue("HTTP"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path)
+		httpURL := fmt.Sprintf("http://%s%s%s%s", userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path)
+		requestMessages += sshConn.FormatLog(
+			slog.LevelInfo,
+			fmt.Sprintf("%s: %s\r\n", aurora.BgBlue("HTTP"), httpURL),
+			"forwarding started",
+			"forwardingType", "HTTP",
+			"url", httpURL,
+		)
 		sshConn.Logger().Info(
 			"forwarding started",
 			"forwardingType", "HTTP",
@@ -135,7 +148,14 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 			httpsPortString = fmt.Sprintf(":%d", state.Ports.HTTPSPort)
 		}
 
-		requestMessages += fmt.Sprintf("%s: https://%s%s%s%s\r\n", aurora.BgBlue("HTTPS"), userPass, pH.HTTPUrl.Host, httpsPortString, pH.HTTPUrl.Path)
+		httpsURL := fmt.Sprintf("https://%s%s%s%s", userPass, pH.HTTPUrl.Host, httpsPortString, pH.HTTPUrl.Path)
+		requestMessages += sshConn.FormatLog(
+			slog.LevelInfo,
+			fmt.Sprintf("%s: %s\r\n", aurora.BgBlue("HTTPS"), httpsURL),
+			"forwarding started",
+			"forwardingType", "HTTPS",
+			"url", httpsURL,
+		)
 		sshConn.Logger().Info(
 			"forwarding started",
 			"forwardingType", "HTTPS",

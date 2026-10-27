@@ -64,6 +64,25 @@ sish. In the directory, sish will look for a combination of files that look like
 `name.crt` and `name.key`. `name` can be arbitrary in either case, it just needs
 to be unique to the cert and key pair to allow them to be loaded into sish.
 
+# JSON client logs
+
+Pass `log-format=json` to have sish send its messages to your SSH client as JSON
+records, one per line, in place of colored text. Scripts and agents can parse
+these directly.
+
+```bash
+ssh -R 80:localhost:3000 tuns.sh log-format=json
+```
+
+```
+{"time":"2026-10-27T15:33:52.555Z","level":"INFO","msg":"option set","option":"log-format","value":"json"}
+{"time":"2026-10-27T15:33:52.556Z","level":"INFO","msg":"forwarding started","forwardingType":"HTTPS","url":"https://example.tuns.sh"}
+```
+
+Every record has `time`, `level` and `msg`, plus fields that depend on the
+message. When the server sends request logs to clients (`--log-to-client`),
+they arrive as `http request` and `accepted connection` records.
+
 # Load balancing
 
 sish can load balance any type of forwarded connection, but this needs to be

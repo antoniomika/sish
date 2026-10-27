@@ -257,7 +257,7 @@ func newTestFrontWithHostHeader(t *testing.T, fwd *httputil.ReverseProxy, sock, 
 			proxySocket: c.GetString("proxySocket"),
 			console:     console,
 		}
-	}, gin.Recovery(), recoverAbort, func(c *gin.Context) {
+	}, gin.CustomRecoveryWithWriter(nil, recoverPanic), recoverAbort, func(c *gin.Context) {
 		hostname := c.Request.Host
 
 		if hostHeader != "" {
@@ -840,12 +840,14 @@ func TestForwarderPipelineClientAbortIsNotLogged(t *testing.T) {
 	}
 }
 
-// Panics other than an aborted handler keep gin's behavior.
+// Panics other than an aborted handler fail the request and are logged.
 func TestEngineRecoversOtherPanics(t *testing.T) {
+	logs := captureLog(t)
+
 	gin.SetMode(gin.TestMode)
 
 	engine := gin.New()
-	engine.Use(gin.Recovery(), recoverAbort)
+	engine.Use(gin.CustomRecoveryWithWriter(nil, recoverPanic), recoverAbort)
 	engine.GET("/boom", func(*gin.Context) { panic("boom") })
 
 	recorder := httptest.NewRecorder()
@@ -853,5 +855,9 @@ func TestEngineRecoversOtherPanics(t *testing.T) {
 
 	if recorder.Code != http.StatusInternalServerError {
 		t.Errorf("expected status 500, got %d", recorder.Code)
+	}
+
+	if out := logs(); !strings.Contains(out, `msg="panic recovered" error=boom`) {
+		t.Errorf("expected the panic to be logged, got:\n%s", out)
 	}
 }

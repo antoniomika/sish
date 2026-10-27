@@ -58,6 +58,9 @@ const (
 
 	// deadlinePrefix defines a timestamp at which the connection will close automatically.
 	deadlinePrefix = "deadline"
+
+	// logFormatPrefix defines whether messages to the client are text or json.
+	logFormatPrefix = "log-format"
 )
 
 // handleSession handles the channel when a user requests a session.
@@ -74,9 +77,12 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 		"connection", connection,
 	)
 
-	welcomeMessage := viper.GetString("welcome-message")
-	if welcomeMessage != "" {
-		writeToSession(connection, aurora.BgRed(welcomeMessage).String()+"\r\n")
+	// The welcome message waits for the shell or exec request, which may ask for json.
+	sendWelcome := func() {
+		welcomeMessage := viper.GetString("welcome-message")
+		if welcomeMessage != "" {
+			sshConn.SendLog(slog.LevelInfo, aurora.BgRed(welcomeMessage).String()+"\r\n", welcomeMessage)
+		}
 	}
 
 	go func() {
@@ -128,10 +134,19 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 					)
 				}
 
+				sendWelcome()
 				sshConn.ExecReceived()
 			case "exec":
 				payloadString := string(req.Payload[4:])
 				commandFlags := strings.Fields(payloadString)
+
+				for _, commandFlag := range commandFlags {
+					if command, param, ok := strings.Cut(commandFlag, commandSplitter); ok && command == logFormatPrefix {
+						sshConn.JSONLogs.Store(param == "json")
+					}
+				}
+
+				sendWelcome()
 
 				for _, commandFlag := range commandFlags {
 					commandFlagParts := strings.Split(commandFlag, commandSplitter)
@@ -151,14 +166,26 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						}
 						sshConn.ProxyProto = getProxyProtoVersion(param)
 						if sshConn.ProxyProto != 0 {
-							sshConn.SendMessage(fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)), true)
+							sshConn.SendLog(
+								slog.LevelInfo,
+								fmt.Sprintf("Proxy protocol enabled for TCP connections. Using protocol version %d", int(sshConn.ProxyProto)),
+								"option set",
+								"option", proxyProtocolPrefix,
+								"value", int(sshConn.ProxyProto),
+							)
 						}
 					case hostHeaderPrefix:
 						if !viper.GetBool("rewrite-host-header") {
 							break
 						}
 						sshConn.HostHeader = param
-						sshConn.SendMessage(fmt.Sprintf("Using host header %s for HTTP handlers", sshConn.HostHeader), true)
+						sshConn.SendLog(
+							slog.LevelInfo,
+							fmt.Sprintf("Using host header %s for HTTP handlers", sshConn.HostHeader),
+							"option set",
+							"option", hostHeaderPrefix,
+							"value", sshConn.HostHeader,
+						)
 					case stripPathPrefix:
 						if !sshConn.StripPath {
 							break
@@ -175,7 +202,13 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 							sshConn.StripPath = nstripPath
 						}
 
-						sshConn.SendMessage(fmt.Sprintf("Strip path for HTTP handlers set to: %t", sshConn.StripPath), true)
+						sshConn.SendLog(
+							slog.LevelInfo,
+							fmt.Sprintf("Strip path for HTTP handlers set to: %t", sshConn.StripPath),
+							"option set",
+							"option", stripPathPrefix,
+							"value", sshConn.StripPath,
+						)
 					case sniProxyPrefix:
 						if !viper.GetBool("sni-proxy") {
 							break
@@ -192,7 +225,13 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 
 						sshConn.SNIProxy = sniProxy
 
-						sshConn.SendMessage(fmt.Sprintf("SNI proxy for TCP forwards set to: %t", sshConn.SNIProxy), true)
+						sshConn.SendLog(
+							slog.LevelInfo,
+							fmt.Sprintf("SNI proxy for TCP forwards set to: %t", sshConn.SNIProxy),
+							"option set",
+							"option", sniProxyPrefix,
+							"value", sshConn.SNIProxy,
+						)
 					case tcpAddressPrefix:
 						if viper.GetBool("force-tcp-address") {
 							break
@@ -200,7 +239,13 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 
 						sshConn.TCPAddress = param
 
-						sshConn.SendMessage(fmt.Sprintf("TCP address for TCP forwards set to: %s", sshConn.TCPAddress), true)
+						sshConn.SendLog(
+							slog.LevelInfo,
+							fmt.Sprintf("TCP address for TCP forwards set to: %s", sshConn.TCPAddress),
+							"option set",
+							"option", tcpAddressPrefix,
+							"value", sshConn.TCPAddress,
+						)
 					case tcpAliasPrefix:
 						if !viper.GetBool("tcp-aliases") {
 							break
@@ -217,7 +262,13 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 
 						sshConn.TCPAlias = tcpAlias
 
-						sshConn.SendMessage(fmt.Sprintf("TCP alias for TCP forwards set to: %t", sshConn.TCPAlias), true)
+						sshConn.SendLog(
+							slog.LevelInfo,
+							fmt.Sprintf("TCP alias for TCP forwards set to: %t", sshConn.TCPAlias),
+							"option set",
+							"option", tcpAliasPrefix,
+							"value", sshConn.TCPAlias,
+						)
 					case autoClosePrefix:
 						autoClose, err := strconv.ParseBool(param)
 
@@ -230,7 +281,13 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 
 						sshConn.AutoClose = autoClose
 
-						sshConn.SendMessage(fmt.Sprintf("Auto close for connection set to: %t", sshConn.AutoClose), true)
+						sshConn.SendLog(
+							slog.LevelInfo,
+							fmt.Sprintf("Auto close for connection set to: %t", sshConn.AutoClose),
+							"option set",
+							"option", autoClosePrefix,
+							"value", sshConn.AutoClose,
+						)
 					case forceHTTPSPrefix:
 						if !viper.GetBool("force-https") {
 							break
@@ -244,7 +301,13 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 							)
 						}
 						sshConn.ForceHTTPS = forceHTTPS
-						sshConn.SendMessage(fmt.Sprintf("Force https for connection set to: %t", sshConn.ForceHTTPS), true)
+						sshConn.SendLog(
+							slog.LevelInfo,
+							fmt.Sprintf("Force https for connection set to: %t", sshConn.ForceHTTPS),
+							"option set",
+							"option", forceHTTPSPrefix,
+							"value", sshConn.ForceHTTPS,
+						)
 					case localForwardPrefix:
 						localForward, err := strconv.ParseBool(param)
 
@@ -257,7 +320,13 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 
 						sshConn.LocalForward = localForward
 
-						sshConn.SendMessage(fmt.Sprintf("Connection used for local forwards set to: %t", sshConn.LocalForward), true)
+						sshConn.SendLog(
+							slog.LevelInfo,
+							fmt.Sprintf("Connection used for local forwards set to: %t", sshConn.LocalForward),
+							"option set",
+							"option", localForwardPrefix,
+							"value", sshConn.LocalForward,
+						)
 					case tcpAliasesAllowedUsersPrefix:
 						if !viper.GetBool("tcp-aliases-allowed-users") {
 							break
@@ -284,7 +353,26 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 							printKeys = slices.Insert(printKeys, 0, fmt.Sprintf("%s (self)", connPubKey))
 						}
 
-						sshConn.SendMessage(fmt.Sprintf("Allowed users for TCP Aliases set to: %s", strings.Join(printKeys, ", ")), true)
+						sshConn.SendLog(
+							slog.LevelInfo,
+							fmt.Sprintf("Allowed users for TCP Aliases set to: %s", strings.Join(printKeys, ", ")),
+							"option set",
+							"option", tcpAliasesAllowedUsersPrefix,
+							"value", sshConn.TCPAliasesAllowedUsers,
+						)
+					case logFormatPrefix:
+						logFormat := "text"
+						if sshConn.JSONLogs.Load() {
+							logFormat = "json"
+						}
+
+						sshConn.SendLog(
+							slog.LevelInfo,
+							fmt.Sprintf("Log format for connection set to: %s", logFormat),
+							"option set",
+							"option", logFormatPrefix,
+							"value", logFormat,
+						)
 					case deadlinePrefix:
 						deadline, err := parseDeadline(param)
 						if err != nil {
@@ -297,7 +385,13 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						}
 
 						sshConn.Deadline = &deadline
-						sshConn.SendMessage(fmt.Sprintf("Deadline for connection set to: %s", sshConn.Deadline.UTC().Format("2006-01-02 15:04:05")), true)
+						sshConn.SendLog(
+							slog.LevelInfo,
+							fmt.Sprintf("Deadline for connection set to: %s", sshConn.Deadline.UTC().Format("2006-01-02 15:04:05")),
+							"option set",
+							"option", deadlinePrefix,
+							"value", sshConn.Deadline.UTC(),
+						)
 					}
 				}
 
@@ -434,22 +528,24 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 	logLine := fmt.Sprintf("Accepted alias connection from %s -> %s", connString, tcpAliasToConnect)
 
-	state.LogConnection(utils.ConnectionEvent{
+	ev := utils.ConnectionEvent{
 		SSHConn:        sshConn,
 		TunnelType:     "alias",
 		TunnelId:       aH.TunnelId(),
 		ConnectionType: "tcp",
 		RemoteAddr:     connString,
 		LocalAddr:      tcpAliasToConnect,
-	})
+	}
+
+	state.LogConnection(ev)
 
 	if viper.GetBool("log-to-client") {
 		if owner := utils.ListenerOwner(aH.SSHConnections, aliasAddr); owner != nil {
-			owner.SendMessage(logLine, true)
+			owner.SendConnection(logLine, ev)
 		}
 
 		if sshConn.LocalForward {
-			sshConn.SendMessage(logLine, true)
+			sshConn.SendConnection(logLine, ev)
 		}
 	}
 

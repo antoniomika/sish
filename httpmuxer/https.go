@@ -112,17 +112,19 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 
 	sshConn := utils.ListenerOwner(pL.Holder.SSHConnections, hostAddr)
 
-	pL.State.LogConnection(utils.ConnectionEvent{
+	ev := utils.ConnectionEvent{
 		SSHConn:        sshConn,
 		TunnelType:     "sni",
 		TunnelId:       fmt.Sprintf("%s-%s", pL.Holder.TunnelId(), balancerName),
 		ConnectionType: "tls",
 		RemoteAddr:     teeConn.RemoteAddr().String(),
 		LocalAddr:      teeConn.LocalAddr().String(),
-	})
+	}
+
+	pL.State.LogConnection(ev)
 
 	if viper.GetBool("log-to-client") && sshConn != nil {
-		sshConn.SendMessage(logLine, true)
+		sshConn.SendConnection(logLine, ev)
 	}
 
 	conn, err := net.Dial("unix", hostAddr)

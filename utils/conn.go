@@ -3,11 +3,15 @@ package utils
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/tls"
+	"errors"
 	"io"
 	"log/slog"
 	"net"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/antoniomika/syncmap"
@@ -39,6 +43,7 @@ type SSHConnection struct {
 	SetupLock              *sync.Mutex
 	Deadline               *time.Time
 	ConnectedAt            time.Time
+	JSONLogs               atomic.Bool
 	sessionOnce            sync.Once
 	execOnce               sync.Once
 }
@@ -65,6 +70,10 @@ func (s *SSHConnection) ExecReceived() {
 // will block until the message is sent. If it is false, it will try to send the
 // message 5 times, waiting 100ms each time.
 func (s *SSHConnection) SendMessage(message string, block bool) {
+	if s.JSONLogs.Load() {
+		message = strings.TrimSuffix(message, "\r\n")
+	}
+
 	if block {
 		s.Messages <- message
 		return
@@ -81,6 +90,41 @@ func (s *SSHConnection) SendMessage(message string, block bool) {
 			i++
 		}
 	}
+}
+
+// FormatLog returns text for the client, or a JSON record of msg and args
+// ending in a line break if the client asked for JSON logs. A message with no
+// msg is only shown as text.
+func (s *SSHConnection) FormatLog(level slog.Level, text, msg string, args ...any) string {
+	if !s.JSONLogs.Load() {
+		return text
+	}
+
+	if msg == "" {
+		return ""
+	}
+
+	var buf bytes.Buffer
+
+	r := slog.NewRecord(time.Now(), level, msg, 0)
+	r.Add(args...)
+	_ = slog.NewJSONHandler(&buf, nil).Handle(context.Background(), r)
+
+	return strings.TrimSuffix(buf.String(), "\n") + "\r\n"
+}
+
+// SendLog sends a message formatted by FormatLog to the client, blocking until
+// it is sent.
+func (s *SSHConnection) SendLog(level slog.Level, text, msg string, args ...any) {
+	if message := s.FormatLog(level, text, msg, args...); message != "" {
+		s.SendMessage(message, true)
+	}
+}
+
+// SendConnection sends the client text about a visitor connection, or its
+// event as a JSON record.
+func (s *SSHConnection) SendConnection(text string, ev ConnectionEvent) {
+	s.SendLog(slog.LevelInfo, text, "accepted connection", ev.attrs()...)
 }
 
 // ListenerCount returns the number of current active listeners on this connection.
@@ -253,9 +297,10 @@ func (i IdleTimeoutConn) Write(buf []byte) (int, error) {
 
 // CopyBoth copies betwen a reader and writer and will cleanup each.
 func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
+	// Either side may already be closed by the time the copy ends.
 	closeBoth := func() {
 		err := reader.Close()
-		if err != nil {
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 			slog.Error(
 				"error closing reader",
 				"error", err,
@@ -263,7 +308,7 @@ func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 		}
 
 		err = writer.Close()
-		if err != nil {
+		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 			slog.Error(
 				"error closing writer",
 				"error", err,

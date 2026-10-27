@@ -57,7 +57,13 @@ func handleAliasListener(check *channelForwardMsg, stringPort string, requestMes
 		)
 	}
 
-	requestMessages += fmt.Sprintf("%s: %s\r\n", aurora.BgBlue("TCP Alias"), validAlias)
+	requestMessages += sshConn.FormatLog(
+		slog.LevelInfo,
+		fmt.Sprintf("%s: %s\r\n", aurora.BgBlue("TCP Alias"), validAlias),
+		"forwarding started",
+		"forwardingType", "TCP Alias",
+		"alias", validAlias,
+	)
 	sshConn.Logger().Info(
 		"forwarding started",
 		"forwardingType", "TCP Alias",

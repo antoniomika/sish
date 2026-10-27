@@ -381,14 +381,14 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 				runTime++
 
 				if holderConn.Deadline != nil && time.Now().After(*holderConn.Deadline) {
-					holderConn.SendMessage("Connection deadline reached. Closing connection.", true)
+					holderConn.SendLog(slog.LevelInfo, "Connection deadline reached. Closing connection.", "connection deadline reached")
 					time.Sleep(1 * time.Millisecond)
 					holderConn.CleanUp(state)
 					return
 				}
 
 				if ((viper.GetBool("cleanup-unbound") && runTime > viper.GetDuration("cleanup-unbound-timeout").Seconds()) || holderConn.AutoClose) && holderConn.ListenerCount() == 0 {
-					holderConn.SendMessage("No forwarding requests sent. Closing connection.", true)
+					holderConn.SendLog(slog.LevelInfo, "No forwarding requests sent. Closing connection.", "no forwarding requests sent")
 					time.Sleep(1 * time.Millisecond)
 					holderConn.CleanUp(state)
 				}

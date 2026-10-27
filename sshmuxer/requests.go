@@ -322,7 +322,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	portChannelForwardReplyPayload := channelForwardReply{bindPort}
 
-	mainRequestMessages := fmt.Sprintf("Starting SSH Forwarding service for %s. Forwarded connections can be accessed via the following methods:\r\n", aurora.Sprintf(aurora.Green("%s:%s"), connType, stringPort))
+	mainRequestMessages := sshConn.FormatLog(slog.LevelInfo, fmt.Sprintf("Starting SSH Forwarding service for %s. Forwarded connections can be accessed via the following methods:\r\n", aurora.Sprintf(aurora.Green("%s:%s"), connType, stringPort)), "")
 
 	switch listenerType {
 	case utils.HTTPListener:
@@ -349,7 +349,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		mainRequestMessages = requestMessages
 
 		forwardingType = strings.ToUpper(connType)
-		forwardingName = pH.HTTPUrl.String()
+		forwardingName = pH.TunnelId()
 
 		deferHandler = func() {
 			err := pH.Balancer.RemoveServer(serverURL)
@@ -536,7 +536,12 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 				newChan, newReqs, err := sshConn.SSHConn.OpenChannel("forwarded-tcpip", ssh.Marshal(resp))
 				if err != nil {
-					sshConn.SendMessage(err.Error(), true)
+					sshConn.SendLog(
+						slog.LevelError,
+						err.Error(),
+						"unable to open forwarded connection",
+						"error", err,
+					)
 
 					err := cl.Close()
 					if err != nil {

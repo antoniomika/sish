@@ -87,6 +87,7 @@ Flags:
       --load-templates                                          Load HTML templates. This is required for admin/service consoles (default true)
       --load-templates-directory string                         A directory and glob for templates to load instead of the built-in ones (ie templates/*)
       --localhost-as-all                                        Enable forcing localhost to mean all interfaces for tcp listeners (default true)
+      --log-format string                                       The format of log output. Can either be text or json (default "text")
       --log-to-client                                           Enable logging HTTP and TCP requests to the client
       --log-to-file                                             Enable writing log output to file, specified by log-to-file-path
       --log-to-file-compress                                    Enable compressing log output files
