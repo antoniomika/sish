@@ -521,7 +521,7 @@ func GetSSHConfig() *ssh.ServerConfig {
 		NoClientAuth:  !viper.GetBool("authentication"),
 		PasswordCallback: func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 			slog.Info(
-				"Login attempt",
+				"login attempt",
 				"remoteAddr", c.RemoteAddr().String(),
 				"user", c.User(),
 			)
@@ -553,7 +553,7 @@ func GetSSHConfig() *ssh.ServerConfig {
 			authKey = authKey[:len(authKey)-1]
 
 			slog.Info(
-				"Login attempt",
+				"login attempt",
 				"remoteAddr", c.RemoteAddr().String(),
 				"user", c.User(),
 				"key", authKey,
@@ -697,7 +697,7 @@ func generatePrivateKey(passphrase string) []byte {
 		)
 	}
 
-	slog.Info("Generated ED25519 Keypair")
+	slog.Info("generated ED25519 keypair")
 
 	// In an effort to guarantee that keys can still be loaded by OpenSSH
 	// we adopt branching logic here for passphrase encrypted keys.

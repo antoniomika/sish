@@ -302,7 +302,12 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		deferHandler()
 
 		if forwardingType != "" {
-			sshConn.Logger().Info(fmt.Sprintf("%s forwarding stopped: %s -> %s for client: %s", aurora.BgBlue(forwardingType), forwardingName, listenAddr, sshConn.SSHConn.RemoteAddr().String()))
+			sshConn.Logger().Info(
+				"forwarding stopped",
+				"forwardingType", forwardingType,
+				"name", forwardingName,
+				"listenerAddr", listenAddr,
+			)
 		}
 	}
 
@@ -536,7 +541,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 					err := cl.Close()
 					if err != nil {
 						slog.Error(
-							"Error closing client connection",
+							"error closing client connection",
 							"error", err,
 						)
 					}

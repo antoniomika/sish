@@ -399,7 +399,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 		})
 
 		if !connAllowed {
-			slog.Info("Connection not allowed because fingerprint is not found in allowed list")
+			slog.Info("connection not allowed because fingerprint is not found in allowed list")
 			sshConn.CleanUp(state)
 			return
 		}
@@ -434,7 +434,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 	logLine := fmt.Sprintf("Accepted alias connection from %s -> %s", connString, tcpAliasToConnect)
 
-	state.LogConnection(logLine, utils.ConnectionEvent{
+	state.LogConnection(utils.ConnectionEvent{
 		SSHConn:        sshConn,
 		TunnelType:     "alias",
 		TunnelId:       aH.TunnelId(),

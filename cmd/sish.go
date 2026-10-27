@@ -168,7 +168,7 @@ func initConfig() {
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
 	if err != nil {
 		slog.Error(
-			"Unable to bind pflags:",
+			"unable to bind pflags",
 			"error", err,
 		)
 	}
@@ -179,7 +179,7 @@ func initConfig() {
 
 	if err := viper.ReadInConfig(); err == nil {
 		slog.Info(
-			"Using config file:",
+			"using config file",
 			"config", viper.ConfigFileUsed(),
 		)
 	}
@@ -231,7 +231,7 @@ func initConfig() {
 	slog.SetDefault(logger)
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
-		slog.Info("Reloaded configuration file.")
+		slog.Info("reloaded configuration file")
 	})
 
 	logrus.SetOutput(multiWriter)

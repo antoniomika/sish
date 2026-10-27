@@ -124,7 +124,7 @@ func (tH *TCPHolder) Handle(state *State) {
 
 				if viper.GetBool("debug") {
 					slog.Debug(
-						"Blocked connection",
+						"blocked connection",
 						"remoteAddr", cl.RemoteAddr().String(),
 						"localAddr", cl.LocalAddr().String(),
 					)
@@ -190,11 +190,9 @@ func (tH *TCPHolder) Handle(state *State) {
 
 				if pB == nil {
 					slog.Info(
-						fmt.Sprintf(
-							"Unable to load connection location: %s not found on TCP listener %s",
-							balancerName,
-							tH.TCPHost,
-						),
+						"unable to load connection location",
+						"balancer", balancerName,
+						"tcpHost", tH.TCPHost,
 					)
 
 					err := cl.Close()
@@ -253,7 +251,7 @@ func (tH *TCPHolder) Handle(state *State) {
 
 			sshConn := ListenerOwner(tH.SSHConnections, hostAddr)
 
-			state.LogConnection(logLine, ConnectionEvent{
+			state.LogConnection(ConnectionEvent{
 				SSHConn:        sshConn,
 				TunnelType:     "tcp",
 				TunnelId:       tH.TunnelId(),
@@ -402,9 +400,9 @@ type ConnectionEvent struct {
 }
 
 // LogConnection logs a visitor connection that a tunnel accepted.
-func (s *State) LogConnection(msg string, ev ConnectionEvent) {
+func (s *State) LogConnection(ev ConnectionEvent) {
 	slog.Info(
-		msg,
+		"accepted connection",
 		"remoteAddr", ev.RemoteAddr,
 		"localAddr", ev.LocalAddr,
 		"tunnelType", ev.TunnelType,

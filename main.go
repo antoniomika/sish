@@ -12,7 +12,7 @@ func main() {
 	err := cmd.Execute()
 	if err != nil {
 		slog.Error(
-			"Unable to execute root command:",
+			"unable to execute root command",
 			"error", err,
 		)
 	}

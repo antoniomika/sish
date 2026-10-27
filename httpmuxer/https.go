@@ -112,7 +112,7 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 
 	sshConn := utils.ListenerOwner(pL.Holder.SSHConnections, hostAddr)
 
-	pL.State.LogConnection(logLine, utils.ConnectionEvent{
+	pL.State.LogConnection(utils.ConnectionEvent{
 		SSHConn:        sshConn,
 		TunnelType:     "sni",
 		TunnelId:       fmt.Sprintf("%s-%s", pL.Holder.TunnelId(), balancerName),

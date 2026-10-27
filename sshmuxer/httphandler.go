@@ -122,16 +122,10 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 
 		requestMessages += fmt.Sprintf("%s: http://%s%s%s%s\r\n", aurora.BgBlue("HTTP"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path)
 		sshConn.Logger().Info(
-			fmt.Sprintf(
-				"%s forwarding started: http://%s%s%s%s -> %s for client: %s\n",
-				aurora.BgBlue("HTTP"),
-				userPass,
-				pH.HTTPUrl.Host,
-				httpPortString,
-				pH.HTTPUrl.Path,
-				listenerHolder.Addr().String(),
-				sshConn.SSHConn.RemoteAddr().String(),
-			),
+			"forwarding started",
+			"forwardingType", "HTTP",
+			"url", fmt.Sprintf("http://%s%s%s", pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path),
+			"listenerAddr", listenerHolder.Addr().String(),
 		)
 	}
 
@@ -143,16 +137,10 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 
 		requestMessages += fmt.Sprintf("%s: https://%s%s%s%s\r\n", aurora.BgBlue("HTTPS"), userPass, pH.HTTPUrl.Host, httpsPortString, pH.HTTPUrl.Path)
 		sshConn.Logger().Info(
-			fmt.Sprintf(
-				"%s forwarding started: https://%s%s%s%s -> %s for client: %s\n",
-				aurora.BgBlue("HTTPS"),
-				userPass,
-				pH.HTTPUrl.Host,
-				httpsPortString,
-				pH.HTTPUrl.Path,
-				listenerHolder.Addr().String(),
-				sshConn.SSHConn.RemoteAddr().String(),
-			),
+			"forwarding started",
+			"forwardingType", "HTTPS",
+			"url", fmt.Sprintf("https://%s%s%s", pH.HTTPUrl.Host, httpsPortString, pH.HTTPUrl.Path),
+			"listenerAddr", listenerHolder.Addr().String(),
 		)
 	}
 

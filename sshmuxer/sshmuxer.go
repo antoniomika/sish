@@ -188,7 +188,7 @@ func Start() {
 	}
 
 	slog.Info(
-		"Starting SSH service",
+		"starting SSH service",
 		"address", viper.GetString("ssh-address"),
 	)
 

@@ -257,7 +257,7 @@ func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 		err := reader.Close()
 		if err != nil {
 			slog.Error(
-				"Error closing reader:",
+				"error closing reader",
 				"error", err,
 			)
 		}
@@ -265,7 +265,7 @@ func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 		err = writer.Close()
 		if err != nil {
 			slog.Error(
-				"Error closing writer:",
+				"error closing writer",
 				"error", err,
 			)
 		}

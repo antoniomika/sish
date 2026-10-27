@@ -106,7 +106,7 @@ func Start(state *utils.State) {
 			status := http.StatusForbidden
 			c.AbortWithStatus(status)
 			slog.Debug(
-				"Aborting with status",
+				"aborting with status",
 				"status", status,
 				"remoteAddrBlocked", clientIPAddrBlocked,
 				"remoteAddr", clientIPAddr,
