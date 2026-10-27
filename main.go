@@ -2,7 +2,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/antoniomika/sish/cmd"
 )
@@ -11,6 +11,9 @@ import (
 func main() {
 	err := cmd.Execute()
 	if err != nil {
-		log.Println("Unable to execute root command:", err)
+		slog.Error(
+			"Unable to execute root command:",
+			"error", err,
+		)
 	}
 }

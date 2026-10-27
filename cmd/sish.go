@@ -4,7 +4,7 @@ package cmd
 import (
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -167,7 +167,10 @@ func initConfig() {
 
 	err := viper.BindPFlags(rootCmd.PersistentFlags())
 	if err != nil {
-		log.Println("Unable to bind pflags:", err)
+		slog.Error(
+			"Unable to bind pflags:",
+			"error", err,
+		)
 	}
 
 	viper.SetEnvPrefix(rootCmd.Use)
@@ -175,7 +178,10 @@ func initConfig() {
 	viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err == nil {
-		log.Println("Using config file:", viper.ConfigFileUsed())
+		slog.Info(
+			"Using config file:",
+			"config", viper.ConfigFileUsed(),
+		)
 	}
 
 	viper.WatchConfig()
@@ -198,29 +204,35 @@ func initConfig() {
 
 	multiWriter := io.MultiWriter(writers...)
 
-	viper.OnConfigChange(func(e fsnotify.Event) {
-		log.Println("Reloaded configuration file.")
-
-		log.SetFlags(0)
-		log.SetOutput(utils.LogWriter{
-			TimeFmt:     viper.GetString("time-format"),
-			MultiWriter: multiWriter,
-		})
-
-		if viper.GetBool("debug") {
-			logrus.SetLevel(logrus.DebugLevel)
-		}
-	})
-
-	log.SetFlags(0)
-	log.SetOutput(utils.LogWriter{
-		TimeFmt:     viper.GetString("time-format"),
-		MultiWriter: multiWriter,
-	})
-
+	logLevel := slog.LevelInfo
 	if viper.GetBool("debug") {
 		logrus.SetLevel(logrus.DebugLevel)
+		logLevel = slog.LevelDebug
 	}
+
+	logger := slog.New(
+		slog.NewTextHandler(multiWriter, &slog.HandlerOptions{AddSource: true, Level: logLevel}),
+	)
+
+	hostname, err := os.Hostname()
+	if err == nil && hostname != "" {
+		logger = logger.With(
+			"hostname", hostname,
+		)
+	}
+
+	nodename := os.Getenv("NODENAME")
+	if nodename != "" {
+		logger = logger.With(
+			"nodename", nodename,
+		)
+	}
+
+	slog.SetDefault(logger)
+
+	viper.OnConfigChange(func(e fsnotify.Event) {
+		slog.Info("Reloaded configuration file.")
+	})
 
 	logrus.SetOutput(multiWriter)
 

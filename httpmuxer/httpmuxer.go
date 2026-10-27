@@ -9,7 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -20,6 +20,7 @@ import (
 	"github.com/antoniomika/sish/templates"
 	"github.com/antoniomika/sish/utils"
 	"github.com/antoniomika/syncmap"
+
 	"github.com/caddyserver/certmagic"
 	"github.com/pires/go-proxyproto"
 	"github.com/spf13/viper"
@@ -104,15 +105,14 @@ func Start(state *utils.State) {
 		if clientIPAddrBlocked || cClientIPBlocked || err != nil {
 			status := http.StatusForbidden
 			c.AbortWithStatus(status)
-			if viper.GetBool("debug") {
-				log.Println("Aborting with status", status)
-				if clientIPAddrBlocked {
-					log.Println("Blocked:", clientIPAddr)
-				}
-				if cClientIPBlocked {
-					log.Println("Blocked:", cClientIP)
-				}
-			}
+			slog.Debug(
+				"Aborting with status",
+				"status", status,
+				"remoteAddrBlocked", clientIPAddrBlocked,
+				"remoteAddr", clientIPAddr,
+				"clientIPBlocked", cClientIPBlocked,
+				"clientIP", cClientIP,
+			)
 			return
 		}
 		c.Next()
@@ -271,16 +271,20 @@ func Start(state *utils.State) {
 
 			status := http.StatusNotFound
 			c.AbortWithStatus(status)
-			if viper.GetBool("debug") {
-				log.Println("Aborting with status", status)
-			}
+			slog.Debug(
+				"aborting with status",
+				"status", status,
+			)
 			return
 		}
 
 		if currentListener == nil {
 			err := c.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", hostname))
 			if err != nil {
-				log.Println("Aborting with error", err)
+				slog.Error(
+					"aborting with error",
+					"error", err,
+				)
 			}
 			return
 		}
@@ -291,9 +295,10 @@ func Start(state *utils.State) {
 			c.Header("WWW-Authenticate", "Basic realm=\"sish\"")
 			status := http.StatusUnauthorized
 			c.AbortWithStatus(status)
-			if viper.GetBool("debug") {
-				log.Println("Aborting with status", status)
-			}
+			slog.Debug(
+				"aborting with status",
+				"status", status,
+			)
 			return
 		}
 
@@ -365,7 +370,10 @@ func Start(state *utils.State) {
 		if consoleEnabled() {
 			body, err := readRequestBody(c)
 			if err != nil {
-				log.Println("Error reading request body:", err)
+				slog.Error(
+					"error reading request body",
+					"error", err,
+				)
 				c.AbortWithStatus(http.StatusBadRequest)
 				return
 			}
@@ -422,7 +430,10 @@ func Start(state *utils.State) {
 					return fmt.Errorf("cannot find connection for host: %s", name)
 				}
 
-				log.Println("Requesting certificate for host:", name)
+				slog.Info(
+					"requesting certificate for host",
+					"host", name,
+				)
 				return nil
 			},
 		}
@@ -440,7 +451,11 @@ func Start(state *utils.State) {
 			// That listener will then check the hostname of the request and choose the connection to send it to
 			portListener, err := utils.Listen(httpsServer.Addr)
 			if err != nil {
-				log.Fatalf("couldn't listen to %q: %q\n", httpsServer.Addr, err.Error())
+				utils.Fatal(
+					"unable to listen",
+					"address", httpsServer.Addr,
+					"error", err,
+				)
 			}
 
 			pListener := portListener
@@ -469,7 +484,10 @@ func Start(state *utils.State) {
 
 				balancer, err := roundrobin.New(nil)
 				if err != nil {
-					log.Fatal("Error initializing tcp balancer:", err)
+					utils.Fatal(
+						"unable to initialize tcp balancer",
+						"error", err,
+					)
 				}
 
 				err = balancer.UpsertServer(&url.URL{
@@ -477,7 +495,10 @@ func Start(state *utils.State) {
 				})
 
 				if err != nil {
-					log.Fatal("Error upserting empty balancer:", err)
+					utils.Fatal(
+						"unable to add empty balancer server",
+						"error", err,
+					)
 				}
 
 				tH.Balancers.Store("", balancer)
@@ -499,11 +520,18 @@ func Start(state *utils.State) {
 			defer func() {
 				err := httpsListener.Close()
 				if err != nil {
-					log.Println("Error closing https listener:", err)
+					slog.Error(
+						"error closing https listener",
+						"error", err,
+					)
 				}
 			}()
 
-			log.Fatal(httpsServer.ServeTLS(httpsListener, "", ""))
+			err = httpsServer.ServeTLS(httpsListener, "", "")
+			utils.Fatal(
+				"https server stopped",
+				"error", err,
+			)
 		}()
 	}
 
@@ -516,7 +544,11 @@ func Start(state *utils.State) {
 
 	l, err := utils.Listen(httpServer.Addr)
 	if err != nil {
-		log.Fatalf("couldn't listen to %q: %q\n", httpServer.Addr, err.Error())
+		utils.Fatal(
+			"unable to listen",
+			"address", httpServer.Addr,
+			"error", err,
+		)
 	}
 
 	if viper.GetBool("proxy-protocol-listener") {
@@ -533,11 +565,18 @@ func Start(state *utils.State) {
 	defer func() {
 		err := httpListener.Close()
 		if err != nil {
-			log.Println("Error closing http listener:", err)
+			slog.Error(
+				"error closing http listener",
+				"error", err,
+			)
 		}
 	}()
 
-	log.Fatal(httpServer.Serve(httpListener))
+	err = httpServer.Serve(httpListener)
+	utils.Fatal(
+		"http server stopped",
+		"error", err,
+	)
 }
 
 // newServer returns a server for visitor traffic. Read and write timeouts stay

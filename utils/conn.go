@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"sync"
 	"time"
@@ -106,12 +106,32 @@ func (s *SSHConnection) CleanUp(state *State) {
 
 		err := s.SSHConn.Close()
 		if err != nil {
-			log.Println("Error closing SSH connection:", err)
+			slog.Error(
+				"error closing SSH connection",
+				"error", err,
+			)
 		}
 
 		state.SSHConnections.Delete(s.SSHConn.RemoteAddr().String())
-		log.Println("Closed SSH connection for:", s.SSHConn.RemoteAddr().String(), "user:", s.SSHConn.User())
+		s.Logger().Info("closed SSH connection")
 	})
+}
+
+// User returns the name the client authenticated as, or "" for a nil connection.
+func (s *SSHConnection) User() string {
+	if s == nil {
+		return ""
+	}
+
+	return s.SSHConn.User()
+}
+
+// Logger returns the default logger with the connection's remote address and user.
+func (s *SSHConnection) Logger() *slog.Logger {
+	return slog.With(
+		"remoteAddr", s.SSHConn.RemoteAddr().String(),
+		"user", s.User(),
+	)
 }
 
 // TeeConn represents a simple net.Conn interface for SNI Processing.
@@ -236,12 +256,18 @@ func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 	closeBoth := func() {
 		err := reader.Close()
 		if err != nil {
-			log.Println("Error closing reader:", err)
+			slog.Error(
+				"Error closing reader:",
+				"error", err,
+			)
 		}
 
 		err = writer.Close()
 		if err != nil {
-			log.Println("Error closing writer:", err)
+			slog.Error(
+				"Error closing writer:",
+				"error", err,
+			)
 		}
 	}
 
@@ -257,8 +283,11 @@ func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 
 	copyToReader := func() {
 		_, err := io.Copy(reader, tcon)
-		if err != nil && viper.GetBool("debug") {
-			log.Println("Error copying to reader:", err)
+		if err != nil {
+			slog.Debug(
+				"error copying to reader",
+				"error", err,
+			)
 		}
 
 		closeBoth()
@@ -266,8 +295,11 @@ func CopyBoth(writer net.Conn, reader io.ReadWriteCloser) {
 
 	copyToWriter := func() {
 		_, err := io.Copy(tcon, reader)
-		if err != nil && viper.GetBool("debug") {
-			log.Println("Error copying to writer:", err)
+		if err != nil {
+			slog.Debug(
+				"error copying to writer",
+				"error", err,
+			)
 		}
 
 		closeBoth()

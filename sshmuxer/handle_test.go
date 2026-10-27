@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/netip"
 	"os"
@@ -22,9 +22,14 @@ import (
 // starts outlive it and keep reading this config, so a test that changed it
 // would race with them.
 func TestMain(m *testing.M) {
+	// captureLog swaps handlers, so start from a real one rather than slog's
+	// default, which routes through the log package.
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
+
 	dir, err := os.MkdirTemp("", "sish_keys")
 	if err != nil {
-		log.Fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 
 	viper.Set("private-keys-directory", dir)
@@ -60,6 +65,18 @@ func (b *syncBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.buf.String()
+}
+
+// captureLog sends the default logger's output to a buffer until the test ends.
+func captureLog(t *testing.T) *syncBuffer {
+	t.Helper()
+
+	buf := &syncBuffer{}
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(old) })
+
+	return buf
 }
 
 // dropConnAfterForwardRequest connects to addr, requests an HTTP remote
@@ -122,8 +139,7 @@ func countHTTPListeners(state *utils.State) int {
 // with zero HTTP listeners registered.
 func TestForwardingCleanupOnDroppedConn(t *testing.T) {
 	// Silence the per-connection logging this test deliberately generates.
-	log.SetOutput(io.Discard)
-	defer log.SetOutput(os.Stderr)
+	captureLog(t)
 
 	sshConfig := utils.GetSSHConfig()
 	state := utils.NewState()
@@ -179,8 +195,7 @@ func TestForwardingCleanupOnDroppedConn(t *testing.T) {
 // strict clients such as golang.org/x/crypto/ssh reject outright, breaking
 // every connection the forward was supposed to deliver.
 func TestForwardedTCPIPPayloadHasValidOrigin(t *testing.T) {
-	log.SetOutput(io.Discard)
-	defer log.SetOutput(os.Stderr)
+	captureLog(t)
 
 	sshConfig := utils.GetSSHConfig()
 	state := utils.NewState()
@@ -278,9 +293,7 @@ func TestForwardedTCPIPPayloadHasValidOrigin(t *testing.T) {
 // forward emits a "forwarding stopped" log line, mirroring the
 // "forwarding started" log.
 func TestForwardingStoppedIsLogged(t *testing.T) {
-	logBuf := &syncBuffer{}
-	log.SetOutput(logBuf)
-	defer log.SetOutput(os.Stderr)
+	logBuf := captureLog(t)
 
 	sshConfig := utils.GetSSHConfig()
 	state := utils.NewState()

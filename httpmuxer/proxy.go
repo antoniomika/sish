@@ -10,13 +10,14 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"strings"
 	"sync"
 	"time"
+
+	"log/slog"
 
 	"github.com/andybalholm/brotli"
 	"github.com/antoniomika/sish/utils"
@@ -37,7 +38,10 @@ func RoundTripper() http.RoundTripper {
 	dialer := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		realAddr, err := base64.StdEncoding.DecodeString(strings.Split(addr, ":")[0])
 		if err != nil {
-			log.Println("Unable to parse socket:", err)
+			slog.Error(
+				"unable to parse socket",
+				"error", err,
+			)
 		}
 
 		var d net.Dialer
@@ -161,7 +165,11 @@ func (b *loggingBody) Read(p []byte) (int, error) {
 
 	// A canceled context means the client went away, not the tunnel.
 	if err != nil && err != io.EOF && b.ctx.Err() == nil {
-		log.Printf("Error reading response body from %s: %s", b.host, err)
+		slog.Error(
+			"error reading response body",
+			"host", b.host,
+			"error", err,
+		)
 	}
 
 	return n, err
@@ -177,13 +185,17 @@ func NewForwarder() *httputil.ReverseProxy {
 
 	// The proxy only logs failed body reads, which loggingBody already logs
 	// with the host.
-	fwd.ErrorLog = log.New(io.Discard, "", 0)
+	fwd.ErrorLog = slog.NewLogLogger(slog.DiscardHandler, slog.LevelError)
 
 	fwd.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
 		// Once an upgrade has hijacked the connection there is no status left
 		// to send.
 		if gw, ok := w.(gin.ResponseWriter); ok && gw.Written() {
-			log.Printf("Error switching protocols for %s: %s", publicHost(req), err)
+			slog.Error(
+				"error switching protocols",
+				"host", publicHost(req),
+				"error", err,
+			)
 			return
 		}
 
@@ -233,7 +245,10 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 		if response.Request != nil {
 			hostLocation, err := base64.StdEncoding.DecodeString(response.Request.URL.Host)
 			if err != nil {
-				log.Println("Error loading proxy info from request", err)
+				slog.Error(
+					"error loading proxy info from request",
+					"error", err,
+				)
 			}
 
 			c.Set("proxySocket", string(hostLocation))
@@ -427,7 +442,11 @@ func decodeConsoleBody(body []byte, encoding string, limit int64) []byte {
 	}
 
 	if err != nil {
-		log.Printf("Error decoding %s console body: %s", encoding, err)
+		slog.Error(
+			"error decoding console body",
+			"encoding", encoding,
+			"error", err,
+		)
 		return body
 	}
 
@@ -437,7 +456,11 @@ func decodeConsoleBody(body []byte, encoding string, limit int64) []byte {
 
 	decoded, err := io.ReadAll(reader)
 	if err != nil {
-		log.Printf("Error decoding %s console body: %s", encoding, err)
+		slog.Error(
+			"error decoding console body",
+			"encoding", encoding,
+			"error", err,
+		)
 		return body
 	}
 

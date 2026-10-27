@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"slices"
 	"strconv"
@@ -69,9 +69,10 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 		return
 	}
 
-	if viper.GetBool("debug") {
-		log.Println("Handling session for connection:", connection)
-	}
+	slog.Debug(
+		"handling session for connection",
+		"connection", connection,
+	)
 
 	welcomeMessage := viper.GetString("welcome-message")
 	if welcomeMessage != "" {
@@ -121,7 +122,10 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 			case "shell":
 				err := req.Reply(true, nil)
 				if err != nil {
-					log.Println("Error replying to socket request:", err)
+					slog.Error(
+						"error replying to socket request",
+						"error", err,
+					)
 				}
 
 				sshConn.ExecReceived()
@@ -163,7 +167,10 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						nstripPath, err := strconv.ParseBool(param)
 
 						if err != nil {
-							log.Printf("Unable to detect strip path setting. Using configuration: %s", err)
+							slog.Error(
+								"unable to detect strip path setting",
+								"error", err,
+							)
 						} else {
 							sshConn.StripPath = nstripPath
 						}
@@ -177,7 +184,10 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						sniProxy, err := strconv.ParseBool(param)
 
 						if err != nil {
-							log.Printf("Unable to detect sni proxy setting. Using false as default: %s", err)
+							slog.Error(
+								"unable to detect sni proxy setting",
+								"error", err,
+							)
 						}
 
 						sshConn.SNIProxy = sniProxy
@@ -199,7 +209,10 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						tcpAlias, err := strconv.ParseBool(param)
 
 						if err != nil {
-							log.Printf("Unable to detect tcp alias setting. Using false as default: %s", err)
+							slog.Error(
+								"unable to detect tcp alias setting",
+								"error", err,
+							)
 						}
 
 						sshConn.TCPAlias = tcpAlias
@@ -209,7 +222,10 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						autoClose, err := strconv.ParseBool(param)
 
 						if err != nil {
-							log.Printf("Unable to detect auto close setting. Using false as default: %s", err)
+							slog.Error(
+								"unable to detect auto close setting",
+								"error", err,
+							)
 						}
 
 						sshConn.AutoClose = autoClose
@@ -222,7 +238,10 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 
 						forceHTTPS, err := strconv.ParseBool(param)
 						if err != nil {
-							log.Printf("Unable to detect force https setting. Using false as default: %s", err)
+							slog.Error(
+								"unable to detect force https setting",
+								"error", err,
+							)
 						}
 						sshConn.ForceHTTPS = forceHTTPS
 						sshConn.SendMessage(fmt.Sprintf("Force https for connection set to: %t", sshConn.ForceHTTPS), true)
@@ -230,7 +249,10 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						localForward, err := strconv.ParseBool(param)
 
 						if err != nil {
-							log.Printf("Unable to detect tcp alias setting. Using false as default: %s", err)
+							slog.Error(
+								"unable to detect tcp alias setting",
+								"error", err,
+							)
 						}
 
 						sshConn.LocalForward = localForward
@@ -266,7 +288,11 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 					case deadlinePrefix:
 						deadline, err := parseDeadline(param)
 						if err != nil {
-							log.Printf("Unable to parse deadline: %s", param)
+							slog.Error(
+								"unable to parse deadline",
+								"error", err,
+								"param", param,
+							)
 							break
 						}
 
@@ -277,19 +303,28 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 
 				err := req.Reply(true, nil)
 				if err != nil {
-					log.Println("Error replying to socket request:", err)
+					slog.Error(
+						"error replying to socket request",
+						"error", err,
+					)
 				}
 
 				sshConn.ExecReceived()
 			default:
 				err := req.Reply(req.Type == "pty-req", nil)
 				if err != nil {
-					log.Println("Error replying to socket request:", err)
+					slog.Error(
+						"error replying to socket request",
+						"error", err,
+					)
 				}
 
-				if viper.GetBool("debug") {
-					log.Println("Sub Channel Type", req.Type, req.WantReply, string(req.Payload))
-				}
+				slog.Debug(
+					"sub channel type",
+					"type", req.Type,
+					"wantReply", req.WantReply,
+					"payload", req.Payload,
+				)
 			}
 		}
 	}()
@@ -311,14 +346,18 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 		break
 	}
 
-	if viper.GetBool("debug") {
-		log.Println("Handling alias connection for:", connection)
-	}
+	slog.Debug(
+		"handling alias connection",
+		"connection", connection,
+	)
 
 	check := &forwardedTCPPayload{}
 	err = ssh.Unmarshal(newChannel.ExtraData(), check)
 	if err != nil {
-		log.Println("Error unmarshaling information:", err)
+		slog.Error(
+			"error unmarshaling information",
+			"error", err,
+		)
 		sshConn.CleanUp(state)
 		return
 	}
@@ -328,7 +367,10 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 	tcpAliasToConnect := fmt.Sprintf("%s:%d", check.Addr, check.Port)
 	loc, ok := state.AliasListeners.Load(tcpAliasToConnect)
 	if !ok {
-		log.Println("Unable to load tcp alias:", tcpAliasToConnect)
+		slog.Error(
+			"unable to load tcp alias",
+			"ok", ok,
+		)
 		sshConn.CleanUp(state)
 		return
 	}
@@ -357,7 +399,7 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 		})
 
 		if !connAllowed {
-			log.Println("Connection not allowed because fingerprint is not found in allowed list")
+			slog.Info("Connection not allowed because fingerprint is not found in allowed list")
 			sshConn.CleanUp(state)
 			return
 		}
@@ -365,14 +407,20 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 	connectionLocation, err := aH.Balancer.NextServer()
 	if err != nil {
-		log.Println("Unable to load connection location:", err)
+		slog.Error(
+			"error selecting next server",
+			"error", err,
+		)
 		sshConn.CleanUp(state)
 		return
 	}
 
 	host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
 	if err != nil {
-		log.Println("Unable to decode connection location:", err)
+		slog.Error(
+			"error decoding server",
+			"error", err,
+		)
 		sshConn.CleanUp(state)
 		return
 	}
@@ -381,26 +429,24 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 	connString := sshConn.SSHConn.RemoteAddr().String()
 	if pubKeyFingerprint != "" {
-		connString = fmt.Sprintf("%s (%s)", connString, pubKeyFingerprint)
+		connString = fmt.Sprintf("%s [%s (%s)]", connString, pubKeyFingerprint, sshConn.User())
 	}
 
-	logLine := fmt.Sprintf("Accepted connection from %s -> %s", connString, tcpAliasToConnect)
-	log.Println(logLine)
+	logLine := fmt.Sprintf("Accepted alias connection from %s -> %s", connString, tcpAliasToConnect)
+
+	state.LogConnection(logLine, utils.ConnectionEvent{
+		SSHConn:        sshConn,
+		TunnelType:     "alias",
+		TunnelId:       aH.TunnelId(),
+		ConnectionType: "tcp",
+		RemoteAddr:     connString,
+		LocalAddr:      tcpAliasToConnect,
+	})
 
 	if viper.GetBool("log-to-client") {
-		aH.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
-			sshConn.Listeners.Range(func(listenerAddr string, val net.Listener) bool {
-				if listenerAddr == aliasAddr {
-					sshConn.SendMessage(logLine, true)
-
-					return false
-				}
-
-				return true
-			})
-
-			return true
-		})
+		if owner := utils.ListenerOwner(aH.SSHConnections, aliasAddr); owner != nil {
+			owner.SendMessage(logLine, true)
+		}
 
 		if sshConn.LocalForward {
 			sshConn.SendMessage(logLine, true)
@@ -409,7 +455,10 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 
 	conn, err := net.Dial("unix", aliasAddr)
 	if err != nil {
-		log.Println("Error connecting to alias:", err)
+		slog.Error(
+			"error connecting to alias",
+			"error", err,
+		)
 		sshConn.CleanUp(state)
 		return
 	}
@@ -420,8 +469,11 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 // writeToSession is where we write to the underlying session channel.
 func writeToSession(connection ssh.Channel, c string) {
 	_, err := connection.Write(append([]byte(c), []byte{'\r', '\n'}...))
-	if err != nil && viper.GetBool("debug") {
-		log.Println("Error trying to write message to socket:", err)
+	if err != nil {
+		slog.Debug(
+			"error trying to write message to session",
+			"error", err,
+		)
 	}
 }
 

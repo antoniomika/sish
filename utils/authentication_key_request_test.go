@@ -6,7 +6,6 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -18,12 +17,14 @@ import (
 )
 
 // MakeTestKeys returns a slice of randomly generated private keys.
-func MakeTestKeys(numKeys int) []*rsa.PrivateKey {
+func MakeTestKeys(t *testing.T, numKeys int) []*rsa.PrivateKey {
+	t.Helper()
+
 	testKeys := make([]*rsa.PrivateKey, numKeys)
 	for i := 0; i < numKeys; i++ {
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
-			log.Fatal(err)
+			t.Fatal(err)
 		}
 		testKeys[i] = key
 	}
@@ -39,7 +40,7 @@ type AuthRequestBody struct {
 // PubKeyHttpHandler returns a http handler function which validates an
 // OpenSSH authorized-keys formatted public key against a slice of
 // slice authorized keys.
-func PubKeyHttpHandler(validPublicKeys *[]rsa.PublicKey, validUsernames *[]string) func(w http.ResponseWriter, r *http.Request) {
+func PubKeyHttpHandler(t *testing.T, validPublicKeys *[]rsa.PublicKey, validUsernames *[]string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		pubKey, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -63,7 +64,7 @@ func PubKeyHttpHandler(validPublicKeys *[]rsa.PublicKey, validUsernames *[]strin
 		for _, key := range *validPublicKeys {
 			authorizedKey, err := ssh.NewPublicKey(&key)
 			if err != nil {
-				log.Print("Error parsing authorized public key", err)
+				t.Error("error parsing authorized public key:", err)
 				continue
 			}
 			if bytes.Equal(authorizedKey.Marshal(), marshalled) {
@@ -87,18 +88,15 @@ func PubKeyHttpHandler(validPublicKeys *[]rsa.PublicKey, validUsernames *[]strin
 // HandleSSHConn accepts an incoming client connection, performs the
 // auth handshake to test the GetSSHConfig method using the
 // authentication-key-request-url flag.
-func HandleSSHConn(sshListener net.Listener, successAuth *chan bool) {
+func HandleSSHConn(t *testing.T, sshListener net.Listener, successAuth *chan bool) {
 	conn, err := sshListener.Accept()
 	if err != nil {
-		log.Fatal(err)
+		t.Error(err)
+		*successAuth <- false
+		return
 	}
 
-	defer func() {
-		err := conn.Close()
-		if err != nil {
-			log.Println("Error closing connection:", err)
-		}
-	}()
+	defer func() { _ = conn.Close() }()
 
 	// GetSSHConfig is the method we are testing to validate that it
 	// can use an http request to validate client public key auth
@@ -109,10 +107,7 @@ func HandleSSHConn(sshListener net.Listener, successAuth *chan bool) {
 		return
 	}
 
-	err = connection.Close()
-	if err != nil {
-		log.Print("Error closing connection", err)
-	}
+	_ = connection.Close()
 
 	*successAuth <- true
 }
@@ -120,12 +115,12 @@ func HandleSSHConn(sshListener net.Listener, successAuth *chan bool) {
 // TestAuthenticationKeyRequest validates that the utils.GetSSHConfig
 // PublicKey auth works with the authentication-key-request-url parameter.
 func TestAuthenticationKeyRequest(t *testing.T) {
-	testKeys := MakeTestKeys(3)
+	testKeys := MakeTestKeys(t, 3)
 
 	// Give sish a temp directory to generate a server ssh host key
 	dir, err := os.MkdirTemp("", "sish_keys")
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	defer func() {
@@ -196,7 +191,7 @@ func TestAuthenticationKeyRequest(t *testing.T) {
 	for caseIdx, c := range testCases {
 		if c.overrideHttpUrl == "" {
 			// start an http server that will validate against the specified public keys
-			httpSrv := httptest.NewServer(http.HandlerFunc(PubKeyHttpHandler(&c.validPublicKeys, &c.validUsernames)))
+			httpSrv := httptest.NewServer(http.HandlerFunc(PubKeyHttpHandler(t, &c.validPublicKeys, &c.validUsernames)))
 			defer httpSrv.Close()
 
 			// set viper to this http server URL as the auth request url it will
@@ -218,7 +213,7 @@ func TestAuthenticationKeyRequest(t *testing.T) {
 		}()
 
 		successAuth := make(chan bool)
-		go HandleSSHConn(sshListener, &successAuth)
+		go HandleSSHConn(t, sshListener, &successAuth)
 
 		// attempt to connect to the ssh server using the specified private key
 		signer, err := ssh.NewSignerFromKey(c.clientPrivateKey)

@@ -2,20 +2,22 @@ package sshmuxer
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/antoniomika/sish/utils"
-	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
 
 // handleRequests handles incoming requests from an SSH connection.
 func handleRequests(reqs <-chan *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
 	for req := range reqs {
-		if viper.GetBool("debug") {
-			log.Println("Main Request Info", req.Type, req.WantReply, string(req.Payload))
-		}
+		slog.Debug("main request info",
+			"type", req.Type,
+			"wantReply", req.WantReply,
+			"payload", req.Payload,
+		)
+
 		handleRequest(req, sshConn, state)
 	}
 }
@@ -31,12 +33,18 @@ func handleRequest(newRequest *ssh.Request, sshConn *utils.SSHConnection, state 
 	case "keepalive@openssh.com":
 		err := newRequest.Reply(true, nil)
 		if err != nil {
-			log.Println("Error replying to socket request:", err)
+			slog.Error(
+				"error replying to socket request",
+				"error", err,
+			)
 		}
 	default:
 		err := newRequest.Reply(false, nil)
 		if err != nil {
-			log.Println("Error replying to socket request:", err)
+			slog.Error(
+				"error replying to socket request",
+				"error", err,
+			)
 		}
 	}
 }
@@ -66,7 +74,10 @@ func checkSession(_ *ssh.Request, sshConn *utils.SSHConnection, state *utils.Sta
 
 		err := sshConn.SSHConn.Wait()
 		if err != nil {
-			log.Println("Waited for ssh conn without session:", err)
+			slog.Error(
+				"waited for ssh conn without session",
+				"error", err,
+			)
 		}
 		sshConn.CleanUp(state)
 		return
@@ -76,9 +87,10 @@ func checkSession(_ *ssh.Request, sshConn *utils.SSHConnection, state *utils.Sta
 // handleChannels handles a SSH connection's channel requests.
 func handleChannels(chans <-chan ssh.NewChannel, sshConn *utils.SSHConnection, state *utils.State) {
 	for newChannel := range chans {
-		if viper.GetBool("debug") {
-			log.Println("Main Channel Info", newChannel.ChannelType(), string(newChannel.ExtraData()))
-		}
+		slog.Debug("main channel info",
+			"channelType", newChannel.ChannelType(),
+			"extraData", newChannel.ExtraData(),
+		)
 		go handleChannel(newChannel, sshConn, state)
 	}
 }
@@ -90,7 +102,10 @@ func handleChannel(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 		if !sshConn.OpenSession() {
 			err := newChannel.Reject(ssh.Prohibited, "only one session is allowed per connection")
 			if err != nil {
-				log.Println("Error rejecting session channel:", err)
+				slog.Error(
+					"error rejecting session channel",
+					"error", err,
+				)
 			}
 			return
 		}
@@ -101,7 +116,10 @@ func handleChannel(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 	default:
 		err := newChannel.Reject(ssh.UnknownChannelType, fmt.Sprintf("unknown channel type: %s", channel))
 		if err != nil {
-			log.Println("Error rejecting socket channel:", err)
+			slog.Error(
+				"error rejecting socket channel",
+				"error", err,
+			)
 		}
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -169,7 +169,10 @@ func (c *WebConsole) HandleTemplate(proxyUrl string, hostIsRoot bool, userIsAdmi
 
 	err := g.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", proxyUrl))
 	if err != nil {
-		log.Println("Aborting with error", err)
+		slog.Error(
+			"aborting with error",
+			"error", err,
+		)
 	}
 }
 
@@ -182,7 +185,10 @@ func (c *WebConsole) HandleWebSocket(proxyUrl string, g *gin.Context) {
 
 	conn, err := upgrader.Upgrade(g.Writer, g.Request, nil)
 	if err != nil {
-		log.Println(err)
+		slog.Error(
+			"error handling websockets",
+			"error", err,
+		)
 		return
 	}
 
@@ -236,11 +242,17 @@ func (c *WebConsole) HandleDisconnectRoute(proxyUrl string, g *gin.Context) {
 
 	decRouteName, err := base64.StdEncoding.DecodeString(encRouteName)
 	if err != nil {
-		log.Println("Error decoding route name:", err)
-		err := g.AbortWithError(http.StatusInternalServerError, err)
+		slog.Error(
+			"error decoding route name",
+			"error", err,
+		)
 
+		err := g.AbortWithError(http.StatusInternalServerError, err)
 		if err != nil {
-			log.Println("Error aborting with error:", err)
+			slog.Error(
+				"aborting with error",
+				"error", err,
+			)
 		}
 		return
 	}
@@ -254,7 +266,10 @@ func (c *WebConsole) HandleDisconnectRoute(proxyUrl string, g *gin.Context) {
 		if ok {
 			err := listener.Close()
 			if err != nil {
-				log.Println("Error closing listener:", err)
+				slog.Error(
+					"error closing listener",
+					"error", err,
+				)
 			}
 		}
 	}
@@ -293,7 +308,10 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 				for _, server := range aliasHolder.Balancer.Servers() {
 					serverAddr, err := base64.StdEncoding.DecodeString(server.Host)
 					if err != nil {
-						log.Println("Error decoding server host:", err)
+						slog.Error(
+							"error decoding server host",
+							"error", err,
+						)
 						continue
 					}
 
@@ -320,7 +338,10 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 					for _, server := range balancer.Servers() {
 						serverAddr, err := base64.StdEncoding.DecodeString(server.Host)
 						if err != nil {
-							log.Println("Error decoding server host:", err)
+							slog.Error(
+								"error decoding server host",
+								"error", err,
+							)
 							continue
 						}
 
@@ -378,7 +399,7 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 
 		clients[clientName] = map[string]any{
 			"remoteAddr":        sshConn.SSHConn.RemoteAddr().String(),
-			"user":              sshConn.SSHConn.User(),
+			"user":              sshConn.User(),
 			"version":           string(sshConn.SSHConn.ClientVersion()),
 			"session":           sshConn.SSHConn.SessionID(),
 			"pubKey":            pubKey,
@@ -431,7 +452,10 @@ func (c *WebConsole) RemoveRoute(route string) {
 	for _, client := range clients {
 		err := client.Conn.Close()
 		if err != nil {
-			log.Println("Error closing websocket connection:", err)
+			slog.Error(
+				"error closing websocket connection",
+				"error", err,
+			)
 		}
 	}
 
@@ -494,7 +518,10 @@ func (c *WebConsole) BroadcastRoute(route string, data map[string]any) uint64 {
 
 	message, err := json.Marshal(data)
 	if err != nil {
-		log.Println("Unable to marshal console data:", err)
+		slog.Error(
+			"unable to marshal console data",
+			"error", err,
+		)
 		return 0
 	}
 
@@ -519,7 +546,10 @@ func (c *WebConsole) BroadcastEvent(route string, requestID uint64, data map[str
 
 	message, err := json.Marshal(data)
 	if err != nil {
-		log.Println("Unable to marshal console data:", err)
+		slog.Error(
+			"unable to marshal console data",
+			"error", err,
+		)
 		return
 	}
 
@@ -619,7 +649,10 @@ func (c *WebClient) Handle() {
 
 		err := c.Conn.Close()
 		if err != nil {
-			log.Println("Error closing websocket connection:", err)
+			slog.Error(
+				"error closing websocket connection",
+				"error", err,
+			)
 		}
 
 		c.Console.RemoveClient(c.Route, c)

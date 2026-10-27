@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -172,7 +172,7 @@ func enableConsole(t *testing.T) {
 	viper.Set("service-console-max-content-length", int64(-1))
 }
 
-// captureLog sends the standard logger's output to a buffer for the rest of
+// captureLog sends the default logger's output to a buffer for the rest of
 // the test and returns a function that reads it. The proxy goroutines write
 // while the test reads, so the buffer is guarded by a mutex.
 func captureLog(t *testing.T) func() string {
@@ -183,17 +183,17 @@ func captureLog(t *testing.T) func() string {
 		buf bytes.Buffer
 	)
 
-	oldWriter := log.Writer()
+	old := slog.Default()
 
-	log.SetOutput(writerFunc(func(p []byte) (int, error) {
+	slog.SetDefault(slog.New(slog.NewTextHandler(writerFunc(func(p []byte) (int, error) {
 		mu.Lock()
 		defer mu.Unlock()
 
 		return buf.Write(p)
-	}))
+	}), nil)))
 
 	t.Cleanup(func() {
-		log.SetOutput(oldWriter)
+		slog.SetDefault(old)
 	})
 
 	return func() string {
@@ -641,7 +641,7 @@ func TestForwarderPipelineDroppedTunnelLogsPublicHost(t *testing.T) {
 
 	front.Close()
 
-	if !strings.Contains(logs(), "from sub.example.com:") {
+	if !strings.Contains(logs(), "host=sub.example.com") {
 		t.Errorf("expected the log to name sub.example.com, got %q", logs())
 	}
 }

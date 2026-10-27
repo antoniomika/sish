@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/http/httputil"
 	"net/url"
@@ -64,11 +64,27 @@ type HTTPHolder struct {
 	Balancer       *roundrobin.RoundRobin
 }
 
+// TunnelId identifies the tunnel in logs. It keeps the basic auth username
+// from the URL and leaves out the password.
+func (h *HTTPHolder) TunnelId() string {
+	var user string
+	if name := h.HTTPUrl.User.Username(); name != "" {
+		user = name + "@"
+	}
+
+	return fmt.Sprintf("%s%s%s", user, h.HTTPUrl.Hostname(), h.HTTPUrl.Path)
+}
+
 // AliasHolder holds alias and connection info.
 type AliasHolder struct {
 	AliasHost      string
 	SSHConnections *syncmap.Map[string, *SSHConnection]
 	Balancer       *roundrobin.RoundRobin
+}
+
+// TunnelId identifies the tunnel in logs.
+func (h *AliasHolder) TunnelId() string {
+	return h.AliasHost
 }
 
 // TCPHolder holds proxy and connection info.
@@ -79,6 +95,11 @@ type TCPHolder struct {
 	SNIProxy       bool
 	Balancers      *syncmap.Map[string, *roundrobin.RoundRobin]
 	NoHandle       bool
+}
+
+// TunnelId identifies the tunnel in logs.
+func (h *TCPHolder) TunnelId() string {
+	return h.TCPHost
 }
 
 // Handle will copy connections from one handler to a roundrobin server.
@@ -95,11 +116,18 @@ func (tH *TCPHolder) Handle(state *State) {
 			if err != nil || state.IPFilter.Blocked(clientRemote) {
 				err := cl.Close()
 				if err != nil {
-					log.Printf("Unable to close connection: %s", err)
+					slog.Error(
+						"unable to close connection",
+						"error", err,
+					)
 				}
 
 				if viper.GetBool("debug") {
-					log.Printf("Blocked connection from %s to %s", cl.RemoteAddr().String(), cl.LocalAddr().String())
+					slog.Debug(
+						"Blocked connection",
+						"remoteAddr", cl.RemoteAddr().String(),
+						"localAddr", cl.LocalAddr().String(),
+					)
 				}
 
 				return
@@ -111,11 +139,17 @@ func (tH *TCPHolder) Handle(state *State) {
 			if tH.SNIProxy {
 				tlsHello, teeConn, err := PeekTLSHello(cl)
 				if tlsHello == nil {
-					log.Printf("Unable to read TLS hello: %s", err)
+					slog.Error(
+						"unable to read tls hello",
+						"error", err,
+					)
 
 					err := cl.Close()
 					if err != nil {
-						log.Printf("Unable to close connection: %s", err)
+						slog.Error(
+							"unable to close connection",
+							"error", err,
+						)
 					}
 
 					return
@@ -125,11 +159,17 @@ func (tH *TCPHolder) Handle(state *State) {
 
 				_, err = io.ReadFull(teeConn, bufBytes)
 				if err != nil {
-					log.Printf("Unable to read buffered data: %s", err)
+					slog.Error(
+						"unable to read buffered data",
+						"error", err,
+					)
 
 					err := cl.Close()
 					if err != nil {
-						log.Printf("Unable to close connection: %s", err)
+						slog.Error(
+							"unable to close connection",
+							"error", err,
+						)
 					}
 
 					return
@@ -149,11 +189,20 @@ func (tH *TCPHolder) Handle(state *State) {
 				})
 
 				if pB == nil {
-					log.Printf("Unable to load connection location: %s not found on TCP listener %s", balancerName, tH.TCPHost)
+					slog.Info(
+						fmt.Sprintf(
+							"Unable to load connection location: %s not found on TCP listener %s",
+							balancerName,
+							tH.TCPHost,
+						),
+					)
 
 					err := cl.Close()
 					if err != nil {
-						log.Printf("Unable to close connection: %s", err)
+						slog.Error(
+							"unable to close connection",
+							"error", err,
+						)
 					}
 
 					return
@@ -164,11 +213,17 @@ func (tH *TCPHolder) Handle(state *State) {
 
 			connectionLocation, err := balancer.NextServer()
 			if err != nil {
-				log.Println("Unable to load connection location:", err)
+				slog.Error(
+					"unable to load connection location",
+					"error", err,
+				)
 
 				err := cl.Close()
 				if err != nil {
-					log.Printf("Unable to close connection: %s", err)
+					slog.Error(
+						"unable to close connection",
+						"error", err,
+					)
 				}
 
 				return
@@ -176,11 +231,17 @@ func (tH *TCPHolder) Handle(state *State) {
 
 			host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
 			if err != nil {
-				log.Println("Unable to decode connection location:", err)
+				slog.Error(
+					"unable to decode connection location",
+					"error", err,
+				)
 
 				err := cl.Close()
 				if err != nil {
-					log.Printf("Unable to close connection: %s", err)
+					slog.Error(
+						"unable to close connection",
+						"error", err,
+					)
 				}
 
 				return
@@ -188,32 +249,36 @@ func (tH *TCPHolder) Handle(state *State) {
 
 			hostAddr := string(host)
 
-			logLine := fmt.Sprintf("Accepted connection from %s -> %s", cl.RemoteAddr().String(), cl.LocalAddr().String())
-			log.Println(logLine)
+			logLine := fmt.Sprintf("Accepted TCP connection from %s -> %s", cl.RemoteAddr().String(), cl.LocalAddr().String())
 
-			if viper.GetBool("log-to-client") {
-				tH.SSHConnections.Range(func(key string, sshConn *SSHConnection) bool {
-					sshConn.Listeners.Range(func(listenerAddr string, val net.Listener) bool {
-						if listenerAddr == hostAddr {
-							sshConn.SendMessage(logLine, true)
+			sshConn := ListenerOwner(tH.SSHConnections, hostAddr)
 
-							return false
-						}
+			state.LogConnection(logLine, ConnectionEvent{
+				SSHConn:        sshConn,
+				TunnelType:     "tcp",
+				TunnelId:       tH.TunnelId(),
+				ConnectionType: "tcp",
+				RemoteAddr:     cl.RemoteAddr().String(),
+				LocalAddr:      cl.LocalAddr().String(),
+			})
 
-						return true
-					})
-
-					return true
-				})
+			if viper.GetBool("log-to-client") && sshConn != nil {
+				sshConn.SendMessage(logLine, true)
 			}
 
 			conn, err := net.Dial("unix", hostAddr)
 			if err != nil {
-				log.Println("Error connecting to tcp balancer:", err)
+				slog.Error(
+					"unable to connect to tcp balancer",
+					"error", err,
+				)
 
 				err := cl.Close()
 				if err != nil {
-					log.Printf("Unable to close connection: %s", err)
+					slog.Error(
+						"unable to close connection",
+						"error", err,
+					)
 				}
 
 				return
@@ -253,18 +318,27 @@ func (tH *TCPHolder) Handle(state *State) {
 			if proxyProtoHeader != nil {
 				_, err := proxyProtoHeader.WriteTo(conn)
 				if err != nil && viper.GetBool("debug") {
-					log.Println("Error writing to channel:", err)
+					slog.Error(
+						"error writing to conn",
+						"error", err,
+					)
 				}
 			}
 
 			if bufBytes != nil {
 				_, err := conn.Write(bufBytes)
 				if err != nil {
-					log.Println("Unable to write to conn:", err)
+					slog.Error(
+						"unable to write to conn",
+						"error", err,
+					)
 
 					err := cl.Close()
 					if err != nil {
-						log.Printf("Unable to close connection: %s", err)
+						slog.Error(
+							"unable to close connection",
+							"error", err,
+						)
 					}
 
 					return
@@ -314,4 +388,43 @@ func NewState() *State {
 		LogWriter:      multiWriter,
 		Ports:          &Ports{},
 	}
+}
+
+// ConnectionEvent describes a visitor connection that a tunnel accepted.
+type ConnectionEvent struct {
+	// SSHConn is the client whose user is logged, or nil if there is none.
+	SSHConn        *SSHConnection
+	TunnelType     string
+	TunnelId       string
+	ConnectionType string
+	RemoteAddr     string
+	LocalAddr      string
+}
+
+// LogConnection logs a visitor connection that a tunnel accepted.
+func (s *State) LogConnection(msg string, ev ConnectionEvent) {
+	slog.Info(
+		msg,
+		"remoteAddr", ev.RemoteAddr,
+		"localAddr", ev.LocalAddr,
+		"tunnelType", ev.TunnelType,
+		"tunnelId", ev.TunnelId,
+		"connectionType", ev.ConnectionType,
+		"user", ev.SSHConn.User(),
+	)
+}
+
+// ListenerOwner returns the client in conns that has a listener on addr, or nil.
+func ListenerOwner(conns *syncmap.Map[string, *SSHConnection], addr string) *SSHConnection {
+	var owner *SSHConnection
+
+	conns.Range(func(_ string, conn *SSHConnection) bool {
+		if _, ok := conn.Listeners.Load(addr); ok {
+			owner = conn
+		}
+
+		return owner == nil
+	})
+
+	return owner
 }

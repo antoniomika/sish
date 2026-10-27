@@ -3,7 +3,7 @@ package sshmuxer
 import (
 	"encoding/base64"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"strings"
 
@@ -30,7 +30,10 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 		lb, err := roundrobin.New(fwd)
 
 		if err != nil {
-			log.Println("Error initializing HTTP balancer:", err)
+			slog.Error(
+				"error initializing http balancer",
+				"error", err,
+			)
 			return nil, nil, "", err
 		}
 
@@ -55,7 +58,10 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 
 	err := pH.Balancer.UpsertServer(serverURL)
 	if err != nil {
-		log.Println("Unable to add server to balancer")
+		slog.Error(
+			"error adding server to balancer",
+			"error", err,
+		)
 	}
 
 	var userPass string
@@ -115,7 +121,18 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 		}
 
 		requestMessages += fmt.Sprintf("%s: http://%s%s%s%s\r\n", aurora.BgBlue("HTTP"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path)
-		log.Printf("%s forwarding started: http://%s%s%s%s -> %s for client: %s\n", aurora.BgBlue("HTTP"), userPass, pH.HTTPUrl.Host, httpPortString, pH.HTTPUrl.Path, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
+		sshConn.Logger().Info(
+			fmt.Sprintf(
+				"%s forwarding started: http://%s%s%s%s -> %s for client: %s\n",
+				aurora.BgBlue("HTTP"),
+				userPass,
+				pH.HTTPUrl.Host,
+				httpPortString,
+				pH.HTTPUrl.Path,
+				listenerHolder.Addr().String(),
+				sshConn.SSHConn.RemoteAddr().String(),
+			),
+		)
 	}
 
 	if viper.GetBool("https") || viper.GetBool("proxy-ssl-termination") {
@@ -125,7 +142,18 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 		}
 
 		requestMessages += fmt.Sprintf("%s: https://%s%s%s%s\r\n", aurora.BgBlue("HTTPS"), userPass, pH.HTTPUrl.Host, httpsPortString, pH.HTTPUrl.Path)
-		log.Printf("%s forwarding started: https://%s%s%s%s -> %s for client: %s\n", aurora.BgBlue("HTTPS"), userPass, pH.HTTPUrl.Host, httpsPortString, pH.HTTPUrl.Path, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
+		sshConn.Logger().Info(
+			fmt.Sprintf(
+				"%s forwarding started: https://%s%s%s%s -> %s for client: %s\n",
+				aurora.BgBlue("HTTPS"),
+				userPass,
+				pH.HTTPUrl.Host,
+				httpsPortString,
+				pH.HTTPUrl.Path,
+				listenerHolder.Addr().String(),
+				sshConn.SSHConn.RemoteAddr().String(),
+			),
+		)
 	}
 
 	return pH, serverURL, requestMessages, nil

@@ -3,7 +3,7 @@ package sshmuxer
 import (
 	"encoding/base64"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/url"
 	"strings"
@@ -36,7 +36,10 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 	if tH == nil {
 		lis, err := utils.Listen(tcpAddr)
 		if err != nil {
-			log.Println("Error listening on addr:", err)
+			slog.Error(
+				"error listening on address",
+				"error", err,
+			)
 			return nil, nil, "", nil, "", "", err
 		}
 
@@ -87,7 +90,10 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		newBalancer, err := roundrobin.New(nil)
 
 		if err != nil {
-			log.Println("Error initializing tcp balancer:", err)
+			slog.Error(
+				"error initializing tcp balancer",
+				"error", err,
+			)
 			return nil, nil, "", nil, "", "", err
 		}
 
@@ -104,7 +110,10 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 
 	err := balancer.UpsertServer(serverURL)
 	if err != nil {
-		log.Println("Unable to add server to balancer")
+		slog.Error(
+			"unable to add server to balancer",
+			"error", err,
+		)
 	}
 
 	domainName := viper.GetString("domain")
@@ -119,7 +128,16 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 
 	listenPort := tH.Listener.Addr().(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port
 	requestMessages += fmt.Sprintf("%s: %s:%d\r\n", aurora.BgBlue(connType), domainName, listenPort)
-	log.Printf("%s forwarding started: %s:%d -> %s for client: %s\n", aurora.BgBlue(connType), domainName, listenPort, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
+	sshConn.Logger().Info(
+		fmt.Sprintf(
+			"%s forwarding started: %s:%d -> %s for client: %s\n",
+			aurora.BgBlue(connType),
+			domainName,
+			listenPort,
+			listenerHolder.Addr().String(),
+			sshConn.SSHConn.RemoteAddr().String(),
+		),
+	)
 
 	return tH, balancer, balancerName, serverURL, tcpAddr, requestMessages, nil
 }

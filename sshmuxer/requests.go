@@ -2,7 +2,7 @@ package sshmuxer
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/netip"
 	"os"
@@ -48,10 +48,16 @@ func handleCancelRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnec
 
 	err := ssh.Unmarshal(newRequest.Payload, check)
 	if err != nil {
-		log.Println("Error unmarshaling remote forward payload:", err)
+		slog.Error(
+			"error unmarshaling remote forward payload",
+			"error", err,
+		)
 		err = newRequest.Reply(false, nil)
 		if err != nil {
-			log.Println("Error replying to request:", err)
+			slog.Error(
+				"error replying to request",
+				"error", err,
+			)
 		}
 		return
 	}
@@ -69,7 +75,10 @@ func handleCancelRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnec
 
 			err := holder.Close()
 			if err != nil {
-				log.Println("Error closing listener:", err)
+				slog.Error(
+					"error closing listener",
+					"error", err,
+				)
 			}
 
 			return false
@@ -79,11 +88,14 @@ func handleCancelRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnec
 	})
 
 	if !closed {
-		log.Println("Unable to close tunnel")
+		slog.Error("unable to close tunnel")
 
 		err = newRequest.Reply(false, nil)
 		if err != nil {
-			log.Println("Error replying to request:", err)
+			slog.Error(
+				"error replying to request",
+				"error", err,
+			)
 		}
 
 		return
@@ -91,7 +103,10 @@ func handleCancelRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnec
 
 	err = newRequest.Reply(true, nil)
 	if err != nil {
-		log.Println("Error replying to request:", err)
+		slog.Error(
+			"error replying to request",
+			"error", err,
+		)
 	}
 }
 
@@ -112,7 +127,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	select {
 	case <-sshConn.Close:
 		if err := newRequest.Reply(false, nil); err != nil {
-			log.Println("Error replying to socket request:", err)
+			slog.Error(
+				"error replying to socket request",
+				"error", err,
+			)
 		}
 		return
 	default:
@@ -122,11 +140,17 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	err := ssh.Unmarshal(newRequest.Payload, check)
 	if err != nil {
-		log.Println("Error unmarshaling remote forward payload:", err)
+		slog.Error(
+			"error unmarshaling remote forward payload",
+			"error", err,
+		)
 
 		err = newRequest.Reply(false, nil)
 		if err != nil {
-			log.Println("Error replying to socket request:", err)
+			slog.Error(
+				"error replying to socket request",
+				"error", err,
+			)
 		}
 		return
 	}
@@ -184,34 +208,52 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	tmpfile, err := os.CreateTemp("", strings.ReplaceAll(sshConn.SSHConn.RemoteAddr().String()+":"+stringPort, ":", "_"))
 	if err != nil {
-		log.Println("Error creating temporary file:", err)
+		slog.Error(
+			"error creating temporary file",
+			"error", err,
+		)
 
 		err = newRequest.Reply(false, nil)
 		if err != nil {
-			log.Println("Error replying to socket request:", err)
+			slog.Error(
+				"error replying to socket request",
+				"error", err,
+			)
 		}
 		return
 	}
 
 	err = tmpfile.Close()
 	if err != nil {
-		log.Println("Error closing temporary file:", err)
+		slog.Error(
+			"error closing temporary file",
+			"error", err,
+		)
 	}
 
 	err = os.Remove(tmpfile.Name())
 	if err != nil {
-		log.Println("Error removing temporary file:", err)
+		slog.Error(
+			"error removing temporary file",
+			"error", err,
+		)
 	}
 
 	listenAddr := tmpfile.Name()
 
 	chanListener, err := net.Listen("unix", listenAddr)
 	if err != nil {
-		log.Println("Error listening on unix socket:", err)
+		slog.Error(
+			"error listening to unix socket",
+			"error", err,
+		)
 
 		err = newRequest.Reply(false, nil)
 		if err != nil {
-			log.Println("Error replying to socket request:", err)
+			slog.Error(
+				"error replying to socket request",
+				"error", err,
+			)
 		}
 		return
 	}
@@ -240,7 +282,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	cleanupChanListener := func() {
 		err := listenerHolder.Close()
 		if err != nil {
-			log.Println("Error closing listener:", err)
+			slog.Error(
+				"error closing listener",
+				"error", err,
+			)
 		}
 
 		state.Listeners.Delete(listenAddr)
@@ -248,13 +293,16 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 		err = os.Remove(listenAddr)
 		if err != nil {
-			log.Println("Error removing unix socket:", err)
+			slog.Error(
+				"error removing unix socket",
+				"error", err,
+			)
 		}
 
 		deferHandler()
 
 		if forwardingType != "" {
-			log.Printf("%s forwarding stopped: %s -> %s for client: %s\n", aurora.BgBlue(forwardingType), forwardingName, listenAddr, sshConn.SSHConn.RemoteAddr().String())
+			sshConn.Logger().Info(fmt.Sprintf("%s forwarding stopped: %s -> %s for client: %s", aurora.BgBlue(forwardingType), forwardingName, listenAddr, sshConn.SSHConn.RemoteAddr().String()))
 		}
 	}
 
@@ -275,11 +323,17 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	case utils.HTTPListener:
 		pH, serverURL, requestMessages, err := handleHTTPListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn, connType)
 		if err != nil {
-			log.Println("Error setting up HTTPListener:", err)
+			slog.Error(
+				"error setting up HTTPListener",
+				"error", err,
+			)
 
 			err = newRequest.Reply(false, nil)
 			if err != nil {
-				log.Println("Error replying to socket request:", err)
+				slog.Error(
+					"error replying to socket request",
+					"error", err,
+				)
 			}
 
 			cleanupOnce.Do(cleanupChanListener)
@@ -295,7 +349,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		deferHandler = func() {
 			err := pH.Balancer.RemoveServer(serverURL)
 			if err != nil {
-				log.Println("Unable to remove server from balancer:", err)
+				slog.Error(
+					"error removing server from balancer",
+					"error", err,
+				)
 			}
 
 			pH.SSHConnections.Delete(listenerHolder.Addr().String())
@@ -311,11 +368,17 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	case utils.AliasListener:
 		aH, serverURL, validAlias, requestMessages, err := handleAliasListener(check, stringPort, mainRequestMessages, listenerHolder, state, sshConn)
 		if err != nil {
-			log.Println("Error setting up AliasListener:", err)
+			slog.Error(
+				"error setting up AliasListener",
+				"error", err,
+			)
 
 			err = newRequest.Reply(false, nil)
 			if err != nil {
-				log.Println("Error replying to socket request:", err)
+				slog.Error(
+					"error replying to socket request",
+					"error", err,
+				)
 			}
 
 			cleanupOnce.Do(cleanupChanListener)
@@ -331,7 +394,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		deferHandler = func() {
 			err := aH.Balancer.RemoveServer(serverURL)
 			if err != nil {
-				log.Println("Unable to remove server from balancer:", err)
+				slog.Error(
+					"unable to remove server from balancer",
+					"error", err,
+				)
 			}
 
 			aH.SSHConnections.Delete(listenerHolder.Addr().String())
@@ -343,11 +409,17 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 	case utils.TCPListener:
 		tH, balancer, balancerName, serverURL, tcpAddr, requestMessages, err := handleTCPListener(check, bindPort, mainRequestMessages, listenerHolder, state, sshConn, sniProxyForced)
 		if err != nil {
-			log.Println("Error setting up TCPListener:", err)
+			slog.Error(
+				"error setting up TCPListener",
+				"error", err,
+			)
 
 			err = newRequest.Reply(false, nil)
 			if err != nil {
-				log.Println("Error replying to socket request:", err)
+				slog.Error(
+					"error replying to socket request",
+					"error", err,
+				)
 			}
 
 			cleanupOnce.Do(cleanupChanListener)
@@ -369,7 +441,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		deferHandler = func() {
 			err := balancer.RemoveServer(serverURL)
 			if err != nil {
-				log.Println("Unable to remove server from balancer:", err)
+				slog.Error(
+					"error removing server from balancer",
+					"error", err,
+				)
 			}
 
 			tH.SSHConnections.Delete(listenerHolder.Addr().String())
@@ -386,7 +461,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 				if balancers == 0 {
 					err := tH.Listener.Close()
 					if err != nil {
-						log.Println("Error closing TCPListener:", err)
+						slog.Error(
+							"error closing TCPListener",
+							"error", err,
+						)
 					}
 
 					state.Listeners.Delete(tcpAddr)
@@ -412,7 +490,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 	err = newRequest.Reply(true, ssh.Marshal(portChannelForwardReplyPayload))
 	if err != nil {
-		log.Println("Error replying to port forwarding request:", err)
+		slog.Error(
+			"error replying to port forward request",
+			"error", err,
+		)
 		cleanupOnce.Do(cleanupChanListener)
 		return
 	}
@@ -454,7 +535,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 
 					err := cl.Close()
 					if err != nil {
-						log.Println("Error closing client connection:", err)
+						slog.Error(
+							"Error closing client connection",
+							"error", err,
+						)
 					}
 					return
 				}

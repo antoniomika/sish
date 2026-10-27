@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
+	"log/slog"
 	mathrand "math/rand"
 	"net"
 	"net/http"
@@ -178,7 +178,10 @@ func GetRandomPortInRange(listenAddr string, portRange string) uint32 {
 
 	err = ln.Close()
 	if err != nil {
-		log.Println("Error closing listener:", err)
+		slog.Error(
+			"error closing listener",
+			"error", err,
+		)
 	}
 
 	return bindPort
@@ -231,7 +234,10 @@ func CheckPort(port uint32, portRanges string) (uint32, error) {
 func loadCerts(certManager *certmagic.Config) {
 	certFiles, err := filepath.Glob(filepath.Join(viper.GetString("https-certificate-directory"), "*.crt"))
 	if err != nil {
-		log.Println("Error loading unmanaged certificates:", err)
+		slog.Error(
+			"error loading unmanaged certificates",
+			"error", err,
+		)
 	}
 
 	ctx := context.TODO()
@@ -239,7 +245,10 @@ func loadCerts(certManager *certmagic.Config) {
 	for _, v := range certFiles {
 		_, err := certManager.CacheUnmanagedCertificatePEMFile(ctx, v, fmt.Sprintf("%s.key", strings.TrimSuffix(v, ".crt")), []string{})
 		if err != nil {
-			log.Println("Error loading unmanaged certificate:", err)
+			slog.Error(
+				"error loading unmanaged certificates",
+				"error", err,
+			)
 		}
 	}
 }
@@ -255,11 +264,19 @@ func loadPrivateKeys(config *ssh.ServerConfig) {
 		}
 
 		if err != nil {
-			log.Printf("Error parsing private key file %s: %s\n", directory.Name(), err)
+			slog.Error(
+				"error parsing private key file",
+				"key", directory.Name(),
+				"error", err,
+			)
 			return
 		}
 
-		log.Printf("Loading %s as %s host key", directory.Name(), key.PublicKey().Type())
+		slog.Info(
+			"loading private key",
+			"key", directory.Name(),
+			"type", key.PublicKey().Type(),
+		)
 
 		config.AddHostKey(key)
 		count++
@@ -276,13 +293,21 @@ func loadPrivateKeys(config *ssh.ServerConfig) {
 		}
 
 		if err != nil {
-			log.Printf("Error walking file %s for private key: %s\n", d.Name(), err)
+			slog.Error(
+				"error walking directory for private key",
+				"dirEntry", d.Name(),
+				"error", err,
+			)
 			return nil
 		}
 
 		i, e := os.ReadFile(path)
 		if e != nil {
-			log.Printf("Can't read file %s as private key: %s\n", d.Name(), e)
+			slog.Error(
+				"can't read file for private key",
+				"dirEntry", d.Name(),
+				"error", e,
+			)
 			return nil
 		}
 
@@ -294,7 +319,11 @@ func loadPrivateKeys(config *ssh.ServerConfig) {
 	})
 
 	if err != nil {
-		log.Printf("Unable to walk private-keys-directory %s: %s\n", viper.GetString("private-keys-directory"), err)
+		slog.Error(
+			"unable to walk private-keys-directory",
+			"directory", viper.GetString("private-keys-directory"),
+			"error", err,
+		)
 	}
 
 	if count == 0 {
@@ -310,7 +339,10 @@ func WatchCerts(certManager *certmagic.Config) {
 	w.SetMaxEvents(1)
 
 	if err := w.AddRecursive(viper.GetString("https-certificate-directory")); err != nil {
-		log.Fatalln(err)
+		Fatal(
+			"unable to watch https certificate directory",
+			"error", err,
+		)
 	}
 
 	go func() {
@@ -342,7 +374,10 @@ func WatchCerts(certManager *certmagic.Config) {
 
 	go func() {
 		if err := w.Start(viper.GetDuration("https-certificate-directory-watch-interval")); err != nil {
-			log.Fatalln(err)
+			Fatal(
+				"unable to start https certificate directory watcher",
+				"error", err,
+			)
 		}
 	}()
 }
@@ -355,7 +390,10 @@ func WatchKeys() {
 	w.SetMaxEvents(1)
 
 	if err := w.AddRecursive(viper.GetString("authentication-keys-directory")); err != nil {
-		log.Fatalln(err)
+		Fatal(
+			"unable to watch authentication keys directory",
+			"error", err,
+		)
 	}
 
 	go func() {
@@ -387,7 +425,10 @@ func WatchKeys() {
 
 	go func() {
 		if err := w.Start(viper.GetDuration("authentication-keys-directory-watch-interval")); err != nil {
-			log.Fatalln(err)
+			Fatal(
+				"unable to start authentication keys directory watcher",
+				"error", err,
+			)
 		}
 	}()
 }
@@ -402,7 +443,12 @@ func loadKeys() {
 			key, _, _, rest, e := ssh.ParseAuthorizedKey(keyBytes)
 			if e != nil {
 				if e.Error() != "ssh: no key found" || (e.Error() == "ssh: no key found" && viper.GetBool("debug")) {
-					log.Printf("Can't load file %s:\"%s\" as public key: %s\n", d.Name(), string(keyBytes), e)
+					slog.Debug(
+						"can't load file as public key",
+						"dirEntry", d.Name(),
+						"keyBytes", keyBytes,
+						"error", e,
+					)
 				}
 			}
 
@@ -428,13 +474,21 @@ func loadKeys() {
 		}
 
 		if err != nil {
-			log.Printf("Error walking file %s for public key: %s\n", d.Name(), err)
+			slog.Error(
+				"error walking file for public key",
+				"dirEntry", d.Name(),
+				"error", err,
+			)
 			return nil
 		}
 
 		i, e := os.ReadFile(path)
 		if e != nil {
-			log.Printf("Can't read file %s as public key: %s\n", d.Name(), e)
+			slog.Error(
+				"can't read file for public key",
+				"dirEntry", d.Name(),
+				"error", e,
+			)
 			return nil
 		}
 
@@ -446,7 +500,11 @@ func loadKeys() {
 	})
 
 	if err != nil {
-		log.Printf("Unable to walk authentication-keys-directory %s: %s\n", viper.GetString("authentication-keys-directory"), err)
+		slog.Error(
+			"error walking authentication-keys-directory",
+			"directory", viper.GetString("authentication-keys-directory"),
+			"error", err,
+		)
 		return
 	}
 
@@ -462,7 +520,11 @@ func GetSSHConfig() *ssh.ServerConfig {
 		ServerVersion: "SSH-2.0-sish",
 		NoClientAuth:  !viper.GetBool("authentication"),
 		PasswordCallback: func(c ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
-			log.Printf("Login attempt: %s, user %s", c.RemoteAddr(), c.User())
+			slog.Info(
+				"Login attempt",
+				"remoteAddr", c.RemoteAddr().String(),
+				"user", c.User(),
+			)
 
 			if string(password) == viper.GetString("authentication-password") && viper.GetString("authentication-password") != "" {
 				return nil, nil
@@ -473,7 +535,11 @@ func GetSSHConfig() *ssh.ServerConfig {
 			if authUrl != "" {
 				validKey, err := checkAuthenticationPasswordRequest(authUrl, password, c.RemoteAddr(), c.User())
 				if err != nil {
-					log.Printf("Error calling authentication password URL %s: %s\n", authUrl, err)
+					slog.Error(
+						"error calling authentication password url",
+						"authURL", authUrl,
+						"error", err,
+					)
 				}
 				if validKey {
 					return nil, nil
@@ -486,7 +552,12 @@ func GetSSHConfig() *ssh.ServerConfig {
 			authKey := ssh.MarshalAuthorizedKey(key)
 			authKey = authKey[:len(authKey)-1]
 
-			log.Printf("Login attempt: %s, user %s key: %s", c.RemoteAddr(), c.User(), string(authKey))
+			slog.Info(
+				"Login attempt",
+				"remoteAddr", c.RemoteAddr().String(),
+				"user", c.User(),
+				"key", authKey,
+			)
 
 			holderLock.Lock()
 			defer holderLock.Unlock()
@@ -508,7 +579,11 @@ func GetSSHConfig() *ssh.ServerConfig {
 			if authUrl != "" {
 				validKey, err := checkAuthenticationKeyRequest(authUrl, authKey, c.RemoteAddr(), c.User())
 				if err != nil {
-					log.Printf("Error calling authentication key URL %s: %s\n", authUrl, err)
+					slog.Error(
+						"error calling authentication key url",
+						"authURL", authUrl,
+						"error", err,
+					)
 				}
 				if validKey {
 					permssionsData := &ssh.Permissions{
@@ -562,7 +637,11 @@ func checkAuthenticationKeyRequest(authUrl string, authKey []byte, addr net.Addr
 	}
 
 	if res.StatusCode != http.StatusOK {
-		log.Printf("Public key rejected by auth service: %s with status %d", urlS, res.StatusCode)
+		slog.Info(
+			"public key rejected by auth service",
+			"authURL", urlS,
+			"status", res.StatusCode,
+		)
 		return false, nil
 	}
 
@@ -596,7 +675,11 @@ func checkAuthenticationPasswordRequest(authUrl string, password []byte, addr ne
 	}
 
 	if res.StatusCode != http.StatusOK {
-		log.Printf("Password rejected by auth service: %s with status %d", urlS, res.StatusCode)
+		slog.Info(
+			"password rejected by auth service",
+			"authURL", urlS,
+			"status", res.StatusCode,
+		)
 		return false, nil
 	}
 
@@ -608,10 +691,13 @@ func checkAuthenticationPasswordRequest(authUrl string, password []byte, addr ne
 func generatePrivateKey(passphrase string) []byte {
 	_, pk, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		log.Fatal(err)
+		Fatal(
+			"unable to generate private key",
+			"error", err,
+		)
 	}
 
-	log.Println("Generated ED25519 Keypair")
+	slog.Info("Generated ED25519 Keypair")
 
 	// In an effort to guarantee that keys can still be loaded by OpenSSH
 	// we adopt branching logic here for passphrase encrypted keys.
@@ -621,20 +707,29 @@ func generatePrivateKey(passphrase string) []byte {
 	if passphrase != "" {
 		pemBlock, err := ssh.MarshalPrivateKeyWithPassphrase(pk, "", []byte(passphrase))
 		if err != nil {
-			log.Fatal(err)
+			Fatal(
+				"unable to marshal private key",
+				"error", err,
+			)
 		}
 		pemData = pem.EncodeToMemory(pemBlock)
 	} else {
 		pemBlock, err := ssh.MarshalPrivateKey(pk, "")
 		if err != nil {
-			log.Fatal(err)
+			Fatal(
+				"unable to marshal private key",
+				"error", err,
+			)
 		}
 		pemData = pem.EncodeToMemory(pemBlock)
 	}
 
 	err = os.WriteFile(filepath.Join(viper.GetString("private-keys-directory"), "ssh_key"), pemData, 0600)
 	if err != nil {
-		log.Println("Error writing to file:", err)
+		slog.Error(
+			"error writing to file",
+			"error", err,
+		)
 	}
 
 	return pemData
@@ -647,19 +742,28 @@ func loadPrivateKey(passphrase string) ssh.Signer {
 
 	pk, err := os.ReadFile(filepath.Join(viper.GetString("private-keys-directory"), "ssh_key"))
 	if err != nil {
-		log.Println("Error loading private key, generating a new one:", err)
+		slog.Error(
+			"error loading private key, generating a new one",
+			"error", err,
+		)
 		pk = generatePrivateKey(passphrase)
 	}
 
 	if passphrase != "" {
 		signer, err = ssh.ParsePrivateKeyWithPassphrase(pk, []byte(passphrase))
 		if err != nil {
-			log.Fatal(err)
+			Fatal(
+				"unable to parse private key",
+				"error", err,
+			)
 		}
 	} else {
 		signer, err = ssh.ParsePrivateKey(pk)
 		if err != nil {
-			log.Fatal(err)
+			Fatal(
+				"unable to parse private key",
+				"error", err,
+			)
 		}
 	}
 
@@ -753,7 +857,10 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 				} else {
 					err := ln.Close()
 					if err != nil {
-						log.Println("Error closing listener:", err)
+						slog.Error(
+							"error closing listener",
+							"error", err,
+						)
 					}
 				}
 			}
@@ -799,14 +906,18 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 		hostExtension := ""
 
 		if viper.GetBool("append-user-to-subdomain") {
-			hostExtension = viper.GetString("append-user-to-subdomain-separator") + sshConn.SSHConn.User()
+			hostExtension = viper.GetString("append-user-to-subdomain-separator") + sshConn.User()
 		}
 
 		var bindErr error
 
 		dnsMatch, _, err := verifyDNS(addr, sshConn)
-		if err != nil && viper.GetBool("debug") {
-			log.Println("Error looking up txt records for domain:", addr)
+		if err != nil {
+			slog.Debug(
+				"error looking up txt records for host",
+				"error", err,
+				"host", addr,
+			)
 		}
 
 		proposedHost := fmt.Sprintf("%s%s.%s", addr, hostExtension, viper.GetString("domain"))
@@ -897,7 +1008,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 		hostExtension := ""
 
 		if viper.GetBool("append-user-to-subdomain") {
-			hostExtension = viper.GetString("append-user-to-subdomain-separator") + sshConn.SSHConn.User()
+			hostExtension = viper.GetString("append-user-to-subdomain-separator") + sshConn.User()
 		}
 
 		var username string
@@ -935,8 +1046,12 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 		}
 
 		dnsMatch, _, err := verifyDNS(addr, sshConn)
-		if err != nil && viper.GetBool("debug") {
-			log.Println("Error looking up txt records for domain:", addr)
+		if err != nil {
+			slog.Debug(
+				"error looking up txt records for host",
+				"error", err,
+				"host", addr,
+			)
 		}
 
 		proposedHost := fmt.Sprintf("%s%s.%s", addr, hostExtension, viper.GetString("domain"))

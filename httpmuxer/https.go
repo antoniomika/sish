@@ -3,7 +3,7 @@ package httpmuxer
 import (
 	"encoding/base64"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 
 	"github.com/antoniomika/sish/utils"
@@ -28,11 +28,18 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 	if err != nil || pL.State.IPFilter.Blocked(clientRemote) {
 		err := cl.Close()
 		if err != nil {
-			log.Println("Error closing connection:", err)
+			slog.Error(
+				"error closing connection",
+				"error", err,
+			)
 		}
 
 		if viper.GetBool("debug") {
-			log.Printf("Blocked connection from %s to %s", cl.RemoteAddr().String(), cl.LocalAddr().String())
+			slog.Debug(
+				"blocked connection",
+				"remoteAddr", cl.RemoteAddr().String(),
+				"localAddr", cl.LocalAddr().String(),
+			)
 		}
 
 		return pL.Accept()
@@ -65,11 +72,17 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 
 	connectionLocation, err := balancer.NextServer()
 	if err != nil {
-		log.Println("Unable to load connection location:", err)
+		slog.Error(
+			"unable to load connection location",
+			"error", err,
+		)
 
 		err := teeConn.Close()
 		if err != nil {
-			log.Println("Error closing teeConn:", err)
+			slog.Error(
+				"error closing teeConn",
+				"error", err,
+			)
 		}
 
 		return pL.Accept()
@@ -77,11 +90,17 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 
 	host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
 	if err != nil {
-		log.Println("Unable to decode connection location:", err)
+		slog.Error(
+			"unable to decode connection location",
+			"error", err,
+		)
 
 		err := teeConn.Close()
 		if err != nil {
-			log.Println("Error closing teeConn:", err)
+			slog.Error(
+				"error closing teeConn",
+				"error", err,
+			)
 		}
 
 		return pL.Accept()
@@ -89,32 +108,36 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 
 	hostAddr := string(host)
 
-	logLine := fmt.Sprintf("Accepted connection from %s -> %s", teeConn.RemoteAddr().String(), teeConn.LocalAddr().String())
-	log.Println(logLine)
+	logLine := fmt.Sprintf("Accepted HTTP connection from %s -> %s", teeConn.RemoteAddr().String(), teeConn.LocalAddr().String())
 
-	if viper.GetBool("log-to-client") {
-		pL.Holder.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
-			sshConn.Listeners.Range(func(listenerAddr string, val net.Listener) bool {
-				if listenerAddr == hostAddr {
-					sshConn.SendMessage(logLine, true)
+	sshConn := utils.ListenerOwner(pL.Holder.SSHConnections, hostAddr)
 
-					return false
-				}
+	pL.State.LogConnection(logLine, utils.ConnectionEvent{
+		SSHConn:        sshConn,
+		TunnelType:     "sni",
+		TunnelId:       fmt.Sprintf("%s-%s", pL.Holder.TunnelId(), balancerName),
+		ConnectionType: "tls",
+		RemoteAddr:     teeConn.RemoteAddr().String(),
+		LocalAddr:      teeConn.LocalAddr().String(),
+	})
 
-				return true
-			})
-
-			return true
-		})
+	if viper.GetBool("log-to-client") && sshConn != nil {
+		sshConn.SendMessage(logLine, true)
 	}
 
 	conn, err := net.Dial("unix", hostAddr)
 	if err != nil {
-		log.Println("Error connecting to tcp balancer:", err)
+		slog.Error(
+			"error connecting to tcp balancer",
+			"error", err,
+		)
 
 		err := teeConn.Close()
 		if err != nil {
-			log.Println("Error closing teeConn:", err)
+			slog.Error(
+				"error closing teeConn",
+				"error", err,
+			)
 		}
 
 		return pL.Accept()

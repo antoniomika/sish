@@ -3,7 +3,7 @@ package sshmuxer
 import (
 	"encoding/base64"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"strings"
 
@@ -27,7 +27,10 @@ func handleAliasListener(check *channelForwardMsg, stringPort string, requestMes
 		lb, err := roundrobin.New(nil)
 
 		if err != nil {
-			log.Println("Error initializing alias balancer:", err)
+			slog.Error(
+				"error initializing alias balancer",
+				"error", err,
+			)
 			return nil, nil, "", "", err
 		}
 
@@ -48,11 +51,23 @@ func handleAliasListener(check *channelForwardMsg, stringPort string, requestMes
 
 	err := aH.Balancer.UpsertServer(serverURL)
 	if err != nil {
-		log.Println("Unable to add server to balancer")
+		slog.Error(
+			"error adding server to balancer",
+			"error", err,
+		)
 	}
 
 	requestMessages += fmt.Sprintf("%s: %s\r\n", aurora.BgBlue("TCP Alias"), validAlias)
-	log.Printf("%s forwarding started: %s -> %s for client: %s\n", aurora.BgBlue("TCP Alias"), validAlias, listenerHolder.Addr().String(), sshConn.SSHConn.RemoteAddr().String())
+	sshConn.Logger().Info(
+		fmt.Sprintf(
+			"%s forwarding started: %s -> %s for client: %s\n",
+			aurora.BgBlue("TCP Alias"),
+			validAlias,
+			listenerHolder.Addr().String(),
+			sshConn.SSHConn.RemoteAddr().String(),
+		),
+		"listenerAddr", listenerHolder.Addr().String(),
+	)
 
 	return aH, serverURL, validAlias, requestMessages, nil
 }

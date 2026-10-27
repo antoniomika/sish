@@ -3,7 +3,7 @@
 package sshmuxer
 
 import (
-	"log"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -31,32 +31,56 @@ func Start() {
 
 	_, httpPortString, err := utils.ParseAddress(viper.GetString("http-address"))
 	if err != nil {
-		log.Fatalln("Error parsing address:", err)
+		utils.Fatal(
+			"unable to parse address",
+			"address", viper.GetString("http-address"),
+			"error", err,
+		)
 	}
 
 	_, httpsPortString, err := utils.ParseAddress(viper.GetString("https-address"))
 	if err != nil {
-		log.Fatalln("Error parsing address:", err)
+		utils.Fatal(
+			"unable to parse address",
+			"address", viper.GetString("https-address"),
+			"error", err,
+		)
 	}
 
 	_, sshPortString, err := utils.ParseAddress(viper.GetString("ssh-address"))
 	if err != nil {
-		log.Fatalln("Error parsing address:", err)
+		utils.Fatal(
+			"unable to parse address",
+			"address", viper.GetString("ssh-address"),
+			"error", err,
+		)
 	}
 
 	httpPort, err = strconv.Atoi(httpPortString)
 	if err != nil {
-		log.Fatalln("Error parsing address:", err)
+		utils.Fatal(
+			"unable to parse port",
+			"port", httpPortString,
+			"error", err,
+		)
 	}
 
 	httpsPort, err = strconv.Atoi(httpsPortString)
 	if err != nil {
-		log.Fatalln("Error parsing address:", err)
+		utils.Fatal(
+			"unable to parse port",
+			"port", httpsPortString,
+			"error", err,
+		)
 	}
 
 	sshPort, err = strconv.Atoi(sshPortString)
 	if err != nil {
-		log.Fatalln("Error parsing address:", err)
+		utils.Fatal(
+			"unable to parse port",
+			"port", sshPortString,
+			"error", err,
+		)
 	}
 
 	if viper.GetInt("http-port-override") != 0 {
@@ -83,81 +107,90 @@ func Start() {
 	if viper.GetBool("debug") && debugInterval > 0 {
 		go func() {
 			for {
-				log.Println("=======Start=========")
-				log.Println("===Goroutines=====")
-				log.Println(runtime.NumGoroutine())
-				log.Println("===Listeners======")
-				state.Listeners.Range(func(key string, value net.Listener) bool {
-					log.Println(key)
+				remoteAddrs := func(conns *syncmap.Map[string, *utils.SSHConnection]) []string {
+					addrs := []string{}
+					conns.Range(func(_ string, conn *utils.SSHConnection) bool {
+						addrs = append(addrs, conn.SSHConn.RemoteAddr().String())
+						return true
+					})
+					return addrs
+				}
+
+				listeners := []string{}
+				state.Listeners.Range(func(key string, _ net.Listener) bool {
+					listeners = append(listeners, key)
 					return true
 				})
-				log.Println("===Clients========")
+
+				clients := map[string]any{}
 				state.SSHConnections.Range(func(key string, value *utils.SSHConnection) bool {
-					listeners := []string{}
-					value.Listeners.Range(func(name string, listener net.Listener) bool {
-						listeners = append(listeners, name)
+					names := []string{}
+					value.Listeners.Range(func(name string, _ net.Listener) bool {
+						names = append(names, name)
 						return true
 					})
 
-					log.Println(key, value.SSHConn.User(), listeners)
+					clients[key] = map[string]any{"user": value.User(), "listeners": names}
 					return true
 				})
-				log.Println("===HTTP Listeners===")
+
+				httpListeners := map[string][]string{}
 				state.HTTPListeners.Range(func(key string, value *utils.HTTPHolder) bool {
-					clients := []string{}
-					value.SSHConnections.Range(func(name string, conn *utils.SSHConnection) bool {
-						clients = append(clients, conn.SSHConn.RemoteAddr().String())
-						return true
-					})
-
-					log.Println(key, clients)
+					httpListeners[key] = remoteAddrs(value.SSHConnections)
 					return true
 				})
-				log.Println("===TCP Aliases====")
+
+				aliasListeners := map[string][]string{}
 				state.AliasListeners.Range(func(key string, value *utils.AliasHolder) bool {
-					clients := []string{}
-					value.SSHConnections.Range(func(name string, conn *utils.SSHConnection) bool {
-						clients = append(clients, conn.SSHConn.RemoteAddr().String())
-						return true
-					})
-
-					log.Println(key, clients)
+					aliasListeners[key] = remoteAddrs(value.SSHConnections)
 					return true
 				})
-				log.Println("===TCP Listeners====")
+
+				tcpListeners := map[string][]string{}
 				state.TCPListeners.Range(func(key string, value *utils.TCPHolder) bool {
-					clients := []string{}
-					value.SSHConnections.Range(func(name string, conn *utils.SSHConnection) bool {
-						clients = append(clients, conn.SSHConn.RemoteAddr().String())
-						return true
-					})
-
-					log.Println(key, clients)
+					tcpListeners[key] = remoteAddrs(value.SSHConnections)
 					return true
 				})
-				log.Println("===Web Console Routes====")
+
+				consoleClients := map[string][]string{}
 				state.Console.Clients.Range(func(key string, value []*utils.WebClient) bool {
-					newData := []string{}
+					addrs := []string{}
 					for _, cl := range value {
-						newData = append(newData, cl.Conn.RemoteAddr().String())
+						addrs = append(addrs, cl.Conn.RemoteAddr().String())
 					}
 
-					log.Println(key, newData)
+					consoleClients[key] = addrs
 					return true
 				})
-				log.Println("===Web Console Tokens====")
-				state.Console.RouteTokens.Range(func(key, value string) bool {
-					log.Println(key, value)
+
+				// Only the routes, since the tokens grant console access.
+				consoleRoutes := []string{}
+				state.Console.RouteTokens.Range(func(key, _ string) bool {
+					consoleRoutes = append(consoleRoutes, key)
 					return true
 				})
-				log.Print("========End==========\n")
+
+				slog.Debug(
+					"server state",
+					"goroutines", runtime.NumGoroutine(),
+					"listeners", listeners,
+					"clients", clients,
+					"httpListeners", httpListeners,
+					"aliasListeners", aliasListeners,
+					"tcpListeners", tcpListeners,
+					"consoleClients", consoleClients,
+					"consoleRoutes", consoleRoutes,
+				)
 
 				time.Sleep(debugInterval)
 			}
 		}()
 	}
 
-	log.Println("Starting SSH service on address:", viper.GetString("ssh-address"))
+	slog.Info(
+		"Starting SSH service",
+		"address", viper.GetString("ssh-address"),
+	)
 
 	sshConfig := utils.GetSSHConfig()
 
@@ -165,7 +198,11 @@ func Start() {
 
 	l, err := utils.Listen(viper.GetString("ssh-address"))
 	if err != nil {
-		log.Fatal(err)
+		utils.Fatal(
+			"unable to listen",
+			"address", viper.GetString("ssh-address"),
+			"error", err,
+		)
 	}
 
 	if viper.GetBool("proxy-protocol-listener") {
@@ -184,7 +221,10 @@ func Start() {
 	defer func() {
 		err := listener.Close()
 		if err != nil {
-			log.Println("Error closing listener:", err)
+			slog.Error(
+				"error closing listener",
+				"error", err,
+			)
 		}
 
 		state.Listeners.Delete(viper.GetString("ssh-address"))
@@ -201,7 +241,10 @@ func Start() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Println(err)
+			slog.Error(
+				"error accepting from listener",
+				"error", err,
+			)
 			continue
 		}
 
@@ -219,11 +262,18 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 	if err != nil || state.IPFilter.Blocked(clientRemote) {
 		err := conn.Close()
 		if err != nil {
-			log.Println("Error closing connection:", err)
+			slog.Error(
+				"error closing new conn",
+				"error", err,
+			)
 		}
 
 		if viper.GetBool("debug") {
-			log.Printf("Blocked connection from %s to %s", conn.RemoteAddr().String(), conn.LocalAddr().String())
+			slog.Debug(
+				"blocked connection",
+				"remoteAddr", conn.RemoteAddr().String(),
+				"localAddr", conn.LocalAddr().String(),
+			)
 		}
 
 		return
@@ -242,14 +292,20 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 			if !clientLoggedIn {
 				err := conn.Close()
 				if err != nil {
-					log.Println("Error closing connection:", err)
+					slog.Error(
+						"error closing unauthenticated connection",
+						"error", err,
+					)
 				}
 			}
 			clientLoggedInMutex.Unlock()
 		}()
 	}
 
-	log.Println("Accepted SSH connection for:", conn.RemoteAddr())
+	slog.Info(
+		"accepted ssh connection",
+		"remoteAddr", conn.RemoteAddr().String(),
+	)
 
 	sshConn, chans, reqs, err := ssh.NewServerConn(conn, sshConfig)
 	clientLoggedInMutex.Lock()
@@ -258,10 +314,11 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 	if err != nil {
 		err := conn.Close()
 		if err != nil {
-			log.Println("Error closing connection:", err)
+			slog.Error(
+				"error closing connection",
+				"error", err,
+			)
 		}
-
-		log.Println("SSH connection could not be established", err)
 		return
 	}
 
@@ -290,8 +347,11 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 
 	go func() {
 		err := sshConn.Wait()
-		if err != nil && viper.GetBool("debug") {
-			log.Println("Closing SSH connection:", err)
+		if err != nil {
+			slog.Debug(
+				"closing SSH connection",
+				"error", err,
+			)
 		}
 
 		select {
@@ -346,14 +406,20 @@ func handleConn(conn net.Conn, state *utils.State, sshConfig *ssh.ServerConfig) 
 			for {
 				err := conn.SetDeadline(time.Now().Add(tickDuration).Add(viper.GetDuration("ping-client-timeout")))
 				if err != nil {
-					log.Println("Unable to set deadline")
+					slog.Error(
+						"unable to set deadline",
+						"error", err,
+					)
 				}
 
 				select {
 				case <-ticker.C:
 					_, _, err := sshConn.SendRequest("keepalive@sish", true, nil)
 					if err != nil {
-						log.Println("Error retrieving keepalive response:", err)
+						slog.Error(
+							"error retrieving keepalive response",
+							"error", err,
+						)
 						return
 					}
 				case <-holderConn.Close:
