@@ -10,7 +10,7 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gin-gonic/gin v1.12.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/jpillora/ipfilter v1.5.11
+	github.com/jpillora/ipfilter v1.5.12
 	github.com/klauspost/compress v1.20.3
 	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/picosh/pdocs v0.0.0-20260415144233-acc53e8c9998
