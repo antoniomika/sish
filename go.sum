@@ -4,8 +4,8 @@ github.com/HdrHistogram/hdrhistogram-go v1.4.0 h1:JdU0squ73hT0G45GVKzZ8KXS8ImiFu
 github.com/HdrHistogram/hdrhistogram-go v1.4.0/go.mod h1:CiIeGiHSd06zjX+FypuEJ5EQ07KKtxZ+8J6hszwVQig=
 github.com/alecthomas/chroma v0.10.0 h1:7XDcGkCQopCNKjZHfYrNLraA+M7e0fMiJ/Mfikbfjek=
 github.com/alecthomas/chroma v0.10.0/go.mod h1:jtJATyUxlIORhUOFNA9NZDWGAQ8wpxQQqNSB4rjA/1s=
-github.com/andybalholm/brotli v1.2.7 h1:UgafRPGMam5ySHfRkhthMqOFA6IFoeF3D7mWIDLjG5A=
-github.com/andybalholm/brotli v1.2.7/go.mod h1:rzTDkvFWvIrjDXZHkuS16NPggd91W3kUSvPlQ1pLaKY=
+github.com/andybalholm/brotli v1.2.8 h1:H9F6r7RNwzSRsx/lytpIYkbjNFMt2yNBwsJ2+0gpx78=
+github.com/andybalholm/brotli v1.2.8/go.mod h1:rzTDkvFWvIrjDXZHkuS16NPggd91W3kUSvPlQ1pLaKY=
 github.com/antoniomika/multilistener v0.0.0-20240307222635-f0dc097d8acc h1:M4VZoRaaFhYQgkqJdo4AxzUPyGUNsM2DbUWm5dNH3sU=
 github.com/antoniomika/multilistener v0.0.0-20240307222635-f0dc097d8acc/go.mod h1:mSQGXvJEcrZy/3FZmNTh/ly9YhQRJKr3bf5EsV2Idyk=
 github.com/antoniomika/syncmap v1.0.0 h1:iFSfbQFQOvHZILFZF+hqWosO0no+W9+uF4y2VEyMKWU=
@@ -64,8 +64,8 @@ github.com/gravitational/trace v1.5.4 h1:nMmF7alwvNiQJhC817Hhmgm95bzKOXbnxvkickT
 github.com/gravitational/trace v1.5.4/go.mod h1:/uCbC3ukVU8Pdrh8+3vNLyyE1aGheBWpGGrMnwIK80E=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
-github.com/jpillora/ipfilter v1.5.11 h1:ANfsmvXFzN91YUCYtXdvcbrHAgQme1TWD/A8/enck74=
-github.com/jpillora/ipfilter v1.5.11/go.mod h1:fmQ7avHhcNRGGY76KJB1/DfLAIL0TFtosps40p2K1e8=
+github.com/jpillora/ipfilter v1.5.13 h1:FfqdjvIWsY0/F3X6kaMngCY8zbHLUr5oSV0OPFYK0aw=
+github.com/jpillora/ipfilter v1.5.13/go.mod h1:fmQ7avHhcNRGGY76KJB1/DfLAIL0TFtosps40p2K1e8=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
 github.com/json-iterator/go v1.1.12/go.mod h1:e30LSqwooZae/UwlEbR2852Gd8hjQvJoHmT4TnhNGBo=
 github.com/klauspost/compress v1.20.3 h1:zWNoFqq/lSuYQRim3dUXlXeA0IqwuZGicdG5ZTfY5j4=
