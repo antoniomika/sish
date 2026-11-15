@@ -22,7 +22,6 @@ func inspectWebSocket(state *utils.State, hostname string, reqBody []byte, c *gi
 		return
 	}
 
-	route := currentListener.HTTPUrl.String()
 	opened := time.Now()
 
 	data := requestData(c, hostname, reqBody)
@@ -33,7 +32,7 @@ func inspectWebSocket(state *utils.State, hostname string, reqBody []byte, c *gi
 	data["responseStatus"] = fmt.Sprintf("%d %s", response.StatusCode, http.StatusText(response.StatusCode))
 	data["requestTime"] = opened.Sub(c.GetTime("startTime")).Round(10 * time.Microsecond).String()
 
-	id := state.Console.BroadcastRoute(route, data)
+	id := state.Console.BroadcastRoute(currentListener, data)
 	if id == 0 {
 		return
 	}
@@ -43,7 +42,7 @@ func inspectWebSocket(state *utils.State, hostname string, reqBody []byte, c *gi
 		fields["type"] = kind
 		fields["seq"] = seq.Add(1)
 		fields["time"] = time.Now()
-		state.Console.BroadcastEvent(route, id, fields)
+		state.Console.BroadcastEvent(currentListener, id, fields)
 	}
 
 	response.Body = wsinspect.NewConn(backend, response.Header, viper.GetInt("service-console-max-content-length"), wsinspect.Handler{

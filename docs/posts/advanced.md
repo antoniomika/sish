@@ -14,6 +14,13 @@ subdomain by prepending it to the remote port specifier:
 
 If the selected subdomain is not taken, it will be assigned to your connection.
 
+Different connections can share a subdomain by binding different paths
+(`foo/api`), or by binding the same path with their own basic auth credentials
+(`user:pass@foo`). A subdomain is a single browser origin, so pages served by any
+of those connections can read the others' responses, including ones behind
+basic auth that a visitor has already logged into. Only share a subdomain
+between connections that trust each other.
+
 # Websocket Support
 
 The service supports multiplexing connections over HTTP/HTTPS with WebSocket
@@ -31,6 +38,13 @@ single IP, use the `/32` range.
 To whitelist countries, use `--whitelisted-countries` with a comma-separated
 string of countries in ISO format (for example, "pt" for Portugal). You'll also
 need to set `--geodb` to `true`.
+
+If sish is behind a reverse proxy, set `--http-trusted-proxies` to the proxy's
+addresses so HTTP filtering uses the visitor address from `X-Forwarded-For`.
+Without it, sish ignores that header and filters on the connecting address.
+sish also removes forwarding headers (`Forwarded`, `X-Forwarded-*` and
+`X-Real-IP`) sent by anyone other than a trusted proxy before the request
+reaches a tunnel, so apps behind a tunnel can trust the ones sish sets.
 
 # Custom domains
 

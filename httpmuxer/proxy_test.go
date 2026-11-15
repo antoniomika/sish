@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"testing"
 
 	"github.com/andybalholm/brotli"
@@ -193,5 +194,22 @@ func TestDecodeConsoleBodyLimit(t *testing.T) {
 
 	if got := decodeConsoleBody(compressed, "gzip", 1024); !bytes.Equal(got, notCapturedResponse) {
 		t.Errorf("expected the not captured body, got %d bytes", len(got))
+	}
+}
+
+// A zstd frame asking for a window past the console's limit is shown undecoded.
+func TestDecodeConsoleBodyZstdWindowLimit(t *testing.T) {
+	// Magic, no flags, a 64 MiB window, then one raw last block holding "hello".
+	frame := append([]byte{0x28, 0xb5, 0x2f, 0xfd, 0x00, 0x80, 0x29, 0x00, 0x00}, "hello"...)
+
+	if got := decodeConsoleBody(frame, "zstd", 1<<20); !bytes.Equal(got, frame) {
+		t.Errorf("decoded a frame past the window limit to %q", got)
+	}
+
+	// The same frame with an 8 KiB window decodes.
+	small := slices.Clone(frame)
+	small[5] = 0x18
+	if got := decodeConsoleBody(small, "zstd", 1<<20); string(got) != "hello" {
+		t.Errorf("a small window frame decoded to %q", got)
 	}
 }

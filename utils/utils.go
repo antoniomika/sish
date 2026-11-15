@@ -8,14 +8,18 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
-	mathrand "math/rand"
+	"math/big"
+	mathrand "math/rand/v2"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"os/signal"
@@ -25,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/antoniomika/syncmap"
 	"github.com/caddyserver/certmagic"
 	"github.com/jpillora/ipfilter"
 	"github.com/logrusorgru/aurora"
@@ -41,6 +46,12 @@ const (
 
 	// Prefix used for defining wildcard host matchers.
 	wildcardPrefix = "*."
+
+	// maxBindAttempts bounds how many names a binding tries before it fails.
+	maxBindAttempts = 100
+
+	// maxAuthRequests bounds how many auth requests to an external service run at once.
+	maxAuthRequests = 64
 )
 
 var (
@@ -58,6 +69,12 @@ var (
 
 	// bannedAliasList is a list of aliases that cannot be bound.
 	bannedAliasList = []string{""}
+
+	// trustedUpstreams are the sources allowed to send a proxy protocol header. Empty trusts all.
+	trustedUpstreams []netip.Prefix
+
+	// authRequests holds a slot for each auth request to an external service in flight.
+	authRequests = make(chan struct{}, maxAuthRequests)
 )
 
 // Setup main utils. This initializes whitelists and blacklists.
@@ -97,6 +114,66 @@ func Setup() {
 	for k, v := range bannedAliasList {
 		bannedAliasList[k] = strings.ToLower(strings.TrimSpace(v))
 	}
+
+	if portRange := viper.GetString("port-bind-range"); portRange != "" {
+		if _, err := parsePortRanges(portRange); err != nil {
+			Fatal(
+				"invalid port-bind-range",
+				"portBindRange", portRange,
+				"err", err,
+			)
+		}
+	}
+
+	trustedUpstreams = nil
+	for _, upstream := range strings.FieldsFunc(viper.GetString("proxy-protocol-trusted-upstreams"), CommaSplitFields) {
+		prefix, err := ParsePrefix(strings.TrimSpace(upstream))
+		if err != nil {
+			Fatal(
+				"invalid proxy-protocol-trusted-upstreams entry",
+				"upstream", upstream,
+				"err", err,
+			)
+		}
+
+		trustedUpstreams = append(trustedUpstreams, prefix)
+	}
+}
+
+// ParsePrefix parses an IP or CIDR into a prefix.
+func ParsePrefix(upstream string) (netip.Prefix, error) {
+	if strings.Contains(upstream, "/") {
+		prefix, err := netip.ParsePrefix(upstream)
+		return prefix.Masked(), err
+	}
+
+	addr, err := netip.ParseAddr(upstream)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+
+	return netip.PrefixFrom(addr.Unmap(), addr.Unmap().BitLen()), nil
+}
+
+// upstreamTrusted reports whether a proxy protocol header from addr may be used.
+func upstreamTrusted(addr net.Addr) bool {
+	if len(trustedUpstreams) == 0 {
+		return true
+	}
+
+	addrPort, err := netip.ParseAddrPort(addr.String())
+	if err != nil {
+		return false
+	}
+
+	ip := addrPort.Addr().Unmap()
+	for _, prefix := range trustedUpstreams {
+		if prefix.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // CommaSplitFields is a function used by strings.FieldsFunc to split around commas.
@@ -111,6 +188,15 @@ func LoadProxyProtoConfig(l *proxyproto.Listener) {
 	}
 
 	l.ConnPolicy = func(connPolicyOptions proxyproto.ConnPolicyOptions) (proxyproto.Policy, error) {
+		if !upstreamTrusted(connPolicyOptions.Upstream) {
+			// Untrusted sources can connect directly but can't set their address.
+			if viper.GetString("proxy-protocol-policy") == "require" {
+				return proxyproto.REJECT, fmt.Errorf("%w: %s", proxyproto.ErrInvalidUpstream, connPolicyOptions.Upstream)
+			}
+
+			return proxyproto.REJECT, nil
+		}
+
 		switch viper.GetString("proxy-protocol-policy") {
 		case "ignore":
 			return proxyproto.IGNORE, nil
@@ -124,101 +210,107 @@ func LoadProxyProtoConfig(l *proxyproto.Listener) {
 	}
 }
 
-// GetRandomPortInRange returns a random port in the provided range.
-// The port range is a comma separated list of ranges or ports.
-func GetRandomPortInRange(listenAddr string, portRange string) uint32 {
-	var bindPort uint32
+// portRange is an inclusive range of ports.
+type portRange struct {
+	low, high uint32
+}
 
-	ranges := strings.Split(strings.TrimSpace(portRange), ",")
-	possible := [][]uint64{}
-	for _, r := range ranges {
-		ends := strings.Split(strings.TrimSpace(r), "-")
+// parsePortRanges parses a comma separated list of ports and inclusive port ranges.
+func parsePortRanges(portRanges string) ([]portRange, error) {
+	parsePort := func(s string) (uint32, error) {
+		port, err := strconv.ParseUint(strings.TrimSpace(s), 0, 16)
+		return uint32(port), err
+	}
 
-		if len(ends) == 1 {
-			ui, err := strconv.ParseUint(ends[0], 0, 64)
-			if err != nil {
-				return 0
-			}
+	ranges := []portRange{}
+	for _, r := range strings.Split(strings.TrimSpace(portRanges), ",") {
+		lowString, highString, isRange := strings.Cut(strings.TrimSpace(r), "-")
 
-			possible = append(possible, []uint64{uint64(ui)})
-		} else if len(ends) == 2 {
-			ui1, err := strconv.ParseUint(ends[0], 0, 64)
-			if err != nil {
-				return 0
-			}
-
-			ui2, err := strconv.ParseUint(ends[1], 0, 64)
-			if err != nil {
-				return 0
-			}
-
-			possible = append(possible, []uint64{uint64(ui1), uint64(ui2)})
+		low, err := parsePort(lowString)
+		if err != nil {
+			return nil, err
 		}
+
+		high := low
+		if isRange {
+			high, err = parsePort(highString)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if low > high {
+			return nil, fmt.Errorf("port range %q is reversed", r)
+		}
+
+		ranges = append(ranges, portRange{low: low, high: high})
 	}
 
-	locHolder := mathrand.Intn(len(possible))
+	return ranges, nil
+}
 
-	if len(possible[locHolder]) == 1 {
-		bindPort = uint32(possible[locHolder][0])
-	} else if len(possible[locHolder]) == 2 {
-		bindPort = uint32(mathrand.Intn(int(possible[locHolder][1]-possible[locHolder][0])) + int(possible[locHolder][0]))
-	}
-
-	ln, err := Listen(GenerateAddress(listenAddr, bindPort))
+// GetRandomPortInRange returns a random port in the provided range that can
+// be listened on. The port range is a comma separated list of ranges or ports.
+func GetRandomPortInRange(listenAddr string, portRanges string) (uint32, error) {
+	ranges, err := parsePortRanges(portRanges)
 	if err != nil {
-		return GetRandomPortInRange(listenAddr, portRange)
+		return 0, err
 	}
 
-	err = ln.Close()
-	if err != nil {
-		slog.Error(
-			"error closing listener",
-			"err", err,
-		)
+	total := uint64(0)
+	for _, r := range ranges {
+		total += uint64(r.high-r.low) + 1
 	}
 
-	return bindPort
+	portAt := func(i uint64) uint32 {
+		for _, r := range ranges {
+			size := uint64(r.high-r.low) + 1
+			if i < size {
+				return r.low + uint32(i)
+			}
+			i -= size
+		}
+
+		return 0
+	}
+
+	// Try each port once, starting from a random offset.
+	start := mathrand.Uint64N(total)
+	for i := range total {
+		port := portAt((start + i) % total)
+
+		ln, err := Listen(GenerateAddress(listenAddr, port))
+		if err != nil {
+			continue
+		}
+
+		err = ln.Close()
+		if err != nil {
+			slog.Error(
+				"error closing listener",
+				"err", err,
+			)
+		}
+
+		return port, nil
+	}
+
+	return 0, fmt.Errorf("no free port in port-bind-range")
 }
 
 // CheckPort verifies if a port exists within the port range.
 // It will return 0 and an error if not (0 allows the kernel to select)
 // the port.
 func CheckPort(port uint32, portRanges string) (uint32, error) {
-	ranges := strings.Split(strings.TrimSpace(portRanges), ",")
-	checks := false
-	for _, r := range ranges {
-		ends := strings.Split(strings.TrimSpace(r), "-")
-
-		if len(ends) == 1 {
-			ui, err := strconv.ParseUint(ends[0], 0, 64)
-			if err != nil {
-				return 0, err
-			}
-
-			if uint64(ui) == uint64(port) {
-				checks = true
-				continue
-			}
-		} else if len(ends) == 2 {
-			ui1, err := strconv.ParseUint(ends[0], 0, 64)
-			if err != nil {
-				return 0, err
-			}
-
-			ui2, err := strconv.ParseUint(ends[1], 0, 64)
-			if err != nil {
-				return 0, err
-			}
-
-			if uint64(port) >= ui1 && uint64(port) <= ui2 {
-				checks = true
-				continue
-			}
-		}
+	ranges, err := parsePortRanges(portRanges)
+	if err != nil {
+		return 0, err
 	}
 
-	if checks {
-		return port, nil
+	for _, r := range ranges {
+		if port >= r.low && port <= r.high {
+			return port, nil
+		}
 	}
 
 	return 0, fmt.Errorf("not a safe port")
@@ -519,7 +611,7 @@ func GetSSHConfig() *ssh.ServerConfig {
 				"user", c.User(),
 			)
 
-			if string(password) == viper.GetString("authentication-password") && viper.GetString("authentication-password") != "" {
+			if expected := viper.GetString("authentication-password"); expected != "" && subtle.ConstantTimeCompare(password, []byte(expected)) == 1 {
 				return nil, nil
 			}
 
@@ -552,9 +644,13 @@ func GetSSHConfig() *ssh.ServerConfig {
 				"key", authKey,
 			)
 
+			// loadKeys replaces the slice, so a copy of the reference is safe to
+			// range over without holding the lock through the auth request below.
 			holderLock.Lock()
-			defer holderLock.Unlock()
-			for _, i := range certHolder {
+			keys := certHolder
+			holderLock.Unlock()
+
+			for _, i := range keys {
 				if bytes.Equal(key.Marshal(), i.Marshal()) {
 					permssionsData := &ssh.Permissions{
 						Extensions: map[string]string{
@@ -611,8 +707,15 @@ func checkAuthenticationKeyRequest(authUrl string, authKey []byte, addr net.Addr
 		return false, fmt.Errorf("error parsing url %s", err)
 	}
 
+	release, err := acquireAuthRequest(viper.GetDuration("authentication-key-request-timeout"))
+	if err != nil {
+		return false, err
+	}
+	defer release()
+
 	c := &http.Client{
-		Timeout: viper.GetDuration("authentication-key-request-timeout"),
+		Timeout:       viper.GetDuration("authentication-key-request-timeout"),
+		CheckRedirect: noRedirects,
 	}
 	urlS := parsedUrl.String()
 	reqBodyMap := map[string]string{
@@ -628,6 +731,7 @@ func checkAuthenticationKeyRequest(authUrl string, authKey []byte, addr net.Addr
 	if err != nil {
 		return false, err
 	}
+	defer closeBody(res.Body)
 
 	if res.StatusCode != http.StatusOK {
 		slog.Info(
@@ -649,8 +753,15 @@ func checkAuthenticationPasswordRequest(authUrl string, password []byte, addr ne
 		return false, fmt.Errorf("error parsing url %s", err)
 	}
 
+	release, err := acquireAuthRequest(viper.GetDuration("authentication-password-request-timeout"))
+	if err != nil {
+		return false, err
+	}
+	defer release()
+
 	c := &http.Client{
-		Timeout: viper.GetDuration("authentication-password-request-timeout"),
+		Timeout:       viper.GetDuration("authentication-password-request-timeout"),
+		CheckRedirect: noRedirects,
 	}
 	urlS := parsedUrl.String()
 	reqBodyMap := map[string]string{
@@ -666,6 +777,7 @@ func checkAuthenticationPasswordRequest(authUrl string, password []byte, addr ne
 	if err != nil {
 		return false, err
 	}
+	defer closeBody(res.Body)
 
 	if res.StatusCode != http.StatusOK {
 		slog.Info(
@@ -677,6 +789,45 @@ func checkAuthenticationPasswordRequest(authUrl string, password []byte, addr ne
 	}
 
 	return true, nil
+}
+
+// acquireAuthRequest waits up to timeout for a free auth request slot, so
+// clients that can't log in can't send the auth service unlimited requests.
+func acquireAuthRequest(timeout time.Duration) (func(), error) {
+	release := func() { <-authRequests }
+
+	select {
+	case authRequests <- struct{}{}:
+		return release, nil
+	default:
+	}
+
+	if timeout <= 0 {
+		authRequests <- struct{}{}
+		return release, nil
+	}
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case authRequests <- struct{}{}:
+		return release, nil
+	case <-timer.C:
+		return nil, fmt.Errorf("too many auth requests in flight")
+	}
+}
+
+// noRedirects makes an auth request answer with the configured endpoint's own
+// status, since a redirect to a page that returns 200 would approve the login.
+func noRedirects(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
+}
+
+// closeBody drains and closes a response body so its connection can be reused.
+func closeBody(body io.ReadCloser) {
+	_, _ = io.Copy(io.Discard, io.LimitReader(body, 1<<16))
+	_ = body.Close()
 }
 
 // generatePrivateKey creates a new ed25519 private key to be used by the
@@ -803,8 +954,8 @@ func verifyDNS(addr string, sshConn *SSHConnection) (bool, string, error) {
 // GetOpenPort returns open ports that can be bound. It verifies the host to
 // bind the port to and attempts to listen to the port to ensure it is open.
 // If load balancing is enabled, it will return the port if used.
-func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection, sniProxyEnabled bool) (string, uint32, *TCPHolder) {
-	getUnusedPort := func() (string, uint32, *TCPHolder) {
+func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection, sniProxyEnabled bool) (string, uint32, *TCPHolder, error) {
+	getUnusedPort := func() (string, uint32, *TCPHolder, error) {
 		var tH *TCPHolder
 		var bindErr error
 
@@ -813,12 +964,16 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 		bindAddr := addr
 		listenAddr := ""
 
-		if bindAddr == "" {
+		// An SNI forward's requested address is its hostname, which isn't an address to listen on.
+		if bindAddr == "" || sniProxyEnabled {
 			bindAddr = sshConn.TCPAddress
 		}
 
-		if (bindAddr == "localhost" && viper.GetBool("localhost-as-all")) || viper.GetBool("force-tcp-address") || (sniProxyEnabled && sshConn.TCPAddress == "") {
+		if bindAddr == "" || (IsLocalhost(bindAddr) && viper.GetBool("localhost-as-all")) || viper.GetBool("force-tcp-address") {
 			bindAddr = viper.GetString("tcp-address")
+		} else if bindAddr != "localhost" && net.ParseIP(bindAddr) == nil {
+			// Anything else would reach the listener as a network or address list.
+			return "", 0, nil, fmt.Errorf("invalid tcp address %q", bindAddr)
 		}
 
 		// Port 0 asks for any port, so it is never unavailable.
@@ -869,7 +1024,13 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 				reportUnavailable(true)
 
 				if viper.GetString("port-bind-range") != "" {
-					bindPort = GetRandomPortInRange(bindAddr, viper.GetString("port-bind-range"))
+					randomPort, err := GetRandomPortInRange(bindAddr, viper.GetString("port-bind-range"))
+					if err != nil {
+						bindErr = err
+						return false
+					}
+
+					bindPort = randomPort
 				} else {
 					bindPort = 0
 				}
@@ -893,10 +1054,156 @@ func GetOpenPort(addr string, port uint32, state *State, sshConn *SSHConnection,
 		for checkPort(bindPort) {
 		}
 
-		return listenAddr, bindPort, tH
+		return listenAddr, bindPort, tH, bindErr
 	}
 
 	return getUnusedPort()
+}
+
+// validBindHost reports whether host is a hostname, optionally with a leading wildcard label.
+func validBindHost(host string) bool {
+	host = strings.TrimPrefix(host, wildcardPrefix)
+	if host == "" || len(host) > 253 {
+		return false
+	}
+
+	for label := range strings.SplitSeq(host, ".") {
+		if label == "" || len(label) > 63 {
+			return false
+		}
+
+		for _, r := range label {
+			if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' && r != '_' {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// validURLPart reports whether s only uses characters a URL can carry as-is in
+// its userinfo or path. allowColon is false for a username, where ':' would
+// start the password.
+func validURLPart(s string, allowColon bool) bool {
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case strings.ContainsRune("-._~!$&'()*+,;=", r):
+		case r == ':' && allowColon:
+		default:
+			return false
+		}
+	}
+
+	return true
+}
+
+// IsLocalhost reports whether addr is localhost or a loopback IP.
+func IsLocalhost(addr string) bool {
+	if addr == "localhost" {
+		return true
+	}
+
+	ip := net.ParseIP(addr)
+
+	return ip != nil && ip.IsLoopback()
+}
+
+// hostsOverlap reports whether two bound hosts would receive the same names.
+func hostsOverlap(a, b string) bool {
+	return a == b || MatchesWildcardHost(a, b) || MatchesWildcardHost(b, a)
+}
+
+// httpsSNIBound reports whether host overlaps an SNI name bound on sish's HTTPS port.
+func httpsSNIBound(state *State, host string) bool {
+	bound := false
+
+	state.TCPListeners.Range(func(_ string, tH *TCPHolder) bool {
+		if !tH.HTTPS {
+			return true
+		}
+
+		tH.Balancers.Range(func(name string, _ *roundrobin.RoundRobin) bool {
+			bound = name != "" && hostsOverlap(host, name)
+			return !bound
+		})
+
+		return !bound
+	})
+
+	return bound
+}
+
+// httpBindingConflict returns the listener with the same host and credentials
+// that a binding could join, and whether the binding is taken. Bindings at the
+// same host and path can each have their own credentials, which pick between
+// them. Any other overlap with an HTTP host or an HTTPS SNI name is taken.
+func httpBindingConflict(state *State, host, path, username, password string) (*HTTPHolder, bool) {
+	var holder *HTTPHolder
+	taken := false
+
+	state.HTTPListeners.Range(func(key string, locationListener *HTTPHolder) bool {
+		if host != locationListener.HTTPUrl.Host || !strings.HasPrefix(path, locationListener.HTTPUrl.Path) {
+			return true
+		}
+
+		parsedPassword, _ := locationListener.HTTPUrl.User.Password()
+		if username == locationListener.HTTPUrl.User.Username() && password == parsedPassword {
+			holder = locationListener
+			taken = true
+			return true
+		}
+
+		bothNeedCredentials := username != "" && password != "" && locationListener.HTTPUrl.User.Username() != "" && parsedPassword != ""
+		if !bothNeedCredentials || path != locationListener.HTTPUrl.Path {
+			taken = true
+		}
+
+		return true
+	})
+
+	return holder, taken || httpsSNIBound(state, host)
+}
+
+// HTTPBindingTaken reports whether a new HTTP listener for u would overlap an existing binding.
+func HTTPBindingTaken(state *State, u *url.URL) bool {
+	password, _ := u.User.Password()
+	_, taken := httpBindingConflict(state, u.Host, u.Path, u.User.Username(), password)
+
+	return taken
+}
+
+// HTTPHostBound reports whether host overlaps the root domain or a bound HTTP host.
+func HTTPHostBound(state *State, host string) bool {
+	bound := hostsOverlap(host, viper.GetString("domain"))
+
+	state.HTTPListeners.Range(func(_ string, pH *HTTPHolder) bool {
+		bound = bound || hostsOverlap(host, pH.HTTPUrl.Host)
+		return !bound
+	})
+
+	return bound
+}
+
+// SNINameTaken reports whether binding name on tH would take connections from
+// another binding. Only SNI load balancing shares a name, and overlapping
+// wildcards are never shared, so the first binding keeps its names.
+func SNINameTaken(state *State, tH *TCPHolder, name string) bool {
+	taken := false
+
+	tH.Balancers.Range(func(bound string, _ *roundrobin.RoundRobin) bool {
+		if bound == name {
+			taken = !viper.GetBool("sni-load-balancer")
+		} else if bound != "" && hostsOverlap(name, bound) {
+			taken = true
+		}
+
+		return !taken
+	})
+
+	// Raw TLS for an HTTP host would bypass sish's TLS for it.
+	return taken || (tH.HTTPS && HTTPHostBound(state, name))
 }
 
 // GetOpenSNIHost returns an open SNI host or a random host if that one is unavailable.
@@ -938,7 +1245,7 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 		host := strings.ToLower(proposedHost)
 
 		getRandomHost := func() string {
-			return strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("bind-random-subdomains-length")) + "." + viper.GetString("domain"))
+			return strings.ToLower(RandomString(viper.GetInt("bind-random-subdomains-length")) + "." + viper.GetString("domain"))
 		}
 
 		reportUnavailable := func(unavailable bool) {
@@ -959,12 +1266,21 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 			}
 		}
 
+		attempts := 0
+
 		checkHost := func() bool {
 			if bindErr != nil {
 				return false
 			}
 
-			if viper.GetBool("bind-random-subdomains") || !first || inList(host, bannedSubdomainList) {
+			// A wildcard can cover every random name, so don't retry forever.
+			attempts++
+			if attempts > maxBindAttempts {
+				bindErr = fmt.Errorf("unable to find a free subdomain")
+				return false
+			}
+
+			if viper.GetBool("bind-random-subdomains") || !first || inList(host, bannedSubdomainList) || !validBindHost(host) {
 				reportUnavailable(true)
 				host = getRandomHost()
 			}
@@ -974,20 +1290,7 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 				host = getRandomHost()
 			}
 
-			ok := false
-
-			tH.Balancers.Range(func(strKey string, value *roundrobin.RoundRobin) bool {
-				if strKey == host {
-					ok = true
-					return false
-				}
-
-				return true
-			})
-
-			if ok && viper.GetBool("sni-load-balancer") {
-				ok = false
-			}
+			ok := SNINameTaken(state, tH, host)
 
 			reportUnavailable(ok)
 
@@ -1051,6 +1354,18 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			addr = pathParts[0]
 		}
 
+		// These end up in URLs shown to users and admins, so a character that ends
+		// the userinfo, host or path there could point the URL somewhere else.
+		if !validURLPart(username, false) || !validURLPart(password, true) || !validURLPart(strings.ReplaceAll(path, "/", ""), true) {
+			sshConn.SendLog(
+				slog.LevelWarn,
+				"The requested credentials or path contain characters that aren't allowed.\r\n",
+				"invalid binding",
+			)
+
+			return nil, nil
+		}
+
 		dnsMatch, _, err := verifyDNS(addr, sshConn)
 		if err != nil {
 			slog.Debug(
@@ -1078,7 +1393,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 		host := strings.ToLower(proposedHost)
 
 		getRandomHost := func() string {
-			return strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("bind-random-subdomains-length")) + "." + viper.GetString("domain"))
+			return strings.ToLower(RandomString(viper.GetInt("bind-random-subdomains-length")) + "." + viper.GetString("domain"))
 		}
 
 		reportUnavailable := func(unavailable bool) {
@@ -1099,12 +1414,21 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 			}
 		}
 
+		attempts := 0
+
 		checkHost := func() bool {
 			if bindErr != nil {
 				return false
 			}
 
-			if viper.GetBool("bind-random-subdomains") || !first || inList(host, bannedSubdomainList) {
+			// A wildcard can cover every random name, so don't retry forever.
+			attempts++
+			if attempts > maxBindAttempts {
+				bindErr = fmt.Errorf("unable to find a free subdomain")
+				return false
+			}
+
+			if viper.GetBool("bind-random-subdomains") || !first || inList(host, bannedSubdomainList) || !validBindHost(host) {
 				reportUnavailable(true)
 				host = getRandomHost()
 			}
@@ -1114,22 +1438,9 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 				host = getRandomHost()
 			}
 
-			var holder *HTTPHolder
-			ok := false
+			holder, ok := httpBindingConflict(state, host, path, username, password)
 
-			state.HTTPListeners.Range(func(key string, locationListener *HTTPHolder) bool {
-				parsedPassword, _ := locationListener.HTTPUrl.User.Password()
-
-				if host == locationListener.HTTPUrl.Host && strings.HasPrefix(path, locationListener.HTTPUrl.Path) && username == locationListener.HTTPUrl.User.Username() && password == parsedPassword {
-					ok = true
-					holder = locationListener
-					return false
-				}
-
-				return true
-			})
-
-			if ok && viper.GetBool("http-load-balancer") {
+			if holder != nil && viper.GetBool("http-load-balancer") {
 				pH = holder
 				ok = false
 			}
@@ -1170,7 +1481,7 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 		alias := fmt.Sprintf("%s:%s", strings.ToLower(addr), port)
 
 		getRandomAlias := func() string {
-			return fmt.Sprintf("%s:%s", strings.ToLower(RandStringBytesMaskImprSrc(viper.GetInt("bind-random-aliases-length"))), port)
+			return fmt.Sprintf("%s:%s", strings.ToLower(RandomString(viper.GetInt("bind-random-aliases-length"))), port)
 		}
 
 		reportUnavailable := func(unavailable bool) {
@@ -1227,32 +1538,98 @@ func GetOpenAlias(addr string, port string, state *State, sshConn *SSHConnection
 	return getUnusedAlias()
 }
 
-// RandStringBytesMaskImprSrc creates a random string of length n
-// https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-golang
-func RandStringBytesMaskImprSrc(n int) string {
-	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	const (
-		letterIdxBits = 6                    // 6 bits to represent a letter index
-		letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-		letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-	)
-	var src = mathrand.NewSource(time.Now().UnixNano())
+// RandomString returns a string of n letters and digits from crypto/rand.
+func RandomString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+	max := big.NewInt(int64(len(letters)))
 
 	b := make([]byte, n)
-	// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = src.Int63(), letterIdxMax
+	for i := range b {
+		idx, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			Fatal(
+				"unable to read random bytes",
+				"err", err,
+			)
 		}
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			b[i] = letterBytes[idx]
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
+
+		b[i] = letters[idx.Int64()]
 	}
 
 	return string(b)
+}
+
+// MatchHTTPHolder returns the listener for a request and whether the request
+// still needs to send its credentials. An exact host beats a wildcard and the
+// longest matching path wins. Listeners at the same host and path are told
+// apart by the request's credentials.
+func MatchHTTPHolder(listeners *syncmap.Map[string, *HTTPHolder], hostname, path, username, password string) (*HTTPHolder, bool) {
+	type rank struct {
+		exact            bool
+		pathLen, hostLen int
+	}
+
+	rankOf := func(l *HTTPHolder) rank {
+		return rank{exact: hostname == l.HTTPUrl.Host, pathLen: len(l.HTTPUrl.Path), hostLen: len(l.HTTPUrl.Host)}
+	}
+
+	better := func(a, b rank) bool {
+		if a.exact != b.exact {
+			return a.exact
+		}
+
+		if a.pathLen != b.pathLen {
+			return a.pathLen > b.pathLen
+		}
+
+		return a.hostLen > b.hostLen
+	}
+
+	var best []*HTTPHolder
+	var bestRank rank
+
+	listeners.Range(func(_ string, l *HTTPHolder) bool {
+		if !strings.HasPrefix(path, l.HTTPUrl.Path) || (hostname != l.HTTPUrl.Host && !MatchesWildcardHost(hostname, l.HTTPUrl.Host)) {
+			return true
+		}
+
+		switch r := rankOf(l); {
+		case len(best) == 0 || better(r, bestRank):
+			best, bestRank = []*HTTPHolder{l}, r
+		case r == bestRank:
+			best = append(best, l)
+		}
+
+		return true
+	})
+
+	if len(best) == 0 {
+		return nil, false
+	}
+
+	for _, l := range best {
+		listenerUsername := l.HTTPUrl.User.Username()
+		listenerPassword, _ := l.HTTPUrl.User.Password()
+
+		if listenerUsername == "" || listenerPassword == "" {
+			return l, false
+		}
+
+		// Both halves are compared so the time doesn't show which one was wrong.
+		userMatches := TokenMatches(username, listenerUsername)
+		passwordMatches := TokenMatches(password, listenerPassword)
+		if userMatches && passwordMatches {
+			return l, false
+		}
+	}
+
+	return best[0], true
+}
+
+// TokenMatches compares a provided token with the expected one in constant time.
+func TokenMatches(provided, expected string) bool {
+	return expected != "" && subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }
 
 // MatchesWildcardHost checks if the hostname provided would match the potential wildcard.

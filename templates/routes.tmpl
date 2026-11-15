@@ -139,7 +139,7 @@
         const listeners = client.routeListeners || {};
         const routes = [];
         for (const [name, handlers] of Object.entries(listeners.httpListeners || {})) {
-            routes.push({ type: "HTTP", kind: "httplistener", name, targets: [].concat(handlers) });
+            routes.push({ type: "HTTP", kind: "httplistener", name, targets: [].concat(handlers), consoleId: (listeners.consoleRoutes || {})[name] });
         }
         for (const [name, target] of Object.entries(listeners.tcpAliases || {})) {
             routes.push({ type: "Alias", kind: "tcpalias", name, targets: [target] });
@@ -155,13 +155,12 @@
         return route.name.replace(/^([^:@/]*):[^@/]*@/, "$1:•••@");
     }
 
+    // Route consoles open on this host. The admin token must never reach a tenant's host, whose content the tenant controls.
     function consoleUrl(route) {
-        const bare = route.name.replace(/^[^@/]*@/, "");
-        const slash = bare.indexOf("/");
-        const host = slash === -1 ? bare : bare.slice(0, slash);
-        const path = slash === -1 ? "" : bare.slice(slash).replace(/\/+$/, "");
-        const port = location.port ? `:${location.port}` : "";
-        return `${location.protocol}//${host}${port}${path}/_sish/console?x-authorization=${encodeURIComponent(token)}`;
+        const url = new URL("/_sish/console", location.origin);
+        url.searchParams.set("route", route.consoleId);
+        url.searchParams.set("x-authorization", token);
+        return url.href;
     }
 
     function matches(client) {
@@ -232,7 +231,7 @@
     }
 
     function routeAddress(route, ...extra) {
-        return h("td", { class: "mono" }, route.type === "HTTP"
+        return h("td", { class: "mono" }, route.type === "HTTP" && route.consoleId
             ? h("a", { href: consoleUrl(route), title: "Open the request console", text: displayName(route) })
             : displayName(route), extra);
     }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -209,5 +210,134 @@ func TestCancelRandomPortForward(t *testing.T) {
 
 	if err := listener.Close(); err != nil {
 		t.Fatalf("cancelling the forward failed: %v", err)
+	}
+}
+
+// An exec request too short to hold a command is refused and leaves the server running.
+func TestShortExecPayload(t *testing.T) {
+	addr := startTestServer(t)
+
+	for _, payload := range [][]byte{nil, {0, 0}, {0, 0, 0, 9, 'x'}} {
+		// Each connection gets one session.
+		ch, _, err := dialTestServer(t, addr).OpenChannel("session", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ok, err := ch.SendRequest("exec", true, payload)
+		if err != nil {
+			t.Fatalf("exec %v: %v", payload, err)
+		}
+		if ok {
+			t.Errorf("exec %v was accepted", payload)
+		}
+
+		_ = ch.Close()
+	}
+
+	out, err := dialTestServer(t, addr).NewSession()
+	if err != nil {
+		t.Fatalf("server stopped accepting sessions: %v", err)
+	}
+	_ = out.Close()
+}
+
+// A tcp-address that isn't an IP or localhost is ignored.
+func TestInvalidTCPAddressIgnored(t *testing.T) {
+	session, err := dialTestServer(t, startTestServer(t)).NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := session.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := session.Start("log-format=json tcp-address=unix:///tmp/sish-test.sock tcp-address=127.0.0.2"); err != nil {
+		t.Fatal(err)
+	}
+
+	records := make(chan map[string]any)
+	go func() {
+		defer close(records)
+
+		scanner := bufio.NewScanner(out)
+		for scanner.Scan() {
+			var record map[string]any
+			if json.Unmarshal(scanner.Bytes(), &record) == nil {
+				records <- record
+			}
+		}
+	}()
+
+	var got []string
+	for len(got) < 2 {
+		select {
+		case record, ok := <-records:
+			if !ok {
+				t.Fatalf("session ended after %v", got)
+			}
+
+			if option, _ := record["option"].(string); option == tcpAddressPrefix {
+				got = append(got, fmt.Sprintf("%s %v", record["msg"], record["value"]))
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("timed out after %v", got)
+		}
+	}
+
+	expected := []string{"invalid option unix:///tmp/sish-test.sock", "option set 127.0.0.2"}
+	if !slices.Equal(got, expected) {
+		t.Errorf("expected %v, got %v", expected, got)
+	}
+}
+
+// Forwards on kernel-assigned ports each get their own holder.
+func TestRandomPortForwardsAreKeptApart(t *testing.T) {
+	sshConfig := utils.GetSSHConfig()
+	state := utils.NewState()
+
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go handleConn(conn, state, sshConfig)
+		}
+	}()
+
+	ports := map[int]bool{}
+	for range 2 {
+		forward, err := dialTestServer(t, listener.Addr().String()).Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = forward.Close() })
+
+		ports[forward.Addr().(*net.TCPAddr).Port] = true
+	}
+
+	var keys []string
+	state.TCPListeners.Range(func(key string, _ *utils.TCPHolder) bool {
+		keys = append(keys, key)
+		return true
+	})
+
+	if len(ports) != 2 || len(keys) != 2 {
+		t.Fatalf("ports %v, holders %v", ports, keys)
+	}
+
+	for _, key := range keys {
+		if strings.HasSuffix(key, ":0") {
+			t.Errorf("holder keyed by the requested port: %s", key)
+		}
 	}
 }

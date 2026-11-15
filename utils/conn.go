@@ -74,8 +74,12 @@ func (s *SSHConnection) SendMessage(message string, block bool) {
 		message = strings.TrimSuffix(message, "\r\n")
 	}
 
+	// Nothing reads Messages once the connection closes.
 	if block {
-		s.Messages <- message
+		select {
+		case s.Messages <- message:
+		case <-s.Close:
+		}
 		return
 	}
 
@@ -227,8 +231,19 @@ func NewTeeConn(conn net.Conn) *TeeConn {
 	return teeConn
 }
 
-// PeekTLSHello peeks the TLS Connection Hello to proxy based on SNI.
-func PeekTLSHello(conn net.Conn) (*tls.ClientHelloInfo, *TeeConn, error) {
+// PeekTLSHello peeks the TLS Connection Hello to proxy based on SNI. A
+// timeout above 0 bounds how long the client has to send it.
+func PeekTLSHello(conn net.Conn, timeout time.Duration) (*tls.ClientHelloInfo, *TeeConn, error) {
+	if timeout > 0 {
+		if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+			return nil, NewTeeConn(conn), err
+		}
+
+		defer func() {
+			_ = conn.SetReadDeadline(time.Time{})
+		}()
+	}
+
 	var tlsHello *tls.ClientHelloInfo
 
 	tlsConfig := &tls.Config{
@@ -239,6 +254,9 @@ func PeekTLSHello(conn net.Conn) (*tls.ClientHelloInfo, *TeeConn, error) {
 	}
 
 	teeConn := NewTeeConn(conn)
+
+	// Whatever was peeked has to be read back first, TLS or not.
+	teeConn.Unbuffer = true
 
 	header, err := teeConn.Buffer.Peek(5)
 	if err != nil {
@@ -255,8 +273,6 @@ func PeekTLSHello(conn net.Conn) (*tls.ClientHelloInfo, *TeeConn, error) {
 	}
 
 	err = tls.Server(bufConn{reader: bytes.NewReader(helloBytes)}, tlsConfig).Handshake()
-
-	teeConn.Unbuffer = true
 
 	return tlsHello, teeConn, err
 }

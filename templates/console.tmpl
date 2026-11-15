@@ -243,7 +243,15 @@
         clear: document.getElementById("clear"),
     };
 
-    document.getElementById("host").textContent = location.host + base;
+    // An admin views a route's console from the root domain, which passes in the route's address.
+    const routeHost = {{ .RouteHost }};
+    const routeId = new URLSearchParams(location.search).get("route") || "";
+    const publicHost = routeHost ? `${routeHost}${location.port ? `:${location.port}` : ""}` : location.host;
+    const publicOrigin = `${location.protocol}//${publicHost}`;
+    const publicBase = routeHost ? {{ .RoutePath }} : base;
+    const sameOrigin = publicOrigin === location.origin;
+
+    document.getElementById("host").textContent = publicHost + publicBase;
 
     function header(headers, name) {
         const wanted = name.toLowerCase();
@@ -304,7 +312,8 @@
             }
         }
 
-        body.image = type.startsWith("image/") && body.size > 0;
+        // An SVG opened from its blob URL would run its scripts on this page's origin.
+        body.image = type.startsWith("image/") && !type.includes("svg") && body.size > 0;
 
         if (body.image) body.modes = ["preview", body.text !== null ? "raw" : "hex"];
         else if (body.json !== undefined || body.form) body.modes = ["pretty", "raw"];
@@ -372,7 +381,7 @@
             } else {
                 els.list.replaceChildren(h("div", { class: "empty" },
                     h("strong", { text: "Waiting for requests" }),
-                    h("span", { text: `Requests to ${location.host}${base} show up here as they happen.` })));
+                    h("span", { text: `Requests to ${publicHost}${publicBase} show up here as they happen.` })));
             }
             const total = state.entries.length;
             els.count.textContent = visible.length === total ? `${total} request${total === 1 ? "" : "s"}` : `${visible.length} of ${total}`;
@@ -628,7 +637,8 @@
             return;
         }
 
-        const canReplay = !decodeBody(entry.request).notCaptured;
+        const notCaptured = decodeBody(entry.request).notCaptured;
+        const canReplay = !notCaptured && sameOrigin;
         decodeBody(entry.response);
 
         const tab = (id, label, part) => h("button", {
@@ -653,7 +663,7 @@
                     type: "button",
                     class: "btn primary",
                     disabled: !canReplay,
-                    title: canReplay ? "Send this request again from your browser" : "The request body wasn't captured",
+                    title: canReplay ? "Send this request again from your browser" : !sameOrigin ? "Replay from the route's own console" : "The request body wasn't captured",
                     onclick: (ev) => replay(entry, ev.currentTarget),
                 }, "Replay")),
             h("div", { class: "tabs", role: "tablist" }, tab("request", "Request", entry.request), tab("response", "Response", entry.response)),
@@ -851,7 +861,7 @@
             for (const value of entry.request.headers[key]) args.push(`-H ${quote(`${key}: ${value}`)}`);
         }
         const scheme = location.protocol === "https:" ? "wss:" : "ws:";
-        const command = [`websocat ${quote(`${scheme}//${location.host}${entry.uri}`)}`, ...args].join(" \\\n  ");
+        const command = [`websocat ${quote(`${scheme}//${publicHost}${entry.uri}`)}`, ...args].join(" \\\n  ");
         copyText(command)
             .then(() => toast("Copied websocat command"))
             .catch(() => toast("Couldn't copy to the clipboard", "error"));
@@ -863,7 +873,7 @@
         const body = decodeBody(entry.request);
         const args = [];
         let prefix = "";
-        if (entry.method !== "GET" || (body.size && !body.notCaptured)) args.push(`-X ${entry.method}`);
+        if (entry.method !== "GET" || (body.size && !body.notCaptured)) args.push(`-X ${quote(entry.method)}`);
 
         let compressed = false;
         for (const key of Object.keys(entry.request.headers).sort()) {
@@ -883,13 +893,25 @@
             }
         }
 
-        const command = [`${prefix}curl ${quote(location.origin + entry.uri)}`, ...args].join(" \\\n  ");
+        const command = [`${prefix}curl ${quote(publicOrigin + entry.uri)}`, ...args].join(" \\\n  ");
         copyText(command)
             .then(() => toast(body.notCaptured ? "Copied without the body, which wasn't captured" : "Copied curl command"))
             .catch(() => toast("Couldn't copy to the clipboard", "error"));
     }
 
     async function replay(entry, button) {
+        // The URI is the visitor's, so it's appended to this origin and must still resolve to it.
+        let target;
+        try {
+            target = new URL(location.origin + entry.uri);
+        } catch {
+            target = null;
+        }
+        if (!target || target.origin !== location.origin) {
+            toast("Replay only sends requests to this route's origin", "error");
+            return;
+        }
+
         const body = decodeBody(entry.request);
         const headers = new Headers();
         for (const [key, values] of Object.entries(entry.request.headers)) {
@@ -902,7 +924,7 @@
 
         button.disabled = true;
         try {
-            const res = await fetch(entry.uri, {
+            const res = await fetch(target, {
                 method: entry.method,
                 headers,
                 body: ["GET", "HEAD"].includes(entry.method) || !body.size ? undefined : body.raw,
@@ -998,7 +1020,7 @@
         setStatus("", attempts ? "Reconnecting" : "Connecting");
 
         const scheme = location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = socket = new WebSocket(`${scheme}//${location.host}${base}/_sish/console/ws?x-authorization=${encodeURIComponent(token)}`);
+        const ws = socket = new WebSocket(`${scheme}//${location.host}${base}/_sish/console/ws?x-authorization=${encodeURIComponent(token)}${routeId ? `&route=${encodeURIComponent(routeId)}` : ""}`);
 
         ws.onopen = () => {
             connected = true;

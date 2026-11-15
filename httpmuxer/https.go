@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"sync"
+	"time"
 
 	"github.com/antoniomika/sish/utils"
 	"github.com/spf13/viper"
@@ -15,24 +17,91 @@ type proxyListener struct {
 	Listener net.Listener
 	Holder   *utils.TCPHolder
 	State    *utils.State
+
+	// HelloTimeout bounds how long a client has to send its TLS hello. 0 waits forever.
+	HelloTimeout time.Duration
+
+	setup sync.Once
+	start sync.Once
+	stop  sync.Once
+	conns chan net.Conn
+	done  chan struct{}
 }
 
+func (pL *proxyListener) init() {
+	pL.setup.Do(func() {
+		pL.conns = make(chan net.Conn)
+		pL.done = make(chan struct{})
+	})
+}
+
+// Accept returns the next connection for sish's own HTTPS server. Connections
+// whose SNI matches a tunnel are passed to it and never returned.
 func (pL *proxyListener) Accept() (net.Conn, error) {
-	cl, err := pL.Listener.Accept()
-	if err != nil {
-		return nil, err
+	pL.init()
+	pL.start.Do(func() { go pL.acceptLoop() })
+
+	select {
+	case conn := <-pL.conns:
+		return conn, nil
+	case <-pL.done:
+		return nil, net.ErrClosed
 	}
+}
 
-	clientRemote, _, err := net.SplitHostPort(cl.RemoteAddr().String())
+func (pL *proxyListener) acceptLoop() {
+	backoff := time.Duration(0)
 
-	if err != nil || pL.State.IPFilter.Blocked(clientRemote) {
-		err := cl.Close()
+	for {
+		cl, err := pL.Listener.Accept()
+		if err != nil {
+			select {
+			case <-pL.done:
+				return
+			default:
+			}
+
+			// Errors such as running out of file descriptors pass, so keep accepting.
+			backoff = min(max(2*backoff, 5*time.Millisecond), time.Second)
+
+			slog.Error(
+				"error accepting https connection",
+				"err", err,
+				"retryIn", backoff,
+			)
+
+			select {
+			case <-time.After(backoff):
+			case <-pL.done:
+				return
+			}
+
+			continue
+		}
+
+		backoff = 0
+
+		// Reading the hello can take as long as the client wants, so it can't hold up the accept loop.
+		go pL.route(cl)
+	}
+}
+
+// route sends a connection to the tunnel its SNI names, or to sish's HTTPS server.
+func (pL *proxyListener) route(cl net.Conn) {
+	closeConn := func(conn net.Conn) {
+		err := conn.Close()
 		if err != nil {
 			slog.Error(
 				"error closing connection",
 				"err", err,
 			)
 		}
+	}
+
+	clientRemote, _, err := net.SplitHostPort(cl.RemoteAddr().String())
+
+	if err != nil || pL.State.IPFilter.Blocked(clientRemote) {
+		closeConn(cl)
 
 		if viper.GetBool("debug") {
 			slog.Debug(
@@ -42,18 +111,25 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 			)
 		}
 
-		return pL.Accept()
+		return
 	}
 
-	tlsHello, teeConn, _ := utils.PeekTLSHello(cl)
-	if tlsHello == nil {
-		return teeConn, nil
+	tlsHello, teeConn, _ := utils.PeekTLSHello(cl, pL.HelloTimeout)
+
+	serve := func() {
+		select {
+		case pL.conns <- teeConn:
+		case <-pL.done:
+			closeConn(teeConn)
+		}
+	}
+
+	if tlsHello == nil || tlsHello.ServerName == "" {
+		serve()
+		return
 	}
 
 	balancerName := tlsHello.ServerName
-	if balancerName == "" {
-		return teeConn, nil
-	}
 
 	balancer, ok := pL.Holder.Balancers.Load(balancerName)
 	if !ok {
@@ -66,7 +142,8 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 		})
 
 		if balancer == nil {
-			return teeConn, nil
+			serve()
+			return
 		}
 	}
 
@@ -77,15 +154,8 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 			"err", err,
 		)
 
-		err := teeConn.Close()
-		if err != nil {
-			slog.Error(
-				"error closing teeConn",
-				"err", err,
-			)
-		}
-
-		return pL.Accept()
+		closeConn(teeConn)
+		return
 	}
 
 	host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
@@ -95,15 +165,8 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 			"err", err,
 		)
 
-		err := teeConn.Close()
-		if err != nil {
-			slog.Error(
-				"error closing teeConn",
-				"err", err,
-			)
-		}
-
-		return pL.Accept()
+		closeConn(teeConn)
+		return
 	}
 
 	hostAddr := string(host)
@@ -134,23 +197,17 @@ func (pL *proxyListener) Accept() (net.Conn, error) {
 			"err", err,
 		)
 
-		err := teeConn.Close()
-		if err != nil {
-			slog.Error(
-				"error closing teeConn",
-				"err", err,
-			)
-		}
-
-		return pL.Accept()
+		closeConn(teeConn)
+		return
 	}
 
-	go utils.CopyBoth(conn, teeConn)
-
-	return pL.Accept()
+	utils.CopyBoth(conn, teeConn)
 }
 
 func (pL *proxyListener) Close() error {
+	pL.init()
+	pL.stop.Do(func() { close(pL.done) })
+
 	return pL.Listener.Close()
 }
 

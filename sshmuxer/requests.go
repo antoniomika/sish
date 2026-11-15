@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/antoniomika/multilistener"
 	"github.com/antoniomika/sish/utils"
 	"github.com/logrusorgru/aurora"
 	"github.com/spf13/viper"
@@ -359,6 +358,13 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		forwardingName = pH.TunnelId()
 
 		deferHandler = func() {
+			var consoleClients []*utils.WebClient
+			defer func() { utils.CloseWebClients(consoleClients) }()
+
+			// registerHTTPBackend joins and creates holders under this lock.
+			state.BindLock.Lock()
+			defer state.BindLock.Unlock()
+
 			err := pH.Balancer.RemoveServer(serverURL)
 			if err != nil {
 				slog.Error(
@@ -373,7 +379,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 				state.HTTPListeners.Delete(pH.HTTPUrl.String())
 
 				if viper.GetBool("admin-console") || viper.GetBool("service-console") {
-					state.Console.RemoveRoute(pH.HTTPUrl.String())
+					consoleClients = state.Console.DetachRoute(pH.HTTPUrl.String())
 				}
 			}
 		}
@@ -404,6 +410,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		forwardingName = validAlias
 
 		deferHandler = func() {
+			// handleAliasListener joins and creates holders under this lock.
+			state.BindLock.Lock()
+			defer state.BindLock.Unlock()
+
 			err := aH.Balancer.RemoveServer(serverURL)
 			if err != nil {
 				slog.Error(
@@ -439,7 +449,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 			return
 		}
 
-		portChannelForwardReplyPayload.Rport = uint32(tH.Listener.Addr().(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port)
+		portChannelForwardReplyPayload.Rport = uint32(utils.ListenerPort(tH.Listener))
 
 		mainRequestMessages = requestMessages
 
@@ -451,6 +461,10 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 		}
 
 		deferHandler = func() {
+			// handleTCPListener registers under this lock, so it can't join a listener this is closing.
+			state.BindLock.Lock()
+			defer state.BindLock.Unlock()
+
 			err := balancer.RemoveServer(serverURL)
 			if err != nil {
 				slog.Error(
@@ -471,16 +485,7 @@ func handleRemoteForward(newRequest *ssh.Request, sshConn *utils.SSHConnection, 
 				})
 
 				if balancers == 0 {
-					err := tH.Listener.Close()
-					if err != nil {
-						slog.Error(
-							"error closing TCPListener",
-							"err", err,
-						)
-					}
-
-					state.Listeners.Delete(tcpAddr)
-					state.TCPListeners.Delete(tcpAddr)
+					utils.RemoveTCPHolder(state, tcpAddr, tH)
 				}
 			}
 		}

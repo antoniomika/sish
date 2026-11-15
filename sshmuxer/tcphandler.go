@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/antoniomika/multilistener"
 	"github.com/antoniomika/sish/utils"
 	"github.com/antoniomika/syncmap"
 	"github.com/logrusorgru/aurora"
@@ -20,7 +19,10 @@ import (
 // handleTCPListener handles the creation of the tcpHandler
 // (or addition for load balancing) and set's up the underlying listeners.
 func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection, sniProxyEnabled bool) (*utils.TCPHolder, *roundrobin.RoundRobin, string, *url.URL, string, string, error) {
-	tcpAddr, tcpPort, tH := utils.GetOpenPort(check.Addr, bindPort, state, sshConn, sniProxyEnabled)
+	tcpAddr, tcpPort, tH, err := utils.GetOpenPort(check.Addr, bindPort, state, sshConn, sniProxyEnabled)
+	if err != nil {
+		return nil, nil, "", nil, "", "", err
+	}
 
 	if tcpPort != bindPort && viper.GetBool("force-requested-ports") {
 		return nil, nil, "", nil, "", "", fmt.Errorf("error assigning requested port to tunnel")
@@ -33,6 +35,26 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		balancerName = check.Addr
 	}
 
+	created := tH == nil
+
+	// A listener this call created is removed again if the binding fails before
+	// anyone uses it. Callers hold BindLock so no other binding registers on it meanwhile.
+	fail := func(err error) (*utils.TCPHolder, *roundrobin.RoundRobin, string, *url.URL, string, string, error) {
+		if created {
+			inUse := false
+			tH.Balancers.Range(func(string, *roundrobin.RoundRobin) bool {
+				inUse = true
+				return false
+			})
+
+			if !inUse {
+				utils.RemoveTCPHolder(state, tcpAddr, tH)
+			}
+		}
+
+		return nil, nil, "", nil, "", "", err
+	}
+
 	if tH == nil {
 		lis, err := utils.Listen(tcpAddr)
 		if err != nil {
@@ -41,6 +63,11 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 				"err", err,
 			)
 			return nil, nil, "", nil, "", "", err
+		}
+
+		// Every kernel-assigned port would share the key addr:0, so use what it bound to.
+		if tcpPort == 0 {
+			tcpAddr = utils.ListenerAddressKey(lis)
 		}
 
 		tH = &utils.TCPHolder{
@@ -73,14 +100,34 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		state.TCPListeners.Store(tcpAddr, tH)
 	}
 
+	// Picking a name can wait on the client, so it happens before taking the lock.
+	var sniName string
+	var sniErr error
 	if sniProxyEnabled {
-		newName, err := utils.GetOpenSNIHost(balancerName, state, sshConn, tH)
+		sniName, sniErr = utils.GetOpenSNIHost(balancerName, state, sshConn, tH)
+	}
 
-		if err != nil || (!strings.HasPrefix(newName, check.Addr) && viper.GetBool("force-requested-subdomains")) {
-			return nil, nil, "", nil, "", "", fmt.Errorf("error assigning requested address to tunnel")
+	// Registering and tearing down a listener's balancers happen under the same
+	// lock, so a listener can't be closed between this check and the registration below.
+	state.BindLock.Lock()
+	defer state.BindLock.Unlock()
+
+	// Whoever closed the listener has already removed it.
+	if registered, ok := state.TCPListeners.Load(tcpAddr); !ok || registered != tH {
+		return nil, nil, "", nil, "", "", fmt.Errorf("listener %s was closed while binding", tcpAddr)
+	}
+
+	if sniProxyEnabled {
+		if sniErr != nil || (!strings.HasPrefix(sniName, check.Addr) && viper.GetBool("force-requested-subdomains")) {
+			return fail(fmt.Errorf("error assigning requested address to tunnel"))
 		}
 
-		balancerName = newName
+		balancerName = sniName
+
+		// Another binding may have taken the name since it was checked.
+		if utils.SNINameTaken(state, tH, balancerName) {
+			return fail(fmt.Errorf("sni name %s was bound by another tunnel", balancerName))
+		}
 	}
 
 	foundBalancer, ok := tH.Balancers.Load(balancerName)
@@ -94,7 +141,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 				"error initializing tcp balancer",
 				"err", err,
 			)
-			return nil, nil, "", nil, "", "", err
+			return fail(err)
 		}
 
 		tH.Balancers.Store(balancerName, newBalancer)
@@ -108,7 +155,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		Host: base64.StdEncoding.EncodeToString([]byte(listenerHolder.Addr().String())),
 	}
 
-	err := balancer.UpsertServer(serverURL)
+	err = balancer.UpsertServer(serverURL)
 	if err != nil {
 		slog.Error(
 			"unable to add server to balancer",
@@ -126,7 +173,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		connType = "TLS"
 	}
 
-	listenPort := tH.Listener.Addr().(*multilistener.MultiListener).Addresses()[0].(*net.TCPAddr).Port
+	listenPort := utils.ListenerPort(tH.Listener)
 	requestMessages += sshConn.FormatLog(
 		slog.LevelInfo,
 		fmt.Sprintf("%s: %s:%d\r\n", aurora.BgBlue(connType), domainName, listenPort),

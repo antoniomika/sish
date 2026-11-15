@@ -71,8 +71,10 @@ Flags:
       --http-idle-timeout duration                              Duration to keep an idle HTTP keep-alive connection from a visitor open. 0 keeps it open forever (default 2m0s)
       --http-load-balancer                                      Enable the HTTP load balancer (multiple clients can bind the same domain)
       --http-port-override int                                  The port to use for http command output. This does not affect ports used for connecting, it's for cosmetic use only
-      --http-read-header-timeout duration                       Duration to wait for a visitor to send HTTP request headers, which also bounds the TLS handshake. 0 waits forever (default 30s)
+      --http-read-header-timeout duration                       Duration to wait for a visitor to send HTTP request headers, which also bounds the TLS handshake and the TLS hello read for SNI proxying. 0 waits forever (default 30s)
       --http-request-port-override int                          The port to use for http requests. Will default to 80, then http-port-override. Otherwise will use this value
+      --http-trusted-proxies string                             A comma separated list of IPs or CIDRs of reverse proxies whose X-Forwarded-For and X-Real-IP headers name the visitor.
+                                                                IP filtering and logs use the connecting address for everyone else, and their forwarding headers are removed before reaching tunnels. Empty trusts no proxies
       --https                                                   Listen for HTTPS connections. Requires a correct --https-certificate-directory
   -t, --https-address string                                    The address to listen for HTTPS connections (default "localhost:443")
   -s, --https-certificate-directory string                      The directory containing HTTPS certificate files (name.crt and name.key). There can be many crt/key pairs (default "deploy/ssl/")
@@ -80,13 +82,15 @@ Flags:
       --https-ondemand-certificate                              Enable retrieving certificates on demand via Let's Encrypt
       --https-ondemand-certificate-accept-terms                 Accept the Let's Encrypt terms
       --https-ondemand-certificate-email string                 The email to use with Let's Encrypt for cert notifications. Can be left blank
+      --https-ondemand-certificate-wildcards                    Allow on-demand certificates for each name under a bound wildcard host.
+                                                                Without it, wildcard hosts need a wildcard certificate in https-certificate-directory
       --https-port-override int                                 The port to use for https command output. This does not affect ports used for connecting, it's for cosmetic use only
       --https-request-port-override int                         The port to use for https requests. Will default to 443, then https-port-override. Otherwise will use this value
       --idle-connection                                         Enable connection idle timeouts for reads and writes (default true)
       --idle-connection-timeout duration                        Duration to wait for activity before closing a connection for all reads and writes (default 5s)
       --load-templates                                          Load HTML templates. This is required for admin/service consoles (default true)
       --load-templates-directory string                         A directory and glob for templates to load instead of the built-in ones (ie templates/*)
-      --localhost-as-all                                        Enable forcing localhost to mean all interfaces for tcp listeners (default true)
+      --localhost-as-all                                        Enable forcing localhost and loopback addresses to mean all interfaces for tcp listeners (default true)
       --log-format string                                       The format of log output. Can either be text or json (default "text")
       --log-to-client                                           Enable logging HTTP and TCP requests to the client
       --log-to-file                                             Enable writing log output to file, specified by log-to-file-path
@@ -107,16 +111,19 @@ Flags:
       --proxy-protocol-listener                                 Use the proxy-protocol to resolve ip addresses from user connections
       --proxy-protocol-policy string                            What to do with the proxy protocol header. Can be use, ignore, reject, or require (default "use")
       --proxy-protocol-timeout duration                         The duration to wait for the proxy proto header (default 200ms)
+      --proxy-protocol-trusted-upstreams string                 A comma separated list of IPs or CIDRs allowed to send a proxy protocol header.
+                                                                Other sources can still connect directly, but a header from them is rejected. Empty trusts all sources
       --proxy-protocol-use-timeout                              Use a timeout for the proxy-protocol read
   -q, --proxy-protocol-version string                           What version of the proxy protocol to use. Can either be 1, 2, or userdefined.
                                                                 If userdefined, the user needs to add a command to SSH called proxyproto=version (ie proxyproto=1) (default "1")
-      --proxy-ssl-termination                                   Whether sish is running behind an SSL terminated reverse proxy
+      --proxy-ssl-termination https://                          Whether sish is running behind an SSL-terminated reverse proxy
+                                                                If true, the displayed HTTP URL will use https:// despite running on port 80
       --redirect-root                                           Redirect the root domain to the location defined in --redirect-root-location (default true)
   -r, --redirect-root-location string                           The location to redirect requests to the root domain
                                                                 to instead of responding with a 404 (default "https://github.com/antoniomika/sish")
       --rewrite-host-header                                     Force rewrite the host header if the user provides host-header=host.com (default true)
       --service-console                                         Enable the service console for each service and send the info to connected clients
-      --service-console-history int                             The number of recent requests kept per service and sent to a console when it connects. 0 disables history (default 25)
+      --service-console-history int                             The number of recent requests kept per service and sent to a console when it connects, within 64 MiB per service and 512 MiB in all. 0 disables history (default 25)
       --service-console-max-content-length int                  The max size in bytes of a request body, response body, or WebSocket message the console records. -1 records everything (default 1048576)
   -m, --service-console-token string                            The token to use for service console access. Auto generated if empty for each connected tunnel
       --service-console-websocket-messages int                  The number of recent messages kept per WebSocket connection and sent to a console when it connects. 0 turns off WebSocket inspection (default 200)

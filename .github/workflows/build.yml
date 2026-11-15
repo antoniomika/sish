@@ -11,6 +11,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 env:
   PLATFORMS: |
     linux/arm/v7
@@ -42,6 +45,9 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     needs: test
+    permissions:
+      contents: read
+      packages: write
     steps:
     - name: Checkout repo
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

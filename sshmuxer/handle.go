@@ -12,10 +12,11 @@ import (
 // handleRequests handles incoming requests from an SSH connection.
 func handleRequests(reqs <-chan *ssh.Request, sshConn *utils.SSHConnection, state *utils.State) {
 	for req := range reqs {
+		// The payload of a forward request can hold HTTP auth credentials.
 		slog.Debug("main request info",
 			"type", req.Type,
 			"wantReply", req.WantReply,
-			"payload", req.Payload,
+			"payloadSize", len(req.Payload),
 		)
 
 		handleRequest(req, sshConn, state)

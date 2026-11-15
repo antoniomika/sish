@@ -1,7 +1,7 @@
 package sshmuxer
 
 import (
-	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -137,8 +137,24 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 				sendWelcome()
 				sshConn.ExecReceived()
 			case "exec":
-				payloadString := string(req.Payload[4:])
-				commandFlags := strings.Fields(payloadString)
+				execMsg := struct{ Command string }{}
+				if err := ssh.Unmarshal(req.Payload, &execMsg); err != nil {
+					slog.Error(
+						"error unmarshaling exec payload",
+						"err", err,
+					)
+
+					if err := req.Reply(false, nil); err != nil {
+						slog.Error(
+							"error replying to socket request",
+							"err", err,
+						)
+					}
+
+					continue
+				}
+
+				commandFlags := strings.Fields(execMsg.Command)
 
 				for _, commandFlag := range commandFlags {
 					if command, param, ok := strings.Cut(commandFlag, commandSplitter); ok && command == logFormatPrefix {
@@ -234,6 +250,18 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 						)
 					case tcpAddressPrefix:
 						if viper.GetBool("force-tcp-address") {
+							break
+						}
+
+						// Anything else would reach the listener as a network or address list.
+						if param != "localhost" && net.ParseIP(param) == nil {
+							sshConn.SendLog(
+								slog.LevelWarn,
+								fmt.Sprintf("TCP address %s is not an IP address or localhost. Ignoring it.", param),
+								"invalid option",
+								"option", tcpAddressPrefix,
+								"value", param,
+							)
 							break
 						}
 
@@ -417,7 +445,7 @@ func handleSession(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, stat
 					"sub channel type",
 					"type", req.Type,
 					"wantReply", req.WantReply,
-					"payload", req.Payload,
+					"payloadSize", len(req.Payload),
 				)
 			}
 		}
@@ -479,27 +507,12 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 		}
 	}
 
-	if viper.GetBool("tcp-aliases-allowed-users") {
-		connAllowed := false
-
-		aH.SSHConnections.Range(func(name string, conn *utils.SSHConnection) bool {
-			for _, fingerprint := range conn.TCPAliasesAllowedUsers {
-				if fingerprint == "any" || (fingerprint != "" && pubKeyFingerprint != "" && fingerprint == pubKeyFingerprint) {
-					connAllowed = true
-					return false
-				}
-			}
-			return true
-		})
-
-		if !connAllowed {
-			slog.Info("connection not allowed because fingerprint is not found in allowed list")
-			sshConn.CleanUp(state)
-			return
-		}
+	aliasAddr, err := selectAliasBackend(aH, pubKeyFingerprint, viper.GetBool("tcp-aliases-allowed-users"))
+	if errors.Is(err, errAliasNotAllowed) {
+		slog.Info("connection not allowed because fingerprint is not found in allowed list")
+		sshConn.CleanUp(state)
+		return
 	}
-
-	connectionLocation, err := aH.Balancer.NextServer()
 	if err != nil {
 		slog.Error(
 			"error selecting next server",
@@ -508,18 +521,6 @@ func handleAlias(newChannel ssh.NewChannel, sshConn *utils.SSHConnection, state 
 		sshConn.CleanUp(state)
 		return
 	}
-
-	host, err := base64.StdEncoding.DecodeString(connectionLocation.Host)
-	if err != nil {
-		slog.Error(
-			"error decoding server",
-			"err", err,
-		)
-		sshConn.CleanUp(state)
-		return
-	}
-
-	aliasAddr := string(host)
 
 	connString := sshConn.SSHConn.RemoteAddr().String()
 	if pubKeyFingerprint != "" {

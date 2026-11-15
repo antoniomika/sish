@@ -15,14 +15,69 @@ import (
 	"github.com/vulcand/oxy/v2/roundrobin"
 )
 
+// registerHTTPBackend adds a tunnel to an HTTP holder and returns its console
+// token, if the console is on. Teardown removes a holder and its console under
+// the same lock once its last backend leaves, so a new holder can't be taken
+// over and a holder being joined can't be removed in between.
+func registerHTTPBackend(state *utils.State, pH *utils.HTTPHolder, created bool, listenerHolder *utils.ListenerHolder, sshConn *utils.SSHConnection) (*url.URL, string, error) {
+	state.BindLock.Lock()
+	defer state.BindLock.Unlock()
+
+	if created {
+		// Another binding may have taken the host since it was checked.
+		if utils.HTTPBindingTaken(state, pH.HTTPUrl) {
+			return nil, "", fmt.Errorf("subdomain %s was bound by another tunnel", pH.HTTPUrl.Host)
+		}
+
+		state.HTTPListeners.Store(pH.HTTPUrl.String(), pH)
+	} else if registered, ok := state.HTTPListeners.Load(pH.HTTPUrl.String()); !ok || registered != pH {
+		return nil, "", fmt.Errorf("load balancer for %s closed while binding", pH.HTTPUrl.Host)
+	}
+
+	pH.SSHConnections.Store(listenerHolder.Addr().String(), sshConn)
+
+	serverURL := &url.URL{
+		Host:   base64.StdEncoding.EncodeToString([]byte(listenerHolder.Addr().String())),
+		Scheme: pH.HTTPUrl.Scheme,
+	}
+
+	err := pH.Balancer.UpsertServer(serverURL)
+	if err != nil {
+		slog.Error(
+			"error adding server to balancer",
+			"err", err,
+		)
+	}
+
+	if !viper.GetBool("admin-console") && !viper.GetBool("service-console") {
+		return serverURL, "", nil
+	}
+
+	if !created {
+		routeToken, _ := state.Console.RouteToken(pH.HTTPUrl.String())
+		return serverURL, routeToken, nil
+	}
+
+	routeToken := viper.GetString("service-console-token")
+	if routeToken == "" {
+		routeToken = utils.RandomString(20)
+	}
+
+	state.Console.AddRoute(pH.HTTPUrl.String(), routeToken, pH)
+
+	return serverURL, routeToken, nil
+}
+
 // handleHTTPListener handles the creation of the httpHandler
 // (or addition for load balancing) and set's up the underlying listeners.
 func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages string, listenerHolder *utils.ListenerHolder, state *utils.State, sshConn *utils.SSHConnection, scheme string) (*utils.HTTPHolder, *url.URL, string, error) {
 	hostUrl, pH := utils.GetOpenHost(check.Addr, state, sshConn)
 
-	if (hostUrl == nil || !strings.HasPrefix(hostUrl.Host, check.Addr)) && viper.GetBool("force-requested-subdomains") {
+	if hostUrl == nil || (!strings.HasPrefix(hostUrl.Host, check.Addr) && viper.GetBool("force-requested-subdomains")) {
 		return nil, nil, "", fmt.Errorf("error assigning requested subdomain to tunnel")
 	}
+
+	created := pH == nil
 
 	if pH == nil {
 		fwd := httpmuxer.NewForwarder()
@@ -46,22 +101,11 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 			Balancer:       lb,
 		}
 
-		state.HTTPListeners.Store(pH.HTTPUrl.String(), pH)
 	}
 
-	pH.SSHConnections.Store(listenerHolder.Addr().String(), sshConn)
-
-	serverURL := &url.URL{
-		Host:   base64.StdEncoding.EncodeToString([]byte(listenerHolder.Addr().String())),
-		Scheme: pH.HTTPUrl.Scheme,
-	}
-
-	err := pH.Balancer.UpsertServer(serverURL)
+	serverURL, routeToken, err := registerHTTPBackend(state, pH, created, listenerHolder, sshConn)
 	if err != nil {
-		slog.Error(
-			"error adding server to balancer",
-			"err", err,
-		)
+		return nil, nil, "", err
 	}
 
 	var userPass string
@@ -71,23 +115,8 @@ func handleHTTPListener(check *channelForwardMsg, _ string, requestMessages stri
 	}
 
 	if viper.GetBool("admin-console") || viper.GetBool("service-console") {
-		routeToken := viper.GetString("service-console-token")
-		sendToken := false
-		routeExists := state.Console.RouteExists(pH.HTTPUrl.String())
-
-		if routeToken == "" {
-			sendToken = true
-
-			if routeExists {
-				routeToken, _ = state.Console.RouteToken(pH.HTTPUrl.String())
-			} else {
-				routeToken = utils.RandStringBytesMaskImprSrc(20)
-			}
-		}
-
-		if !routeExists {
-			state.Console.AddRoute(pH.HTTPUrl.String(), routeToken)
-		}
+		// A configured token is the operator's, so tunnels aren't sent it.
+		sendToken := viper.GetString("service-console-token") == ""
 
 		if viper.GetBool("service-console") && sendToken {
 			scheme := "http"

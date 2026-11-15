@@ -275,7 +275,7 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 			data["responseHeaders"] = response.Header
 			data["responseBody"] = base64.StdEncoding.EncodeToString(notCapturedResponse)
 
-			c.Set("broadcastRoute", currentListener.HTTPUrl.String())
+			c.Set("broadcastHolder", currentListener)
 			c.Set("broadcastData", data)
 
 			switch {
@@ -306,6 +306,15 @@ func ResponseModifier(state *utils.State, hostname string, reqBody []byte, c *gi
 		return nil
 	}
 }
+
+const (
+	// maxConsoleWindow bounds the zstd window the console decodes with. Larger
+	// frames are shown undecoded.
+	maxConsoleWindow = 8 << 20
+
+	// maxConsoleDecoded bounds how much memory a zstd decode for the console can use.
+	maxConsoleDecoded = 64 << 20
+)
 
 // notCapturedRequest and notCapturedResponse stand in for bodies the console didn't record.
 var (
@@ -432,7 +441,8 @@ func decodeConsoleBody(body []byte, encoding string, limit int64) []byte {
 		reader = brotli.NewReader(bytes.NewReader(body))
 	case "zstd":
 		var decoder *zstd.Decoder
-		decoder, err = zstd.NewReader(bytes.NewReader(body), zstd.WithDecoderConcurrency(1))
+		// The decoder sizes its buffers from the frame's window, which the backend chooses.
+		decoder, err = zstd.NewReader(bytes.NewReader(body), zstd.WithDecoderConcurrency(1), zstd.WithDecoderMaxWindow(maxConsoleWindow), zstd.WithDecoderMaxMemory(maxConsoleDecoded))
 		if err == nil {
 			defer decoder.Close()
 			reader = decoder

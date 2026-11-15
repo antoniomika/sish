@@ -8,6 +8,9 @@ import (
 	"net"
 	"net/http/httputil"
 	"net/url"
+	"slices"
+	"strings"
+	"sync"
 
 	"github.com/antoniomika/syncmap"
 	"github.com/jpillora/ipfilter"
@@ -83,6 +86,71 @@ type TCPHolder struct {
 	SNIProxy       bool
 	Balancers      *syncmap.Map[string, *roundrobin.RoundRobin]
 	NoHandle       bool
+
+	// HTTPS marks the SNI proxy in front of sish's own HTTPS listener.
+	HTTPS bool
+}
+
+// RemoveTCPHolder unregisters a TCP holder and closes its listener. Its entries
+// are removed first: once the listener closes, another binding can listen on the
+// address and register its own holder there.
+func RemoveTCPHolder(state *State, addr string, tH *TCPHolder) {
+	if registered, ok := state.TCPListeners.Load(addr); ok && registered == tH {
+		state.Listeners.Delete(addr)
+		state.TCPListeners.Delete(addr)
+	}
+
+	if err := tH.Listener.Close(); err != nil {
+		slog.Error(
+			"error closing TCPListener",
+			"err", err,
+		)
+	}
+}
+
+// ListenerAddressKey returns the addresses a listener is bound to, in the
+// comma separated form Listen takes.
+func ListenerAddressKey(l net.Listener) string {
+	addrs := []net.Addr{l.Addr()}
+	if ml, ok := l.Addr().(interface{ Addresses() []net.Addr }); ok {
+		addrs = ml.Addresses()
+	}
+
+	keys := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		keys = append(keys, addr.String())
+	}
+
+	slices.Sort(keys)
+
+	return strings.Join(keys, AddressSeparator)
+}
+
+// RedactRoute hides the basic auth password in an HTTP route so it can be logged.
+func RedactRoute(route string) string {
+	u, err := url.Parse(route)
+	if err != nil {
+		return "[unparseable route]"
+	}
+
+	return u.Redacted()
+}
+
+// ListenerPort returns the TCP port a listener is bound to, or 0 if it has none.
+func ListenerPort(l net.Listener) int {
+	// A multilistener is its own Addr and holds one address per network.
+	addrs := []net.Addr{l.Addr()}
+	if ml, ok := l.Addr().(interface{ Addresses() []net.Addr }); ok {
+		addrs = ml.Addresses()
+	}
+
+	for _, addr := range addrs {
+		if tcpAddr, ok := addr.(*net.TCPAddr); ok {
+			return tcpAddr.Port
+		}
+	}
+
+	return 0
 }
 
 // TunnelId identifies the tunnel in logs.
@@ -125,7 +193,7 @@ func (tH *TCPHolder) Handle(state *State) {
 
 			balancerName := ""
 			if tH.SNIProxy {
-				tlsHello, teeConn, err := PeekTLSHello(cl)
+				tlsHello, teeConn, err := PeekTLSHello(cl, viper.GetDuration("http-read-header-timeout"))
 				if tlsHello == nil {
 					slog.Error(
 						"unable to read tls hello",
@@ -360,6 +428,11 @@ type State struct {
 	TCPListeners   *syncmap.Map[string, *TCPHolder]
 	IPFilter       *ipfilter.IPFilter
 	Ports          *Ports
+
+	// BindLock is held while a binding is checked and registered on a holder,
+	// and while a holder loses its last backend and is removed. Nothing that
+	// waits on a client may run while it is held.
+	BindLock sync.Mutex
 }
 
 // NewState returns a new State struct.

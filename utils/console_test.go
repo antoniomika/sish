@@ -2,8 +2,10 @@ package utils
 
 import (
 	"encoding/json"
+	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -17,10 +19,11 @@ func TestBroadcastRouteKeepsRecentHistory(t *testing.T) {
 	t.Cleanup(func() { viper.Set("service-console-history", 25) })
 
 	c := NewWebConsole()
-	c.AddRoute("http://a.example.com", "token")
+	owner := consoleOwner(t, "http://a.example.com")
+	c.AddRoute("http://a.example.com", "token", owner)
 
 	for i := range 5 {
-		c.BroadcastRoute("http://a.example.com", map[string]any{"n": i})
+		c.BroadcastRoute(owner, map[string]any{"n": i})
 	}
 
 	history := c.History("http://a.example.com")
@@ -54,7 +57,7 @@ func TestBroadcastRouteKeepsRecentHistory(t *testing.T) {
 
 func TestBroadcastRouteSkipsUnknownRoutes(t *testing.T) {
 	c := NewWebConsole()
-	c.BroadcastRoute("http://missing.example.com", map[string]any{})
+	c.BroadcastRoute(consoleOwner(t, "http://missing.example.com"), map[string]any{})
 
 	if len(c.History("http://missing.example.com")) != 0 {
 		t.Error("expected no history for a route without a console")
@@ -87,14 +90,15 @@ func TestBroadcastEventKeepsEventsWithTheirRequest(t *testing.T) {
 	t.Cleanup(func() { viper.Set("service-console-websocket-messages", 200) })
 
 	c := NewWebConsole()
-	c.AddRoute("http://ws.example.com", "token")
+	owner := consoleOwner(t, "http://ws.example.com")
+	c.AddRoute("http://ws.example.com", "token", owner)
 
-	first := c.BroadcastRoute("http://ws.example.com", map[string]any{"n": "first"})
-	second := c.BroadcastRoute("http://ws.example.com", map[string]any{"n": "second"})
+	first := c.BroadcastRoute(owner, map[string]any{"n": "first"})
+	second := c.BroadcastRoute(owner, map[string]any{"n": "second"})
 	for _, n := range []string{"a", "b", "c"} {
-		c.BroadcastEvent("http://ws.example.com", first, map[string]any{"n": n})
+		c.BroadcastEvent(owner, first, map[string]any{"n": n})
 	}
-	c.BroadcastEvent("http://ws.example.com", 12345, map[string]any{"n": "unknown request"})
+	c.BroadcastEvent(owner, 12345, map[string]any{"n": "unknown request"})
 
 	var got []string
 	for _, message := range c.History("http://ws.example.com") {
@@ -137,7 +141,7 @@ func TestHandleWebSocketLogsSwitchingProtocols(t *testing.T) {
 	viper.Set("service-console", true)
 
 	console := NewWebConsole()
-	console.AddRoute("http://sub.example.com", "token")
+	console.AddRoute("http://sub.example.com", "token", nil)
 
 	status := make(chan int, 1)
 
@@ -161,5 +165,210 @@ func TestHandleWebSocketLogsSwitchingProtocols(t *testing.T) {
 
 	if got := <-status; got != http.StatusSwitchingProtocols {
 		t.Errorf("expected status 101, got %d", got)
+	}
+}
+
+func newConsoleEngine(t *testing.T, c *WebConsole, proxyUrl string, hostIsRoot bool) *gin.Engine {
+	t.Helper()
+
+	engine := gin.New()
+	engine.SetHTMLTemplate(template.Must(template.New("console").Parse(`{{ define "console" }}console {{ .RouteHost }}{{ end }}{{ define "routes" }}routes{{ end }}`)))
+	engine.Use(func(g *gin.Context) {
+		g.Set("originalPath", g.Request.URL.Path)
+		c.HandleRequest(proxyUrl, hostIsRoot, g)
+	})
+
+	return engine
+}
+
+// The admin token only works on the root domain, where admins open route consoles by id.
+func TestAdminTokenStaysOnTheRootDomain(t *testing.T) {
+	setViper(t, map[string]any{
+		"admin-console":       true,
+		"admin-console-token": "admin",
+		"service-console":     false,
+	})
+
+	c := NewWebConsole()
+	c.AddRoute("http://user:secret@app.example.com", "route-token", nil)
+	id := c.RouteID("http://user:secret@app.example.com")
+	if id == "" || strings.Contains(id, "secret") {
+		t.Fatalf("unexpected route id %q", id)
+	}
+
+	get := func(engine *gin.Engine, target string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, target, nil))
+		return rec
+	}
+
+	tenant := newConsoleEngine(t, c, "http://user:secret@app.example.com", false)
+	if rec := get(tenant, "/_sish/console?x-authorization=admin"); strings.HasPrefix(rec.Body.String(), "console") {
+		t.Error("the admin token opened a console on a tenant host")
+	}
+
+	root := newConsoleEngine(t, c, "", true)
+	if rec := get(root, "/_sish/console?x-authorization=admin"); rec.Body.String() != "routes" {
+		t.Errorf("root without a route rendered %q", rec.Body.String())
+	}
+	if rec := get(root, "/_sish/console?x-authorization=admin&route="+id); rec.Body.String() != "console app.example.com" {
+		t.Errorf("root with a route rendered %q", rec.Body.String())
+	}
+	if rec := get(root, "/_sish/console?x-authorization=admin&route=unknown"); rec.Code != http.StatusNotFound {
+		t.Errorf("an unknown route answered %d", rec.Code)
+	}
+
+	c.RemoveRoute("http://user:secret@app.example.com")
+	if _, ok := c.RouteByID(id); ok {
+		t.Error("the route id outlived the route")
+	}
+}
+
+// A client authorized for one route doesn't join a route bound under the same name later.
+func TestAddClientChecksTheRouteToken(t *testing.T) {
+	c := NewWebConsole()
+	c.AddRoute("http://app.example.com", "old", nil)
+	c.RemoveRoute("http://app.example.com")
+	c.AddRoute("http://app.example.com", "new", nil)
+
+	if _, ok := c.AddClient("http://app.example.com", "old", &WebClient{}); ok {
+		t.Error("a client joined with the previous route's token")
+	}
+
+	client := &WebClient{}
+	if _, ok := c.AddClient("http://app.example.com", "new", client); !ok {
+		t.Fatal("a client with the current token was refused")
+	}
+
+	c.RemoveClient("http://app.example.com", client)
+	if clients, _ := c.Clients.Load("http://app.example.com"); len(clients) != 0 {
+		t.Errorf("%d clients left after removal", len(clients))
+	}
+}
+
+func TestDisconnectRouteNeedsAKindAndName(t *testing.T) {
+	setViper(t, map[string]any{
+		"admin-console":       true,
+		"admin-console-token": "admin",
+	})
+
+	c := NewWebConsole()
+	c.State = NewState()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/_sish/api/disconnectroute/http?x-authorization=admin", nil)
+	newConsoleEngine(t, c, "", true).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("a route without a name answered %d", rec.Code)
+	}
+}
+
+func consoleOwner(t *testing.T, route string) *HTTPHolder {
+	t.Helper()
+
+	u, err := url.Parse(route)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return &HTTPHolder{HTTPUrl: u}
+}
+
+// Traffic a previous binding serves late stays out of the next binding's console.
+func TestBroadcastsStayWithTheirBinding(t *testing.T) {
+	setViper(t, map[string]any{"service-console-history": 25, "service-console-websocket-messages": 200})
+
+	c := NewWebConsole()
+	old := consoleOwner(t, "http://app.example.com")
+	c.AddRoute("http://app.example.com", "old", old)
+	request := c.BroadcastRoute(old, map[string]any{"n": "old"})
+	c.RemoveRoute("http://app.example.com")
+
+	current := consoleOwner(t, "http://app.example.com")
+	c.AddRoute("http://app.example.com", "new", current)
+
+	if id := c.BroadcastRoute(old, map[string]any{"n": "late"}); id != 0 {
+		t.Error("a request from the previous binding was recorded")
+	}
+	c.BroadcastEvent(old, request, map[string]any{"n": "late event"})
+
+	client := &WebClient{Send: make(chan []byte, 4), Done: make(chan struct{})}
+	if _, ok := c.AddClient("http://app.example.com", "new", client); !ok {
+		t.Fatal("the current binding's client was refused")
+	}
+	c.BroadcastEvent(old, request, map[string]any{"n": "late event"})
+
+	if len(client.Send) != 0 || len(c.History("http://app.example.com")) != 0 {
+		t.Errorf("the new binding got %d live messages and %d history entries", len(client.Send), len(c.History("http://app.example.com")))
+	}
+
+	if c.BroadcastRoute(current, map[string]any{"n": "new"}) == 0 || len(client.Send) != 1 {
+		t.Error("the current binding's request wasn't broadcast")
+	}
+}
+
+// History stays within its byte limits however much each request holds.
+func TestHistoryIsBoundedInBytes(t *testing.T) {
+	setViper(t, map[string]any{"service-console-history": 1000, "service-console-websocket-messages": 1000})
+
+	c := NewWebConsole()
+	owner := consoleOwner(t, "http://big.example.com")
+	c.AddRoute("http://big.example.com", "token", owner)
+
+	payload := strings.Repeat("x", 1<<20)
+	for range 100 {
+		c.BroadcastRoute(owner, map[string]any{"payload": payload})
+	}
+	if got := c.historyBytes["http://big.example.com"]; got > maxRouteHistory {
+		t.Errorf("requests hold %d bytes of history", got)
+	}
+
+	// Evicted records can't stay reachable past the end of the slice.
+	kept := c.history["http://big.example.com"]
+	for _, record := range kept[len(kept):cap(kept)] {
+		if record != nil {
+			t.Fatal("an evicted record is still referenced")
+		}
+	}
+
+	request := c.BroadcastRoute(owner, map[string]any{"n": "ws"})
+	for range 100 {
+		c.BroadcastEvent(owner, request, map[string]any{"payload": payload})
+	}
+	if got := c.historyBytes["http://big.example.com"]; got > maxRouteHistory {
+		t.Errorf("events hold %d bytes of history", got)
+	}
+
+	history := c.History("http://big.example.com")
+	var data map[string]any
+	if err := json.Unmarshal(history[len(history)-1], &data); err != nil || data["payload"] != payload {
+		t.Error("the newest event wasn't kept")
+	}
+
+	total := 0
+	for _, message := range history {
+		total += len(message)
+	}
+	if total != c.historyBytes["http://big.example.com"] || total != c.historyTotal {
+		t.Errorf("history holds %d bytes but counts %d for the route and %d in all", total, c.historyBytes["http://big.example.com"], c.historyTotal)
+	}
+
+	c.RemoveRoute("http://big.example.com")
+	if c.historyTotal != 0 {
+		t.Errorf("%d bytes counted after the route was removed", c.historyTotal)
+	}
+}
+
+func TestQueueIsBoundedInBytes(t *testing.T) {
+	client := &WebClient{Send: make(chan []byte, clientQueue), Done: make(chan struct{})}
+
+	message := make([]byte, 1<<20)
+	for range 100 {
+		client.queue(message)
+	}
+
+	if queued := len(client.Send) * len(message); queued > maxClientQueued || client.queued.Load() != int64(queued) {
+		t.Errorf("queued %d bytes, counted %d", queued, client.queued.Load())
 	}
 }

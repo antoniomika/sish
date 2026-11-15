@@ -136,7 +136,7 @@ func Start() {
 
 				httpListeners := map[string][]string{}
 				state.HTTPListeners.Range(func(key string, value *utils.HTTPHolder) bool {
-					httpListeners[key] = remoteAddrs(value.SSHConnections)
+					httpListeners[utils.RedactRoute(key)] = remoteAddrs(value.SSHConnections)
 					return true
 				})
 
@@ -159,14 +159,14 @@ func Start() {
 						addrs = append(addrs, cl.Conn.RemoteAddr().String())
 					}
 
-					consoleClients[key] = addrs
+					consoleClients[utils.RedactRoute(key)] = addrs
 					return true
 				})
 
 				// Only the routes, since the tokens grant console access.
 				consoleRoutes := []string{}
 				state.Console.RouteTokens.Range(func(key, _ string) bool {
-					consoleRoutes = append(consoleRoutes, key)
+					consoleRoutes = append(consoleRoutes, utils.RedactRoute(key))
 					return true
 				})
 
@@ -238,15 +238,25 @@ func Start() {
 		}
 	}()
 
+	backoff := time.Duration(0)
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			// Errors such as running out of file descriptors pass, so keep accepting.
+			backoff = min(max(2*backoff, 5*time.Millisecond), time.Second)
+
 			slog.Error(
 				"error accepting from listener",
 				"err", err,
+				"retryIn", backoff,
 			)
+
+			time.Sleep(backoff)
 			continue
 		}
+
+		backoff = 0
 
 		go handleConn(conn, state, sshConfig)
 	}

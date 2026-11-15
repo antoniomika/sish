@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -40,16 +42,28 @@ type WebClient struct {
 	Route   string
 
 	dropped atomic.Int64
+	queued  atomic.Int64
 }
 
-// clientQueue is how many live messages can wait for a slow page before new ones are dropped.
-const clientQueue = 512
+const (
+	// clientQueue is how many live messages can wait for a slow page before new ones are dropped.
+	clientQueue = 512
+
+	// maxClientQueued bounds the bytes of live messages waiting for one page.
+	maxClientQueued = 32 << 20
+
+	// maxRouteHistory and maxHistory bound the bytes of history kept for one
+	// route and for all of them, since visitors choose how much each request holds.
+	maxRouteHistory = 64 << 20
+	maxHistory      = 512 << 20
+)
 
 // consoleRecord is a request kept for consoles that connect later, with the WebSocket events that followed it.
 type consoleRecord struct {
 	id      uint64
 	message []byte
 	events  [][]byte
+	size    int
 }
 
 // WebConsole represents the data structure that stores web console client information.
@@ -58,17 +72,35 @@ type WebConsole struct {
 	RouteTokens *syncmap.Map[string, string]
 	State       *State
 
-	requestID   atomic.Uint64
-	history     map[string][]*consoleRecord
-	historyLock sync.Mutex
+	// routeIDs and routesByID name routes in admin console URLs without the
+	// basic auth password that route keys carry.
+	routeIDs   map[string]string
+	routesByID map[string]string
+
+	// routeOwners is the holder each route belongs to, so traffic a previous
+	// binding of the same route serves late doesn't reach the next one's console.
+	routeOwners map[string]*HTTPHolder
+
+	// routesLock orders route changes with clients joining and leaving them.
+	routesLock sync.Mutex
+
+	requestID    atomic.Uint64
+	history      map[string][]*consoleRecord
+	historyBytes map[string]int
+	historyTotal int
+	historyLock  sync.Mutex
 }
 
 // NewWebConsole sets up the WebConsole.
 func NewWebConsole() *WebConsole {
 	c := &WebConsole{
-		Clients:     syncmap.New[string, []*WebClient](),
-		RouteTokens: syncmap.New[string, string](),
-		history:     map[string][]*consoleRecord{},
+		Clients:      syncmap.New[string, []*WebClient](),
+		RouteTokens:  syncmap.New[string, string](),
+		routeIDs:     map[string]string{},
+		routesByID:   map[string]string{},
+		routeOwners:  map[string]*HTTPHolder{},
+		history:      map[string][]*consoleRecord{},
+		historyBytes: map[string]int{},
 	}
 
 	// Ids keep increasing across restarts so a reconnecting page doesn't drop new requests as already seen.
@@ -86,25 +118,39 @@ func (c *WebConsole) HandleRequest(proxyUrl string, hostIsRoot bool, g *gin.Cont
 
 	userAuthed := false
 	userIsAdmin := false
-	if (viper.GetBool("admin-console") && viper.GetString("admin-console-token") != "") && (g.Request.URL.Query().Get("x-authorization") == viper.GetString("admin-console-token") || g.Request.Header.Get("x-authorization") == viper.GetString("admin-console-token")) {
+	queryToken := g.Request.URL.Query().Get("x-authorization")
+	headerToken := g.Request.Header.Get("x-authorization")
+	tokenMatches := func(expected string) bool {
+		// Check both so the time doesn't show where the token was sent.
+		queryMatches := TokenMatches(queryToken, expected)
+		headerMatches := TokenMatches(headerToken, expected)
+		return queryMatches || headerMatches
+	}
+
+	// Tenant hosts serve content their owners control, so the admin token is only used on the root domain.
+	if hostIsRoot && viper.GetBool("admin-console") && tokenMatches(viper.GetString("admin-console-token")) {
 		userIsAdmin = true
+		userAuthed = true
+
+		// Admins open a route's console from the root domain.
+		if id := g.Request.URL.Query().Get("route"); id != "" {
+			route, ok := c.RouteByID(id)
+			if !ok {
+				g.AbortWithStatus(http.StatusNotFound)
+				return
+			}
+
+			proxyUrl = route
+		}
+	}
+
+	routeToken, ok := c.RouteTokens.Load(proxyUrl)
+	if ok && routeToken != "" && viper.GetBool("service-console") && tokenMatches(routeToken) {
 		userAuthed = true
 	}
 
-	tokenInterface, ok := c.RouteTokens.Load(proxyUrl)
-	if ok {
-		routeToken := tokenInterface
-		if routeToken == "" {
-			ok = false
-		}
-
-		if viper.GetBool("service-console") && ok && (g.Request.URL.Query().Get("x-authorization") == routeToken || g.Request.Header.Get("x-authorization") == routeToken) {
-			userAuthed = true
-		}
-	}
-
 	if strings.HasPrefix(g.Request.URL.Path, "/_sish/console/ws") && userAuthed {
-		c.HandleWebSocket(proxyUrl, g)
+		c.HandleWebSocket(proxyUrl, routeToken, g)
 		return
 	} else if strings.HasPrefix(g.Request.URL.Path, "/_sish/console") && userAuthed {
 		c.HandleTemplate(proxyUrl, hostIsRoot, userIsAdmin, g)
@@ -157,21 +203,32 @@ func (c *WebConsole) HandleTemplate(proxyUrl string, hostIsRoot bool, userIsAdmi
 		base = ""
 	}
 
-	if hostIsRoot && userIsAdmin {
+	if hostIsRoot && userIsAdmin && proxyUrl == "" {
 		g.HTML(http.StatusOK, "routes", gin.H{"Title": "Admin", "Base": base})
 		return
 	}
 
 	if c.RouteExists(proxyUrl) {
-		g.HTML(http.StatusOK, "console", gin.H{"Title": "Requests", "Base": base})
+		data := gin.H{"Title": "Requests", "Base": base, "RouteHost": "", "RoutePath": ""}
+
+		// A route's console on the root domain shows the route's own address.
+		if hostIsRoot && userIsAdmin {
+			if u, err := url.Parse(proxyUrl); err == nil {
+				data["RouteHost"] = u.Hostname()
+				data["RoutePath"] = strings.TrimSuffix(u.Path, "/")
+			}
+		}
+
+		g.HTML(http.StatusOK, "console", data)
 		return
 	}
 
-	_ = g.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", proxyUrl))
+	_ = g.AbortWithError(http.StatusNotFound, fmt.Errorf("cannot find connection for host: %s", RedactRoute(proxyUrl)))
 }
 
-// HandleWebSocket handles the websocket route.
-func (c *WebConsole) HandleWebSocket(proxyUrl string, g *gin.Context) {
+// HandleWebSocket handles the websocket route. routeToken is the route's token
+// when the request was authorized, which ties the client to that route.
+func (c *WebConsole) HandleWebSocket(proxyUrl string, routeToken string, g *gin.Context) {
 	// The upgrade hijacks the connection past gin's writer, which would
 	// otherwise log the 404 gin starts unrouted requests with. A failed
 	// upgrade writes its own status over this one.
@@ -194,13 +251,18 @@ func (c *WebConsole) HandleWebSocket(proxyUrl string, g *gin.Context) {
 		Route:   proxyUrl,
 	}
 
-	c.AddClient(proxyUrl, client)
+	// The route may have closed and been bound by someone else during the upgrade.
+	history, ok := c.AddClient(proxyUrl, routeToken, client)
+	if !ok {
+		CloseWebClients([]*WebClient{client})
+		return
+	}
 
 	go client.Handle()
 
 	// History is one batch so it can't fill the queue that live messages use.
 	// It can interleave with live messages, so the page orders requests by id and events by seq.
-	if history := c.History(proxyUrl); len(history) > 0 {
+	if len(history) > 0 {
 		batch := append([]byte("["), bytes.Join(history, []byte(","))...)
 		batch = append(batch, ']')
 
@@ -231,8 +293,11 @@ func (c *WebConsole) HandleDisconnectClient(proxyUrl string, g *gin.Context) {
 
 // HandleDisconnectRoute handles the disconnection request for a forwarded route.
 func (c *WebConsole) HandleDisconnectRoute(proxyUrl string, g *gin.Context) {
-	route := strings.Split(strings.TrimPrefix(g.Request.URL.Path, "/_sish/api/disconnectroute/"), "/")
-	encRouteName := route[1]
+	_, encRouteName, ok := strings.Cut(strings.TrimPrefix(g.Request.URL.Path, "/_sish/api/disconnectroute/"), "/")
+	if !ok {
+		g.AbortWithStatus(http.StatusNotFound)
+		return
+	}
 
 	decRouteName, err := base64.StdEncoding.DecodeString(encRouteName)
 	if err != nil {
@@ -348,6 +413,7 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 		})
 
 		httpListeners := map[string]any{}
+		consoleRoutes := map[string]any{}
 		c.State.HTTPListeners.Range(func(key string, httpHolder *HTTPHolder) bool {
 			listenerHandlers := []string{}
 			httpHolder.SSHConnections.Range(func(httpAddr string, val *SSHConnection) bool {
@@ -366,7 +432,12 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 					userPass = fmt.Sprintf("%s:%s@", httpHolder.HTTPUrl.User.Username(), password)
 				}
 
-				httpListeners[fmt.Sprintf("%s%s%s", userPass, httpHolder.HTTPUrl.Hostname(), httpHolder.HTTPUrl.Path)] = listenerHandlers
+				name := fmt.Sprintf("%s%s%s", userPass, httpHolder.HTTPUrl.Hostname(), httpHolder.HTTPUrl.Path)
+				httpListeners[name] = listenerHandlers
+
+				if id := c.RouteID(httpHolder.HTTPUrl.String()); id != "" {
+					consoleRoutes[name] = id
+				}
 			}
 
 			return true
@@ -375,6 +446,7 @@ func (c *WebConsole) HandleClients(proxyUrl string, g *gin.Context) {
 		routeListeners["tcpAliases"] = tcpAliases
 		routeListeners["listeners"] = listenerParts
 		routeListeners["httpListeners"] = httpListeners
+		routeListeners["consoleRoutes"] = consoleRoutes
 
 		pubKey := ""
 		pubKeyFingerprint := ""
@@ -423,20 +495,75 @@ func (c *WebConsole) RouteExists(route string) bool {
 	return ok
 }
 
-// AddRoute adds a route token to the console.
-func (c *WebConsole) AddRoute(route string, token string) {
+// AddRoute adds a route token to the console for the holder that serves the route.
+func (c *WebConsole) AddRoute(route string, token string, owner *HTTPHolder) {
+	c.routesLock.Lock()
+	defer c.routesLock.Unlock()
+
 	c.Clients.LoadOrStore(route, []*WebClient{})
 	c.RouteTokens.Store(route, token)
+	c.routeOwners[route] = owner
+
+	if _, ok := c.routeIDs[route]; !ok {
+		id := RandomString(20)
+		c.routeIDs[route] = id
+		c.routesByID[id] = route
+	}
 }
 
-// RemoveRoute removes a route token from the console.
+// RouteID returns the id admin console URLs use for a route.
+func (c *WebConsole) RouteID(route string) string {
+	c.routesLock.Lock()
+	defer c.routesLock.Unlock()
+
+	return c.routeIDs[route]
+}
+
+// RouteByID returns the route an admin console id names.
+func (c *WebConsole) RouteByID(id string) (string, bool) {
+	c.routesLock.Lock()
+	defer c.routesLock.Unlock()
+
+	route, ok := c.routesByID[id]
+	return route, ok
+}
+
+// RemoveRoute removes a route token from the console and closes its clients.
 func (c *WebConsole) RemoveRoute(route string) {
+	CloseWebClients(c.DetachRoute(route))
+}
+
+// DetachRoute removes a route token from the console and returns its clients
+// for the caller to close.
+func (c *WebConsole) DetachRoute(route string) []*WebClient {
+	c.routesLock.Lock()
+	defer c.routesLock.Unlock()
+
 	clients, ok := c.Clients.Load(route)
 
 	if !ok {
-		return
+		return nil
 	}
 
+	c.Clients.Delete(route)
+	c.RouteTokens.Delete(route)
+
+	delete(c.routesByID, c.routeIDs[route])
+	delete(c.routeIDs, route)
+	delete(c.routeOwners, route)
+
+	c.historyLock.Lock()
+	c.historyTotal -= c.historyBytes[route]
+	delete(c.history, route)
+	delete(c.historyBytes, route)
+	c.historyLock.Unlock()
+
+	return clients
+}
+
+// CloseWebClients closes console connections. Closing a TLS connection can
+// wait on a stalled peer, so it shouldn't run under a lock others need.
+func CloseWebClients(clients []*WebClient) {
 	for _, client := range clients {
 		err := client.Conn.Close()
 		if err != nil {
@@ -446,58 +573,51 @@ func (c *WebConsole) RemoveRoute(route string) {
 			)
 		}
 	}
-
-	c.Clients.Delete(route)
-	c.RouteTokens.Delete(route)
-
-	c.historyLock.Lock()
-	delete(c.history, route)
-	c.historyLock.Unlock()
 }
 
-// AddClient adds a client to the console route.
-func (c *WebConsole) AddClient(route string, w *WebClient) {
-	clients, ok := c.Clients.Load(route)
+// AddClient adds a client to the console route if the route still has the
+// token the client was authorized with, and returns the route's history from
+// the same moment, so it can't belong to a later binding of the route.
+func (c *WebConsole) AddClient(route string, token string, w *WebClient) ([][]byte, bool) {
+	c.routesLock.Lock()
+	defer c.routesLock.Unlock()
 
+	clients, ok := c.Clients.Load(route)
 	if !ok {
-		return
+		return nil, false
 	}
 
-	clients = append(clients, w)
+	if current, _ := c.RouteTokens.Load(route); current != token {
+		return nil, false
+	}
 
-	c.Clients.Store(route, clients)
+	// A new slice, since broadcasts range over the stored one without the lock.
+	c.Clients.Store(route, append(slices.Clip(clients), w))
+
+	return c.History(route), true
 }
 
 // RemoveClient removes a client from the console route.
 func (c *WebConsole) RemoveClient(route string, w *WebClient) {
-	clients, ok := c.Clients.Load(route)
+	c.routesLock.Lock()
+	defer c.routesLock.Unlock()
 
+	clients, ok := c.Clients.Load(route)
 	if !ok {
 		return
 	}
 
-	found := false
-	toRemove := 0
-	for i, client := range clients {
-		if client == w {
-			found = true
-			toRemove = i
-			break
-		}
-	}
-
-	if found {
-		clients[toRemove] = clients[len(clients)-1]
-		c.Clients.Store(route, clients[:len(clients)-1])
+	remaining := slices.DeleteFunc(slices.Clone(clients), func(client *WebClient) bool { return client == w })
+	if len(remaining) != len(clients) {
+		c.Clients.Store(route, remaining)
 	}
 }
 
-// BroadcastRoute records a request made to a route and sends it to all of the route's clients.
+// BroadcastRoute records a request the owner served and sends it to the route's clients.
 // It returns the request's id, or 0 if the route has no console.
-func (c *WebConsole) BroadcastRoute(route string, data map[string]any) uint64 {
-	clients, ok := c.Clients.Load(route)
-
-	if !ok {
+func (c *WebConsole) BroadcastRoute(owner *HTTPHolder, data map[string]any) uint64 {
+	route := owner.HTTPUrl.String()
+	if _, ok := c.Clients.Load(route); !ok {
 		return 0
 	}
 
@@ -513,7 +633,10 @@ func (c *WebConsole) BroadcastRoute(route string, data map[string]any) uint64 {
 		return 0
 	}
 
-	c.addHistory(route, id, message)
+	clients, ok := c.publish(route, owner, func() { c.addHistory(route, id, message) })
+	if !ok {
+		return 0
+	}
 
 	for _, client := range clients {
 		client.queue(message)
@@ -523,10 +646,9 @@ func (c *WebConsole) BroadcastRoute(route string, data map[string]any) uint64 {
 }
 
 // BroadcastEvent sends an event that belongs to an earlier request, such as a WebSocket message, to the route's clients.
-func (c *WebConsole) BroadcastEvent(route string, requestID uint64, data map[string]any) {
-	clients, ok := c.Clients.Load(route)
-
-	if !ok {
+func (c *WebConsole) BroadcastEvent(owner *HTTPHolder, requestID uint64, data map[string]any) {
+	route := owner.HTTPUrl.String()
+	if _, ok := c.Clients.Load(route); !ok {
 		return
 	}
 
@@ -541,14 +663,33 @@ func (c *WebConsole) BroadcastEvent(route string, requestID uint64, data map[str
 		return
 	}
 
-	c.addEvent(route, requestID, message)
+	clients, ok := c.publish(route, owner, func() { c.addEvent(route, requestID, message) })
+	if !ok {
+		return
+	}
 
 	for _, client := range clients {
 		client.queue(message)
 	}
 }
 
-// addHistory keeps the most recent requests for a route, up to service-console-history.
+// publish records a message with record if owner still holds the route, and
+// returns the route's clients. Both happen under the lock that route changes take.
+func (c *WebConsole) publish(route string, owner *HTTPHolder, record func()) ([]*WebClient, bool) {
+	c.routesLock.Lock()
+	defer c.routesLock.Unlock()
+
+	clients, ok := c.Clients.Load(route)
+	if !ok || c.routeOwners[route] != owner {
+		return nil, false
+	}
+
+	record()
+
+	return clients, true
+}
+
+// addHistory keeps the most recent requests for a route, up to service-console-history and the history byte limits.
 func (c *WebConsole) addHistory(route string, id uint64, message []byte) {
 	limit := viper.GetInt("service-console-history")
 	if limit <= 0 {
@@ -558,19 +699,29 @@ func (c *WebConsole) addHistory(route string, id uint64, message []byte) {
 	c.historyLock.Lock()
 	defer c.historyLock.Unlock()
 
-	if !c.RouteExists(route) {
-		return
-	}
-
 	history := c.history[route]
 	if len(history) >= limit {
-		history = append(history[:0], history[len(history)-limit+1:]...)
+		history = c.evictRecords(route, history, len(history)-limit+1)
 	}
 
-	c.history[route] = append(history, &consoleRecord{id: id, message: message})
+	record := &consoleRecord{id: id, message: message, size: len(message)}
+	c.historyBytes[route] += record.size
+	c.historyTotal += record.size
+	history = append(history, record)
+
+	// The oldest requests go first, and a request that doesn't fit on its own isn't kept.
+	for len(history) > 0 && c.overHistoryLimit(route) {
+		history = c.evictRecords(route, history, 1)
+	}
+
+	if len(history) == 0 {
+		history = nil
+	}
+
+	c.history[route] = history
 }
 
-// addEvent keeps an event with its request, up to service-console-websocket-messages per request.
+// addEvent keeps an event with its request, up to service-console-websocket-messages per request and the history byte limits.
 func (c *WebConsole) addEvent(route string, requestID uint64, message []byte) {
 	limit := viper.GetInt("service-console-websocket-messages")
 	if limit <= 0 {
@@ -588,12 +739,57 @@ func (c *WebConsole) addEvent(route string, requestID uint64, message []byte) {
 		}
 
 		if len(record.events) >= limit {
-			record.events = append(record.events[:0], record.events[len(record.events)-limit+1:]...)
+			c.evictEvents(route, record, len(record.events)-limit+1)
 		}
 
 		record.events = append(record.events, message)
+		record.size += len(message)
+		c.historyBytes[route] += len(message)
+		c.historyTotal += len(message)
+
+		// Older requests go first, then the connection's oldest messages, so its request stays listed.
+		for c.overHistoryLimit(route) {
+			if history[0] != record {
+				history = c.evictRecords(route, history, 1)
+				continue
+			}
+
+			if len(record.events) == 0 {
+				break
+			}
+
+			c.evictEvents(route, record, 1)
+		}
+
+		c.history[route] = history
 		return
 	}
+}
+
+func (c *WebConsole) overHistoryLimit(route string) bool {
+	return c.historyBytes[route] > maxRouteHistory || c.historyTotal > maxHistory
+}
+
+// evictRecords drops the oldest n records of a route's history.
+func (c *WebConsole) evictRecords(route string, history []*consoleRecord, n int) []*consoleRecord {
+	for _, record := range history[:n] {
+		c.historyBytes[route] -= record.size
+		c.historyTotal -= record.size
+	}
+
+	// Deleting clears the vacated slots, so evicted records can be collected.
+	return slices.Delete(history, 0, n)
+}
+
+// evictEvents drops the oldest n events of a record.
+func (c *WebConsole) evictEvents(route string, record *consoleRecord, n int) {
+	for _, event := range record.events[:n] {
+		record.size -= len(event)
+		c.historyBytes[route] -= len(event)
+		c.historyTotal -= len(event)
+	}
+
+	record.events = slices.Delete(record.events, 0, n)
 }
 
 // History returns the recorded requests for a route, oldest first, each followed by its events.
@@ -612,10 +808,13 @@ func (c *WebConsole) History(route string) [][]byte {
 
 // send passes a message to the client's writer, waiting for room. It returns false if the client has closed.
 func (c *WebClient) send(message []byte) bool {
+	c.queued.Add(int64(len(message)))
+
 	select {
 	case c.Send <- message:
 		return true
 	case <-c.Done:
+		c.queued.Add(-int64(len(message)))
 		return false
 	}
 }
@@ -623,9 +822,17 @@ func (c *WebClient) send(message []byte) bool {
 // queue passes a live message to the client's writer without waiting, so a slow page can't hold up
 // the request or connection that produced it. Messages that don't fit are counted and reported to the page.
 func (c *WebClient) queue(message []byte) {
+	size := int64(len(message))
+	if c.queued.Add(size) > maxClientQueued {
+		c.queued.Add(-size)
+		c.dropped.Add(1)
+		return
+	}
+
 	select {
 	case c.Send <- message:
 	default:
+		c.queued.Add(-size)
 		c.dropped.Add(1)
 	}
 }
@@ -661,6 +868,8 @@ func (c *WebClient) Handle() {
 	for {
 		select {
 		case message := <-c.Send:
+			c.queued.Add(-int64(len(message)))
+
 			w, err := c.Conn.NextWriter(websocket.TextMessage)
 			if err != nil {
 				return

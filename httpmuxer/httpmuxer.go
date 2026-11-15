@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"path/filepath"
 	"runtime/debug"
@@ -113,6 +114,14 @@ func Start(state *utils.State) {
 	gin.ForceConsoleColor()
 
 	r := gin.New()
+
+	trustedProxy, err := setTrustedProxies(r)
+	if err != nil {
+		utils.Fatal(
+			"invalid http-trusted-proxies",
+			"err", err,
+		)
+	}
 
 	if viper.GetBool("load-templates") {
 		if dir := viper.GetString("load-templates-directory"); dir != "" {
@@ -222,7 +231,7 @@ func Start(state *utils.State) {
 			}
 		}
 
-		routeInfo, routeOk := param.Keys["broadcastRoute"].(string)
+		routeHolder, routeOk := param.Keys["broadcastHolder"].(*utils.HTTPHolder)
 		routeData, dataOk := param.Keys["broadcastData"].(map[string]any)
 
 		if routeOk && dataOk {
@@ -238,7 +247,7 @@ func Start(state *utils.State) {
 
 			recordRequestBody(param.Keys, routeData)
 
-			state.Console.BroadcastRoute(routeInfo, routeData)
+			state.Console.BroadcastRoute(routeHolder, routeData)
 		}
 
 		return logLine
@@ -259,62 +268,33 @@ func Start(state *utils.State) {
 		hostname := hostSplit[0]
 		hostIsRoot := hostname == viper.GetString("domain")
 
+		// The redirect comes before consoles and auth challenges, so tokens and credentials aren't sent over HTTP.
+		redirectToHTTPS := func(force bool) bool {
+			if !force || c.Request.TLS != nil || !viper.GetBool("https") {
+				return false
+			}
+
+			c.Request.URL.Scheme = "https"
+			c.Request.URL.Host = hostname
+			if state.Ports.HTTPSPort != 443 {
+				c.Request.URL.Host = fmt.Sprintf("%s:%d", hostname, state.Ports.HTTPSPort)
+			}
+
+			c.Redirect(http.StatusFound, c.Request.URL.String())
+			return true
+		}
+
 		if viper.GetBool("admin-console") && hostIsRoot && strings.HasPrefix(c.Request.URL.Path, "/_sish/") {
+			if redirectToHTTPS(viper.GetBool("force-all-https")) {
+				return
+			}
+
 			state.Console.HandleRequest("", hostIsRoot, c)
 			return
 		}
 
-		var currentListener *utils.HTTPHolder
-
 		requestUsername, requestPassword, _ := c.Request.BasicAuth()
-		authNeeded := true
-
-		// Loop for checking if there's a listener with auth set (most specific)
-		state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
-			parsedPassword, _ := locationListener.HTTPUrl.User.Password()
-
-			if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
-				credsNeeded := locationListener.HTTPUrl.User.Username() != "" && parsedPassword != ""
-				credsMatch := requestUsername == locationListener.HTTPUrl.User.Username() && requestPassword == parsedPassword
-
-				if credsNeeded {
-					currentListener = locationListener
-
-					if credsMatch {
-						authNeeded = false
-						return false
-					}
-				}
-			}
-
-			return true
-		})
-
-		// Loop for checking if there's a listener with the exact host and path prefix set (next most specific)
-		if currentListener == nil {
-			state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
-				if hostname == locationListener.HTTPUrl.Host && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
-					currentListener = locationListener
-					authNeeded = false
-					return false
-				}
-
-				return true
-			})
-		}
-
-		// Loop for checking if there's a wildcard listener with the host and path prefix set (least most specific)
-		if currentListener == nil {
-			state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
-				if utils.MatchesWildcardHost(hostname, locationListener.HTTPUrl.Host) && strings.HasPrefix(c.Request.URL.Path, locationListener.HTTPUrl.Path) {
-					currentListener = locationListener
-					authNeeded = false
-					return false
-				}
-
-				return true
-			})
-		}
+		currentListener, authNeeded := utils.MatchHTTPHolder(state.HTTPListeners, hostname, c.Request.URL.Path, requestUsername, requestPassword)
 
 		if currentListener == nil && hostIsRoot {
 			if viper.GetBool("redirect-root") && !strings.HasPrefix(c.Request.URL.Path, "/favicon.ico") {
@@ -338,6 +318,31 @@ func Start(state *utils.State) {
 
 		c.Set("httpHolder", currentListener)
 
+		forceHTTPS := viper.GetBool("force-all-https")
+		checkForceHTTPS := func(holder *utils.HTTPHolder) {
+			holder.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
+				forceHTTPS = forceHTTPS || sshConn.ForceHTTPS
+				return !forceHTTPS
+			})
+		}
+
+		checkForceHTTPS(currentListener)
+
+		// Until credentials pick one, any binding at this host and path could be the one the visitor wants.
+		if authNeeded && !forceHTTPS {
+			state.HTTPListeners.Range(func(_ string, holder *utils.HTTPHolder) bool {
+				if holder.HTTPUrl.Host == currentListener.HTTPUrl.Host && holder.HTTPUrl.Path == currentListener.HTTPUrl.Path {
+					checkForceHTTPS(holder)
+				}
+
+				return !forceHTTPS
+			})
+		}
+
+		if redirectToHTTPS(forceHTTPS) {
+			return
+		}
+
 		if authNeeded {
 			c.Header("WWW-Authenticate", "Basic realm=\"sish\"")
 			status := http.StatusUnauthorized
@@ -350,11 +355,9 @@ func Start(state *utils.State) {
 		}
 
 		stripPath := viper.GetBool("strip-http-path")
-		forceHTTPS := viper.GetBool("force-all-https")
 
 		currentListener.SSHConnections.Range(func(key string, sshConn *utils.SSHConnection) bool {
 			newHost := sshConn.HostHeader
-			forceHTTPS = forceHTTPS || sshConn.ForceHTTPS
 
 			if sshConn.StripPath != viper.GetBool("strip-http-path") {
 				stripPath = sshConn.StripPath
@@ -371,17 +374,6 @@ func Start(state *utils.State) {
 			c.Request.Host = newHost
 			return false
 		})
-
-		if forceHTTPS && c.Request.TLS == nil && viper.GetBool("https") {
-			c.Request.URL.Scheme = "https"
-			c.Request.URL.Host = hostname
-			if state.Ports.HTTPSPort != 443 {
-				c.Request.URL.Host = fmt.Sprintf("%s:%d", hostname, state.Ports.HTTPSPort)
-			}
-
-			c.Redirect(http.StatusFound, c.Request.URL.String())
-			return
-		}
 
 		if viper.GetBool("strip-http-path") && stripPath {
 			c.Request.RequestURI = strings.TrimPrefix(c.Request.RequestURI, currentListener.HTTPUrl.Path)
@@ -410,6 +402,8 @@ func Start(state *utils.State) {
 			state.Console.HandleRequest(currentListener.HTTPUrl.String(), hostIsRoot, c)
 			return
 		}
+
+		dropForwardHeaders(c.Request, trustedProxy)
 
 		// Only the console uses the body, and reading it holds the whole
 		// request in memory before forwarding.
@@ -458,32 +452,7 @@ func Start(state *utils.State) {
 
 		certManager.OnDemand = &certmagic.OnDemandConfig{
 			DecisionFunc: func(ctx context.Context, name string) error {
-				if !viper.GetBool("https-ondemand-certificate") {
-					return fmt.Errorf("ondemand certificate retrieval is not enabled")
-				}
-
-				ok := name == viper.GetString("domain")
-
-				if !ok {
-					state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
-						if name == locationListener.HTTPUrl.Host || utils.MatchesWildcardHost(name, locationListener.HTTPUrl.Host) {
-							ok = true
-							return false
-						}
-
-						return true
-					})
-				}
-
-				if !ok {
-					return fmt.Errorf("cannot find connection for host: %s", name)
-				}
-
-				slog.Info(
-					"requesting certificate for host",
-					"host", name,
-				)
-				return nil
+				return onDemandAllowed(state, name)
 			},
 		}
 
@@ -529,6 +498,7 @@ func Start(state *utils.State) {
 					Balancers:      syncmap.New[string, *roundrobin.RoundRobin](),
 					SNIProxy:       true,
 					NoHandle:       true,
+					HTTPS:          true,
 				}
 
 				balancer, err := roundrobin.New(nil)
@@ -553,9 +523,10 @@ func Start(state *utils.State) {
 				tH.Balancers.Store("", balancer)
 
 				httpsListener = &proxyListener{
-					Listener: pListener,
-					Holder:   tH,
-					State:    state,
+					Listener:     pListener,
+					Holder:       tH,
+					State:        state,
+					HelloTimeout: viper.GetDuration("http-read-header-timeout"),
 				}
 			}
 
@@ -626,6 +597,92 @@ func Start(state *utils.State) {
 		"http server stopped",
 		"err", err,
 	)
+}
+
+// dropForwardHeaders removes forwarding headers a visitor sent directly, which
+// backends would otherwise take as sish's own.
+func dropForwardHeaders(req *http.Request, trustedProxy func(remoteAddr string) bool) {
+	if trustedProxy(req.RemoteAddr) {
+		return
+	}
+
+	// Apps read the scheme from several X-Forwarded headers, such as X-Forwarded-Ssl, so all of them go.
+	for header := range req.Header {
+		if header == "Forwarded" || header == "X-Real-Ip" || strings.HasPrefix(header, "X-Forwarded-") {
+			req.Header.Del(header)
+		}
+	}
+}
+
+// setTrustedProxies sets which proxies gin takes the visitor address from
+// forwarded headers for, and returns a check for whether a socket address is
+// one of them. With none set, the socket address is the visitor.
+func setTrustedProxies(r *gin.Engine) (func(remoteAddr string) bool, error) {
+	proxies := strings.FieldsFunc(viper.GetString("http-trusted-proxies"), utils.CommaSplitFields)
+	prefixes := make([]netip.Prefix, 0, len(proxies))
+	for i, proxy := range proxies {
+		proxies[i] = strings.TrimSpace(proxy)
+
+		prefix, err := utils.ParsePrefix(proxies[i])
+		if err != nil {
+			return nil, err
+		}
+
+		prefixes = append(prefixes, prefix)
+	}
+
+	if err := r.SetTrustedProxies(proxies); err != nil {
+		return nil, err
+	}
+
+	return func(remoteAddr string) bool {
+		addrPort, err := netip.ParseAddrPort(remoteAddr)
+		if err != nil {
+			return false
+		}
+
+		ip := addrPort.Addr().Unmap()
+		for _, prefix := range prefixes {
+			if prefix.Contains(ip) {
+				return true
+			}
+		}
+
+		return false
+	}, nil
+}
+
+// onDemandAllowed decides whether a certificate for name can be issued on demand.
+func onDemandAllowed(state *utils.State, name string) error {
+	if !viper.GetBool("https-ondemand-certificate") {
+		return fmt.Errorf("ondemand certificate retrieval is not enabled")
+	}
+
+	// Every name under a wildcard would get its own certificate, which anyone can request.
+	allowWildcards := viper.GetBool("https-ondemand-certificate-wildcards")
+
+	ok := name == viper.GetString("domain")
+
+	if !ok {
+		state.HTTPListeners.Range(func(key string, locationListener *utils.HTTPHolder) bool {
+			if name == locationListener.HTTPUrl.Host || (allowWildcards && utils.MatchesWildcardHost(name, locationListener.HTTPUrl.Host)) {
+				ok = true
+				return false
+			}
+
+			return true
+		})
+	}
+
+	if !ok {
+		return fmt.Errorf("cannot find connection for host: %s", name)
+	}
+
+	slog.Info(
+		"requesting certificate for host",
+		"host", name,
+	)
+	return nil
 }
 
 // newServer returns a server for visitor traffic. Read and write timeouts stay
