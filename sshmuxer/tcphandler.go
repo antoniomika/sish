@@ -125,7 +125,7 @@ func handleTCPListener(check *channelForwardMsg, bindPort uint32, requestMessage
 		balancerName = sniName
 
 		// Another binding may have taken the name since it was checked.
-		if utils.SNINameTaken(state, tH, balancerName) {
+		if utils.SNINameTaken(state, tH, balancerName, sshConn) {
 			return fail(fmt.Errorf("sni name %s was bound by another tunnel", balancerName))
 		}
 	}

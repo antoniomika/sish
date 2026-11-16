@@ -9,6 +9,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -1116,7 +1117,9 @@ func hostsOverlap(a, b string) bool {
 }
 
 // httpsSNIBound reports whether host overlaps an SNI name bound on sish's HTTPS port.
-func httpsSNIBound(state *State, host string) bool {
+// Names held only by sshConn's owner don't count, so one user can pair raw TLS
+// on 443 with plain HTTP on 80.
+func httpsSNIBound(state *State, host string, sshConn *SSHConnection) bool {
 	bound := false
 
 	state.TCPListeners.Range(func(_ string, tH *TCPHolder) bool {
@@ -1124,8 +1127,8 @@ func httpsSNIBound(state *State, host string) bool {
 			return true
 		}
 
-		tH.Balancers.Range(func(name string, _ *roundrobin.RoundRobin) bool {
-			bound = name != "" && hostsOverlap(host, name)
+		tH.Balancers.Range(func(name string, balancer *roundrobin.RoundRobin) bool {
+			bound = name != "" && hostsOverlap(host, name) && !sniNameOwnedBy(tH, balancer, sshConn)
 			return !bound
 		})
 
@@ -1139,7 +1142,7 @@ func httpsSNIBound(state *State, host string) bool {
 // that a binding could join, and whether the binding is taken. Bindings at the
 // same host and path can each have their own credentials, which pick between
 // them. Any other overlap with an HTTP host or an HTTPS SNI name is taken.
-func httpBindingConflict(state *State, host, path, username, password string) (*HTTPHolder, bool) {
+func httpBindingConflict(state *State, host, path, username, password string, sshConn *SSHConnection) (*HTTPHolder, bool) {
 	var holder *HTTPHolder
 	taken := false
 
@@ -1163,33 +1166,84 @@ func httpBindingConflict(state *State, host, path, username, password string) (*
 		return true
 	})
 
-	return holder, taken || httpsSNIBound(state, host)
+	return holder, taken || httpsSNIBound(state, host, sshConn)
 }
 
 // HTTPBindingTaken reports whether a new HTTP listener for u would overlap an existing binding.
-func HTTPBindingTaken(state *State, u *url.URL) bool {
+func HTTPBindingTaken(state *State, u *url.URL, sshConn *SSHConnection) bool {
 	password, _ := u.User.Password()
-	_, taken := httpBindingConflict(state, u.Host, u.Path, u.User.Username(), password)
+	_, taken := httpBindingConflict(state, u.Host, u.Path, u.User.Username(), password, sshConn)
 
 	return taken
 }
 
-// HTTPHostBound reports whether host overlaps the root domain or a bound HTTP host.
-func HTTPHostBound(state *State, host string) bool {
+// HTTPHostBound reports whether host overlaps the root domain or an HTTP host
+// bound by someone other than sshConn's owner.
+func HTTPHostBound(state *State, host string, sshConn *SSHConnection) bool {
 	bound := hostsOverlap(host, viper.GetString("domain"))
 
 	state.HTTPListeners.Range(func(_ string, pH *HTTPHolder) bool {
-		bound = bound || hostsOverlap(host, pH.HTTPUrl.Host)
+		bound = bound || (hostsOverlap(host, pH.HTTPUrl.Host) && !httpHostOwnedBy(pH, sshConn))
 		return !bound
 	})
 
 	return bound
 }
 
+// SameOwner reports whether two connections authenticated with the same key.
+func SameOwner(a, b *SSHConnection) bool {
+	fingerprint := func(s *SSHConnection) string {
+		if s == nil || s.SSHConn == nil || s.SSHConn.Permissions == nil {
+			return ""
+		}
+		return s.SSHConn.Permissions.Extensions["pubKeyFingerprint"]
+	}
+
+	return fingerprint(a) != "" && fingerprint(a) == fingerprint(b)
+}
+
+// httpHostOwnedBy reports whether every backend of pH belongs to sshConn's owner.
+func httpHostOwnedBy(pH *HTTPHolder, sshConn *SSHConnection) bool {
+	owned := false
+
+	pH.SSHConnections.Range(func(_ string, owner *SSHConnection) bool {
+		owned = SameOwner(owner, sshConn)
+		return owned
+	})
+
+	return owned
+}
+
+// sniNameOwnedBy reports whether every backend of an SNI name on tH belongs to sshConn's owner.
+func sniNameOwnedBy(tH *TCPHolder, balancer *roundrobin.RoundRobin, sshConn *SSHConnection) bool {
+	if balancer == nil || tH.SSHConnections == nil {
+		return false
+	}
+
+	servers := balancer.Servers()
+	if len(servers) == 0 {
+		return false
+	}
+
+	for _, server := range servers {
+		addr, err := base64.StdEncoding.DecodeString(server.Host)
+		if err != nil {
+			return false
+		}
+
+		owner, ok := tH.SSHConnections.Load(string(addr))
+		if !ok || !SameOwner(owner, sshConn) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // SNINameTaken reports whether binding name on tH would take connections from
 // another binding. Only SNI load balancing shares a name, and overlapping
 // wildcards are never shared, so the first binding keeps its names.
-func SNINameTaken(state *State, tH *TCPHolder, name string) bool {
+func SNINameTaken(state *State, tH *TCPHolder, name string, sshConn *SSHConnection) bool {
 	taken := false
 
 	tH.Balancers.Range(func(bound string, _ *roundrobin.RoundRobin) bool {
@@ -1203,7 +1257,7 @@ func SNINameTaken(state *State, tH *TCPHolder, name string) bool {
 	})
 
 	// Raw TLS for an HTTP host would bypass sish's TLS for it.
-	return taken || (tH.HTTPS && HTTPHostBound(state, name))
+	return taken || (tH.HTTPS && HTTPHostBound(state, name, sshConn))
 }
 
 // GetOpenSNIHost returns an open SNI host or a random host if that one is unavailable.
@@ -1290,7 +1344,7 @@ func GetOpenSNIHost(addr string, state *State, sshConn *SSHConnection, tH *TCPHo
 				host = getRandomHost()
 			}
 
-			ok := SNINameTaken(state, tH, host)
+			ok := SNINameTaken(state, tH, host, sshConn)
 
 			reportUnavailable(ok)
 
@@ -1438,7 +1492,7 @@ func GetOpenHost(addr string, state *State, sshConn *SSHConnection) (*url.URL, *
 				host = getRandomHost()
 			}
 
-			holder, ok := httpBindingConflict(state, host, path, username, password)
+			holder, ok := httpBindingConflict(state, host, path, username, password, sshConn)
 
 			if holder != nil && viper.GetBool("http-load-balancer") {
 				pH = holder

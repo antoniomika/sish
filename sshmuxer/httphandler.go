@@ -25,7 +25,7 @@ func registerHTTPBackend(state *utils.State, pH *utils.HTTPHolder, created bool,
 
 	if created {
 		// Another binding may have taken the host since it was checked.
-		if utils.HTTPBindingTaken(state, pH.HTTPUrl) {
+		if utils.HTTPBindingTaken(state, pH.HTTPUrl, sshConn) {
 			return nil, "", fmt.Errorf("subdomain %s was bound by another tunnel", pH.HTTPUrl.Host)
 		}
 

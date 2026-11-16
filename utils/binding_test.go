@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/base64"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"github.com/antoniomika/syncmap"
 	"github.com/spf13/viper"
 	"github.com/vulcand/oxy/v2/roundrobin"
+	"golang.org/x/crypto/ssh"
 )
 
 func setViper(t *testing.T, values map[string]any) {
@@ -246,17 +248,17 @@ func TestSNINameTakenByOverlap(t *testing.T) {
 		"db.example.com":          true,
 		"other.example.com":       false,
 	} {
-		if got := SNINameTaken(state, tH, name); got != want {
+		if got := SNINameTaken(state, tH, name, newTestSSHConnection()); got != want {
 			t.Errorf("%s taken is %t", name, got)
 		}
 	}
 
 	// Load balancing shares the same name and nothing that only overlaps it.
 	setViper(t, map[string]any{"sni-load-balancer": true})
-	if SNINameTaken(state, tH, "db.example.com") {
+	if SNINameTaken(state, tH, "db.example.com", newTestSSHConnection()) {
 		t.Error("db.example.com wasn't shared with load balancing")
 	}
-	if !SNINameTaken(state, tH, "login.apps.example.com") {
+	if !SNINameTaken(state, tH, "login.apps.example.com", newTestSSHConnection()) {
 		t.Error("login.apps.example.com was shared with load balancing")
 	}
 }
@@ -424,7 +426,7 @@ func TestHTTPBindingTaken(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := HTTPBindingTaken(state, u); got != want {
+		if got := HTTPBindingTaken(state, u, newTestSSHConnection()); got != want {
 			t.Errorf("HTTPBindingTaken(%s) = %t", raw, got)
 		}
 	}
@@ -587,4 +589,89 @@ func TestGetOpenHostRejectsURLBreakingNames(t *testing.T) {
 	if hostURL, _ := GetOpenHost("user:p4ss@app/api/v1", NewState(), newTestSSHConnection()); hostURL == nil || hostURL.Host != "app.example.com" {
 		t.Errorf("a valid binding was refused: %v", hostURL)
 	}
+}
+
+func ownedTestSSHConnection(fingerprint string) *SSHConnection {
+	conn := newTestSSHConnection()
+	conn.SSHConn = &ssh.ServerConn{Permissions: &ssh.Permissions{Extensions: map[string]string{"pubKeyFingerprint": fingerprint}}}
+	return conn
+}
+
+func TestSameOwner(t *testing.T) {
+	if !SameOwner(ownedTestSSHConnection("SHA256:a"), ownedTestSSHConnection("SHA256:a")) {
+		t.Error("connections with the same key didn't match")
+	}
+	if SameOwner(ownedTestSSHConnection("SHA256:a"), ownedTestSSHConnection("SHA256:b")) {
+		t.Error("connections with different keys matched")
+	}
+	if SameOwner(ownedTestSSHConnection(""), ownedTestSSHConnection("")) {
+		t.Error("connections without a key matched")
+	}
+	if SameOwner(newTestSSHConnection(), newTestSSHConnection()) {
+		t.Error("connections without an SSH conn matched")
+	}
+}
+
+// One user can serve raw TLS on 443 and plain HTTP on 80 for the same name.
+// Another user still can't take either side.
+func TestSNIAndHTTPShareOwnName(t *testing.T) {
+	namedBindingConfig(t)
+
+	owner := ownedTestSSHConnection("SHA256:owner")
+	other := ownedTestSSHConnection("SHA256:other")
+	const name = "*.apps.example.com"
+
+	newSNI := func(t *testing.T, state *State) *TCPHolder {
+		tH := storeHTTPSSNIHolder(state)
+		lb, err := roundrobin.New(nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := lb.UpsertServer(&url.URL{Host: base64.StdEncoding.EncodeToString([]byte("sni-listener"))}); err != nil {
+			t.Fatal(err)
+		}
+		tH.Balancers.Store(name, lb)
+		tH.SSHConnections.Store("sni-listener", owner)
+		return tH
+	}
+
+	t.Run("HTTP after SNI", func(t *testing.T) {
+		state := NewState()
+		newSNI(t, state)
+		u := &url.URL{Scheme: "http", Host: name}
+
+		if HTTPBindingTaken(state, u, owner) {
+			t.Error("owner can't add HTTP for its SNI name")
+		}
+		if !HTTPBindingTaken(state, u, other) {
+			t.Error("another user can add HTTP for the owner's SNI name")
+		}
+	})
+
+	t.Run("SNI after HTTP", func(t *testing.T) {
+		state := NewState()
+		pH := storeHTTPHolder(t, state, "http://"+name)
+		pH.SSHConnections.Store("http-listener", owner)
+		tH := storeHTTPSSNIHolder(state)
+
+		if SNINameTaken(state, tH, name, owner) {
+			t.Error("owner can't add SNI for its HTTP name")
+		}
+		if !SNINameTaken(state, tH, name, other) {
+			t.Error("another user can add SNI for the owner's HTTP name")
+		}
+		if !SNINameTaken(state, tH, "example.com", owner) {
+			t.Error("owner can take the root domain for SNI")
+		}
+	})
+
+	t.Run("SNI name served by another user", func(t *testing.T) {
+		state := NewState()
+		tH := newSNI(t, state)
+		tH.SSHConnections.Store("sni-listener", other)
+
+		if !HTTPBindingTaken(state, &url.URL{Scheme: "http", Host: name}, owner) {
+			t.Error("owner can add HTTP for a name another user serves")
+		}
+	})
 }
