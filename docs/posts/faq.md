@@ -2,6 +2,7 @@
 title: FAQ 
 description: Frequently asked questions for sish 
 keywords: [sish, faq]
+toc: true
 ---
 
 # Where can I find latest releases?

@@ -2,6 +2,7 @@
 title: How it works
 description: Technical details for sish 
 keywords: [sish, how, works]
+toc: true
 ---
 
 SSH can normally forward local and remote ports. This service implements an SSH

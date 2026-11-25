@@ -2,6 +2,7 @@
 title: Advanced
 description: How to customize sish
 keywords: [sish, advanced, custom, domains, load, balancing, allowlist, ip]
+toc: true
 ---
 
 # Choose your own subdomain

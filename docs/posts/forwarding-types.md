@@ -2,6 +2,7 @@
 title: Forwarding Types
 description: The various forwarding types sish supports
 keywords: [sish, forwarding, types, http, tcp, sni, alias]
+toc: true
 ---
 
 # HTTP

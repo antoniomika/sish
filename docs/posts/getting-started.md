@@ -2,6 +2,7 @@
 title: Getting Started
 description: Learn how to use sish 
 keywords: [sish, guide, getting, started, how]
+toc: true
 ---
 
 We have a managed service and **three** officially supported self-hosting

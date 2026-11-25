@@ -2,6 +2,7 @@
 title: Cheatsheet
 description: sish usage reference
 keywords: [sish, reference, cheatsheet]
+toc: true
 ---
 
 [More info about forwarding types](/forwarding-types)

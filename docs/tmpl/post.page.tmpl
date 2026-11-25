@@ -12,6 +12,15 @@
 {{template "nav" .}}
 
 <div class="post-group">
+  {{if .Data.TocHtml}}
+  <aside class="toc-pane" aria-label="Page outline">
+    <div class="sidebar-header mono text-sm text-grey">[OUTLINE]</div>
+    <div class="toc">
+      {{.Data.TocHtml}}
+    </div>
+  </aside>
+  {{end}}
+
   <main class="post">
     <h1 class="text-2xl text-hdr m-0 flex items-center">
       {{.Data.Title}}
